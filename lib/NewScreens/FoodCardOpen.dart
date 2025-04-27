@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../Features/codia/codia_page.dart';
-import 'dart:math';
 
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
@@ -130,26 +129,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       _likeController.reset();
       _likeController.forward();
     });
-  }
-
-  // Helper method to format numeric values - removes decimal places
-  String _formatNumericValue(dynamic input) {
-    if (input is int) {
-      // Return integer value as is
-      return input.toString();
-    } else if (input is double) {
-      // Convert to integer to remove decimal places
-      return input.toInt().toString();
-    } else if (input is String) {
-      // Try to extract digits from the string, including decimal values
-      final match = RegExp(r'(\d+\.?\d*)').firstMatch(input);
-      if (match != null && match.group(1) != null) {
-        // Convert to double then integer to remove decimals
-        double value = double.tryParse(match.group(1)!) ?? 0.0;
-        return value.toInt().toString();
-      }
-    }
-    return "0"; // Return string "0" as fallback (without decimal)
   }
 
   @override
@@ -568,8 +547,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Text(
-                                                _formatNumericValue('542.3') +
-                                                    ' kcal',
+                                                '500',
                                                 style: TextStyle(
                                                   fontSize: 20,
                                                   fontWeight: FontWeight.bold,
@@ -599,11 +577,11 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                         mainAxisAlignment:
                                             MainAxisAlignment.spaceAround,
                                         children: [
-                                          _buildMacro('Protein', '27.8g',
+                                          _buildMacro('Protein', '30g',
                                               Color(0xFFD7C1FF)),
-                                          _buildMacro('Fat', '23.2g',
-                                              Color(0xFFFFD8B1)),
-                                          _buildMacro('Carbs', '65.3g',
+                                          _buildMacro(
+                                              'Fat', '32g', Color(0xFFFFD8B1)),
+                                          _buildMacro('Carbs', '125g',
                                               Color(0xFFB1EFD8)),
                                         ],
                                       ),
@@ -737,9 +715,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         _buildIngredient(
-                                            'Cheesecake', '100g', '302.7 kcal'),
+                                            'Cheesecake', '100g', '300 kcal'),
                                         _buildIngredient(
-                                            'Berries', '20g', '12.3 kcal'),
+                                            'Berries', '20g', '10 kcal'),
                                       ],
                                     ),
                                     // Gap between rows of ingredient boxes - set to 15px
@@ -749,7 +727,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         _buildIngredient(
-                                            'Jam', '10g', '22.8 kcal'),
+                                            'Jam', '10g', '20 kcal'),
                                         // Wrap the Add box in a Stack to overlay the icon
                                         Stack(
                                           alignment: Alignment.center,
@@ -868,11 +846,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   }
 
   Widget _buildMacro(String name, String amount, Color color) {
-    // Extract the numeric part and remove decimals
-    final amountValue = amount.replaceAll(RegExp(r'[^\d.]'), '');
-    double value = double.tryParse(amountValue) ?? 0.0;
-    final formattedAmount = value.toInt().toString() + 'g';
-
     return Column(
       children: [
         Text(name, style: TextStyle(fontSize: 12)),
@@ -885,7 +858,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             borderRadius: BorderRadius.circular(4),
           ),
           child: FractionallySizedBox(
-            widthFactor: 1.0,
+            widthFactor: 1.0, // Changed from 0.5 to 1.0 to fill entirely
             child: Container(
               decoration: BoxDecoration(
                 color: color,
@@ -895,7 +868,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           ),
         ),
         SizedBox(height: 4),
-        Text(formattedAmount,
+        Text(amount,
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       ],
     );
@@ -903,22 +876,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   Widget _buildIngredient(String name, String amount, String calories) {
     final boxWidth = (MediaQuery.of(context).size.width - 78) / 2;
-
-    // Preserve original calorie value if there's a value
-    String formattedCalories = "";
-    if (calories.isNotEmpty) {
-      // Extract the numeric part but keep original decimal formatting
-      final calorieMatch = RegExp(r'(\d+\.?\d*)').firstMatch(calories);
-      if (calorieMatch != null && calorieMatch.group(1) != null) {
-        // Preserve the original value, just add "kcal" if needed
-        final rawValue = calorieMatch.group(1)!;
-        formattedCalories =
-            calories.contains("kcal") ? calories : "$rawValue kcal";
-      } else {
-        formattedCalories = calories;
-      }
-    }
-
     return Container(
       width: boxWidth,
       height: 110,
@@ -959,7 +916,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
               ),
               SizedBox(height: 10),
               Text(
-                formattedCalories,
+                calories,
                 style: TextStyle(
                   fontSize: 16,
                   fontFamily: 'SF Pro Display',

@@ -11,8 +11,9 @@ class LogRunning extends StatefulWidget {
 class _LogRunningState extends State<LogRunning> {
   final TextEditingController _distanceController = TextEditingController();
   final TextEditingController _timeController = TextEditingController();
-  String _selectedDistance = '';
-  String _selectedTime = '';
+  
+  String? selectedDistance;
+  String? selectedTime;
 
   final List<String> distances = ['1 km', '5 km', '10 km', '15 km'];
   final List<String> times = ['15 min', '30 min', '60 min', '90 min'];
@@ -22,29 +23,6 @@ class _LogRunningState extends State<LogRunning> {
     _distanceController.dispose();
     _timeController.dispose();
     super.dispose();
-  }
-
-  void _selectDistance(String distance) {
-    setState(() {
-      _selectedDistance = distance;
-      _distanceController.text = distance;
-    });
-  }
-
-  void _selectTime(String time) {
-    setState(() {
-      _selectedTime = time;
-      _timeController.text = time;
-    });
-  }
-
-  void _navigateToSaveWorkout() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const SaveWorkout(),
-      ),
-    );
   }
 
   @override
@@ -85,7 +63,7 @@ class _LogRunningState extends State<LogRunning> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'Log Running',
+                                        'Running',
                                         style: TextStyle(
                                           color: Colors.black,
                                           fontSize: 24,
@@ -93,14 +71,19 @@ class _LogRunningState extends State<LogRunning> {
                                           fontFamily: 'SF Pro Display',
                                         ),
                                       ),
+                                      SizedBox(width: 8),
+                                      Image.asset(
+                                        'assets/images/Shoe.png',
+                                        width: 24,
+                                        height: 24,
+                                      ),
                                     ],
                                   ),
                                 ),
                                 Positioned(
                                   left: 0,
                                   child: IconButton(
-                                    icon: Icon(Icons.arrow_back,
-                                        color: Colors.black, size: 24),
+                                    icon: Icon(Icons.arrow_back, color: Colors.black, size: 24),
                                     onPressed: () => Navigator.pop(context),
                                     padding: EdgeInsets.zero,
                                     constraints: BoxConstraints(),
@@ -119,25 +102,76 @@ class _LogRunningState extends State<LogRunning> {
                     height: 0.5,
                     color: Color(0xFFBDBDBD),
                   ),
-
                   Expanded(
                     child: SingleChildScrollView(
                       padding: EdgeInsets.symmetric(horizontal: 29),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(height: 30),
-
-                          // Distance input
-                          Text(
-                            'Distance',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'SF Pro Display',
+                          SizedBox(height: 20),
+                          // Distance Section
+                          Row(
+                            children: [
+                              Image.asset(
+                                'assets/images/Distance.png',
+                                width: 24,
+                                height: 24,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Distance',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'SF Pro Display',
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 15),
+                          // Distance Chips
+                          Center(
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.center,
+                              children: distances.map((distance) {
+                                return ChoiceChip(
+                                  label: Text(
+                                    distance,
+                                    style: TextStyle(
+                                      color: selectedDistance == distance ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  selected: selectedDistance == distance,
+                                  onSelected: (bool selected) {
+                                    setState(() {
+                                      selectedDistance = selected ? distance : null;
+                                      if (selected) {
+                                        _distanceController.text = distance.replaceAll(' km', '');
+                                      }
+                                    });
+                                  },
+                                  backgroundColor: Colors.white,
+                                  selectedColor: Colors.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    side: BorderSide(
+                                      color: selectedDistance == distance ? Colors.transparent : Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  showCheckmark: false,
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                );
+                              }).toList(),
                             ),
                           ),
-                          SizedBox(height: 10),
+                          SizedBox(height: 15),
+                          // Distance TextField
                           Container(
                             height: 50,
                             decoration: BoxDecoration(
@@ -155,66 +189,101 @@ class _LogRunningState extends State<LogRunning> {
                             child: Center(
                               child: TextField(
                                 controller: _distanceController,
-                                keyboardType: TextInputType.numberWithOptions(
-                                    decimal: true),
+                                keyboardType: TextInputType.number,
                                 cursorColor: Colors.black,
                                 cursorWidth: 1.2,
                                 textAlign: TextAlign.left,
                                 textAlignVertical: TextAlignVertical.center,
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13.6,
                                   fontWeight: FontWeight.w400,
                                   color: Colors.black,
-                                  fontFamily: 'SF Pro Display',
+                                  fontFamily: '.SF Pro Display',
                                 ),
                                 decoration: InputDecoration(
-                                  hintText: 'Enter distance in km',
+                                  hintText: 'Kilometers',
                                   hintStyle: TextStyle(
                                     color: Colors.grey,
-                                    fontSize: 14,
+                                    fontSize: 13.6,
                                     fontWeight: FontWeight.w400,
-                                    fontFamily: 'SF Pro Display',
+                                    fontFamily: '.SF Pro Display',
                                   ),
                                   border: InputBorder.none,
                                   enabledBorder: InputBorder.none,
                                   focusedBorder: InputBorder.none,
-                                  contentPadding:
-                                      EdgeInsets.symmetric(horizontal: 15),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 15),
                                   isCollapsed: true,
-                                  suffixText: 'km',
-                                  suffixStyle: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    fontFamily: 'SF Pro Display',
-                                  ),
                                 ),
                               ),
                             ),
                           ),
-
-                          SizedBox(height: 15),
-
-                          // Distance selection chips
-                          Wrap(
-                            spacing: 8,
-                            children: distances
-                                .map((distance) => _buildDistanceChip(distance))
-                                .toList(),
-                          ),
-
-                          SizedBox(height: 30),
-
-                          // Time input
-                          Text(
-                            'Time',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'SF Pro Display',
+                          SizedBox(height: 20),
+                          
+                          // Time Section
+                          Padding(
+                            padding: EdgeInsets.only(top: 29),
+                            child: Row(
+                              children: [
+                                Image.asset(
+                                  'assets/images/timeicon.png',
+                                  width: 24,
+                                  height: 24,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Time',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'SF Pro Display',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          SizedBox(height: 10),
+                          SizedBox(height: 20),
+                          // Time Chips
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: times.map((time) {
+                                return ChoiceChip(
+                                  label: Text(
+                                    time,
+                                    style: TextStyle(
+                                      color: selectedTime == time ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  selected: selectedTime == time,
+                                  onSelected: (bool selected) {
+                                    setState(() {
+                                      selectedTime = selected ? time : null;
+                                      if (selected) {
+                                        _timeController.text = time.replaceAll(' min', '');
+                                      }
+                                    });
+                                  },
+                                  backgroundColor: Colors.white,
+                                  selectedColor: Colors.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    side: BorderSide(
+                                      color: selectedTime == time ? Colors.transparent : Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  showCheckmark: false,
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          SizedBox(height: 15),
+                          // Time TextField
                           Container(
                             height: 50,
                             decoration: BoxDecoration(
@@ -238,68 +307,24 @@ class _LogRunningState extends State<LogRunning> {
                                 textAlign: TextAlign.left,
                                 textAlignVertical: TextAlignVertical.center,
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13.6,
                                   fontWeight: FontWeight.w400,
                                   color: Colors.black,
-                                  fontFamily: 'SF Pro Display',
+                                  fontFamily: '.SF Pro Display',
                                 ),
                                 decoration: InputDecoration(
-                                  hintText: 'Enter time in minutes',
+                                  hintText: 'Minutes',
                                   hintStyle: TextStyle(
                                     color: Colors.grey,
-                                    fontSize: 14,
+                                    fontSize: 13.6,
                                     fontWeight: FontWeight.w400,
-                                    fontFamily: 'SF Pro Display',
+                                    fontFamily: '.SF Pro Display',
                                   ),
                                   border: InputBorder.none,
                                   enabledBorder: InputBorder.none,
                                   focusedBorder: InputBorder.none,
-                                  contentPadding:
-                                      EdgeInsets.symmetric(horizontal: 15),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 15),
                                   isCollapsed: true,
-                                  suffixText: 'min',
-                                  suffixStyle: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    fontFamily: 'SF Pro Display',
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          SizedBox(height: 15),
-
-                          // Time selection chips
-                          Wrap(
-                            spacing: 8,
-                            children: times
-                                .map((time) => _buildTimeChip(time))
-                                .toList(),
-                          ),
-
-                          SizedBox(height: 30),
-
-                          // Image with person running
-                          Center(
-                            child: Container(
-                              margin: EdgeInsets.symmetric(vertical: 20),
-                              width: MediaQuery.of(context).size.width * 0.7,
-                              height: 180,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 15,
-                                    offset: Offset(0, 5),
-                                  ),
-                                ],
-                                image: DecorationImage(
-                                  image:
-                                      AssetImage('assets/images/running.jpg'),
-                                  fit: BoxFit.cover,
                                 ),
                               ),
                             ),
@@ -310,7 +335,6 @@ class _LogRunningState extends State<LogRunning> {
                   ),
                 ],
               ),
-
               // White box at bottom
               Positioned(
                 left: 0,
@@ -332,7 +356,7 @@ class _LogRunningState extends State<LogRunning> {
                 ),
               ),
 
-              // Save button
+              // Add button
               Positioned(
                 left: 24,
                 right: 24,
@@ -345,9 +369,14 @@ class _LogRunningState extends State<LogRunning> {
                     borderRadius: BorderRadius.circular(28),
                   ),
                   child: TextButton(
-                    onPressed: _navigateToSaveWorkout,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => SaveWorkout()),
+                      );
+                    },
                     child: const Text(
-                      'Continue',
+                      'Save',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w500,
@@ -364,56 +393,4 @@ class _LogRunningState extends State<LogRunning> {
       ),
     );
   }
-
-  Widget _buildDistanceChip(String distance) {
-    bool isSelected = _selectedDistance == distance;
-
-    return ChoiceChip(
-      label: Text(
-        distance,
-        style: TextStyle(
-          color: isSelected ? Colors.white : Colors.black,
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
-          fontFamily: 'SF Pro Display',
-        ),
-      ),
-      selected: isSelected,
-      backgroundColor: Colors.white,
-      selectedColor: Colors.black,
-      side: BorderSide(color: Colors.grey[300]!),
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      onSelected: (selected) {
-        if (selected) {
-          _selectDistance(distance);
-        }
-      },
-    );
-  }
-
-  Widget _buildTimeChip(String time) {
-    bool isSelected = _selectedTime == time;
-
-    return ChoiceChip(
-      label: Text(
-        time,
-        style: TextStyle(
-          color: isSelected ? Colors.white : Colors.black,
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
-          fontFamily: 'SF Pro Display',
-        ),
-      ),
-      selected: isSelected,
-      backgroundColor: Colors.white,
-      selectedColor: Colors.black,
-      side: BorderSide(color: Colors.grey[300]!),
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      onSelected: (selected) {
-        if (selected) {
-          _selectTime(time);
-        }
-      },
-    );
-  }
-}
+} 

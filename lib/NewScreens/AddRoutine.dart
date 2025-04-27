@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'AddExercise.dart';
+import 'package:fitness_app/NewScreens/AddExercise.dart';
 
 class AddRoutine extends StatefulWidget {
   const AddRoutine({Key? key}) : super(key: key);
@@ -9,91 +9,72 @@ class AddRoutine extends StatefulWidget {
 }
 
 class _AddRoutineState extends State<AddRoutine> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-
-  List<Exercise> _selectedExercises = [];
+  final TextEditingController _titleController = TextEditingController();
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
+    _titleController.dispose();
     super.dispose();
-  }
-
-  void _addExercise() async {
-    // Navigate to exercise selection and get result
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => CodiaPage()),
-    );
-
-    if (result != null && result is Exercise) {
-      setState(() {
-        _selectedExercises.add(result);
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBody: true,
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/background4.jpg'),
-            fit: BoxFit.cover,
+    return Stack(
+      children: [
+        // Background Image
+        Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/images/background4.jpg'),
+              fit: BoxFit.cover,
+            ),
           ),
         ),
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              // AppBar
-              PreferredSize(
-                preferredSize: Size.fromHeight(kToolbarHeight),
-                child: AppBar(
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  automaticallyImplyLeading: false,
-                  flexibleSpace: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 29)
-                            .copyWith(top: 16, bottom: 8.5),
-                        child: Stack(
-                          children: [
-                            Center(
-                              child: Text(
-                                'Create Routine',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'SF Pro Display',
-                                ),
-                              ),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: PreferredSize(
+            preferredSize: Size.fromHeight(kToolbarHeight),
+            child: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              flexibleSpace: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 29).copyWith(top: 16, bottom: 8.5),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Text(
+                            'Add Routine',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'SF Pro Display',
                             ),
-                            Positioned(
-                              left: 0,
-                              child: IconButton(
-                                icon: Icon(Icons.arrow_back,
-                                    color: Colors.black, size: 24),
-                                onPressed: () => Navigator.pop(context),
-                                padding: EdgeInsets.zero,
-                                constraints: BoxConstraints(),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          child: IconButton(
+                            icon: Icon(Icons.arrow_back, color: Colors.black, size: 24),
+                            onPressed: () => Navigator.pop(context),
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints(),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
+            ),
+          ),
+          body: Column(
+            children: [
               // Divider line
               Container(
                 margin: EdgeInsets.symmetric(horizontal: 29),
@@ -101,125 +82,101 @@ class _AddRoutineState extends State<AddRoutine> {
                 color: Color(0xFFBDBDBD),
               ),
               Expanded(
-                child: SingleChildScrollView(
+                child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 29),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(height: 20),
-                      // Routine name field
+                      // Routine Title TextField
                       Container(
                         width: double.infinity,
-                        height: 50,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Color(0xFFE8E8E8)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              offset: Offset(0, 2),
-                              blurRadius: 4,
-                            ),
-                          ],
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: Colors.grey[300]!),
                         ),
                         child: TextField(
-                          controller: _nameController,
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontFamily: 'SF Pro Display',
-                          ),
+                          controller: _titleController,
                           decoration: InputDecoration(
-                            hintText: 'Routine name',
+                            hintText: 'Routine Title',
                             hintStyle: TextStyle(
-                              color: Color(0xFFADADAD),
-                              fontSize: 15,
+                              color: Colors.grey[600],
+                              fontSize: 16,
                               fontFamily: 'SF Pro Display',
-                              fontWeight: FontWeight.w400,
                             ),
                             border: InputBorder.none,
-                            contentPadding:
-                                EdgeInsets.symmetric(horizontal: 16),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           ),
                         ),
                       ),
-                      SizedBox(height: 12),
-
-                      // Describe routine field
-                      Container(
-                        width: double.infinity,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Color(0xFFE8E8E8)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              offset: Offset(0, 2),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          controller: _descriptionController,
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontFamily: 'SF Pro Display',
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Describe your routine',
-                            hintStyle: TextStyle(
-                              color: Color(0xFFADADAD),
-                              fontSize: 15,
-                              fontFamily: 'SF Pro Display',
-                              fontWeight: FontWeight.w400,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding:
-                                EdgeInsets.symmetric(horizontal: 16),
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      // Exercises section
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      SizedBox(height: 40),
+                      // Center section
+                      Column(
                         children: [
+                          // Dumbbell Icon
+                          Image.asset(
+                            'assets/images/dumbbell.png',
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.contain,
+                          ),
+                          SizedBox(height: 12),
+                          // Get Started Text
                           Text(
-                            'Exercises',
+                            'Get Started',
                             style: TextStyle(
-                              fontSize: 22,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: Colors.black,
                               fontFamily: 'SF Pro Display',
                             ),
                           ),
-                          GestureDetector(
-                            onTap: _addExercise,
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(15),
+                          SizedBox(height: 8),
+                          // Subtitle Text
+                          Text(
+                            'Add an exercise to get started',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                              fontFamily: 'SF Pro Display',
+                            ),
+                          ),
+                          SizedBox(height: 24),
+                          // Add Exercise Button
+                          Container(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => CodiaPage(),
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.black,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                elevation: 0,
                               ),
                               child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Image.asset(
                                     'assets/images/add.png',
-                                    width: 16,
-                                    height: 16,
+                                    width: 20,
+                                    height: 20,
                                     color: Colors.white,
                                   ),
-                                  SizedBox(width: 6),
+                                  SizedBox(width: 8),
                                   Text(
-                                    'Add',
+                                    'Add Exercise',
                                     style: TextStyle(
+                                      fontSize: 16,
                                       color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
                                       fontFamily: 'SF Pro Display',
                                     ),
                                   ),
@@ -229,161 +186,121 @@ class _AddRoutineState extends State<AddRoutine> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 15),
-
-                      // Exercise List
-                      if (_selectedExercises.isEmpty)
-                        Container(
-                          width: double.infinity,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 10,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              'No exercises added yet',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 15,
-                                fontFamily: 'SF Pro Display',
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: NeverScrollableScrollPhysics(),
-                          itemCount: _selectedExercises.length,
-                          itemBuilder: (context, index) {
-                            final exercise = _selectedExercises[index];
-                            return Container(
-                              margin: EdgeInsets.only(bottom: 10),
-                              padding: EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(15),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 10,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFF9F8FE),
-                                      shape: BoxShape.circle,
+                      SizedBox(height: 20),
+                      // Bottom Actions
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 24),
+                        child: Row(
+                          children: [
+                            // Discard Button
+                            Expanded(
+                              child: Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(15),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: Offset(0, 2),
                                     ),
-                                    child: Center(
-                                      child: Image.asset(
-                                        'assets/images/dumbbell.png',
-                                        width: 24,
-                                        height: 24,
-                                        color: Colors.grey[700],
+                                  ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => Navigator.pop(context),
+                                    borderRadius: BorderRadius.circular(15),
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 20),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Image.asset(
+                                            'assets/images/trashcan.png',
+                                            width: 20,
+                                            height: 20,
+                                            color: Color(0xFFFF3B30),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Discard',
+                                            style: TextStyle(
+                                              color: Color(0xFFFF3B30),
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              fontFamily: 'SF Pro Display',
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          exercise.name,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            // Save Button
+                            Expanded(
+                              child: Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(15),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () {
+                                      // Handle save
+                                    },
+                                    borderRadius: BorderRadius.circular(15),
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 20),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.check_circle_outline,
                                             color: Colors.black,
+                                            size: 20,
                                           ),
-                                        ),
-                                        Text(
-                                          exercise.muscle,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.grey[600],
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Save',
+                                            style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              fontFamily: 'SF Pro Display',
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  IconButton(
-                                    icon:
-                                        Icon(Icons.delete, color: Colors.grey),
-                                    onPressed: () {
-                                      setState(() {
-                                        _selectedExercises.removeAt(index);
-                                      });
-                                    },
-                                  ),
-                                ],
+                                ),
                               ),
-                            );
-                          },
+                            ),
+                          ],
                         ),
+                      ),
                     ],
-                  ),
-                ),
-              ),
-
-              // Save Button
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: Offset(0, -5),
-                    ),
-                  ],
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // TODO: Implement save routine
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    child: Text(
-                      'Save Routine',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                        fontFamily: 'SF Pro Display',
-                      ),
-                    ),
                   ),
                 ),
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
-}
+} 

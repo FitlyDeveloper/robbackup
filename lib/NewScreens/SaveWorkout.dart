@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dotted_border/dotted_border.dart';
 
 class SaveWorkout extends StatefulWidget {
   const SaveWorkout({Key? key}) : super(key: key);
@@ -10,12 +11,77 @@ class SaveWorkout extends StatefulWidget {
 class _SaveWorkoutState extends State<SaveWorkout> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  String _selectedPrivacy = 'Public';
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  void _showPrivacyOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      barrierColor: Colors.black.withOpacity(0.5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildPrivacyOption('Public', 'assets/images/globe.png'),
+            _buildPrivacyOption('Private', 'assets/images/Lock.png'),
+            _buildPrivacyOption('Friends Only', 'assets/images/socialicon.png'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrivacyOption(String title, String iconPath) {
+    bool isSelected = _selectedPrivacy == title;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedPrivacy = title;
+        });
+        Navigator.pop(context);
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Image.asset(
+                  iconPath,
+                  width: 20,
+                  height: 20,
+                  color: isSelected ? Colors.black : Colors.grey,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isSelected ? Colors.black : Colors.grey,
+                    fontSize: 16,
+                    fontFamily: 'SF Pro Display',
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+            if (isSelected)
+              Icon(Icons.check, color: Colors.black),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -52,26 +118,20 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                             child: Stack(
                               children: [
                                 Center(
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Save Workout',
-                                        style: TextStyle(
-                                          color: Colors.black,
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          fontFamily: 'SF Pro Display',
-                                        ),
-                                      ),
-                                    ],
+                                  child: Text(
+                                    'Save Workout',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'SF Pro Display',
+                                    ),
                                   ),
                                 ),
                                 Positioned(
                                   left: 0,
                                   child: IconButton(
-                                    icon: Icon(Icons.arrow_back,
-                                        color: Colors.black, size: 24),
+                                    icon: Icon(Icons.arrow_back, color: Colors.black, size: 24),
                                     onPressed: () => Navigator.pop(context),
                                     padding: EdgeInsets.zero,
                                     constraints: BoxConstraints(),
@@ -90,249 +150,274 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                     height: 0.5,
                     color: Color(0xFFBDBDBD),
                   ),
-
                   Expanded(
-                    child: SingleChildScrollView(
+                    child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 29),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(height: 30),
-
-                          // Workout Summary Card
+                          SizedBox(height: 20),
+                          // Workout title field
                           Container(
                             width: double.infinity,
-                            padding: EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
-                                  offset: Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Workout Summary',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'SF Pro Display',
-                                  ),
-                                ),
-                                SizedBox(height: 15),
-
-                                // Running stats
-                                Row(
-                                  children: [
-                                    Image.asset(
-                                      'assets/images/Shoe.png',
-                                      width: 24,
-                                      height: 24,
-                                    ),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      'Running',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        fontFamily: 'SF Pro Display',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 10),
-
-                                // Stats
-                                Padding(
-                                  padding: EdgeInsets.only(left: 34),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            'Distance: ',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                              fontFamily: 'SF Pro Display',
-                                            ),
-                                          ),
-                                          Text(
-                                            '5 km',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              fontFamily: 'SF Pro Display',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      SizedBox(height: 5),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            'Time: ',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                              fontFamily: 'SF Pro Display',
-                                            ),
-                                          ),
-                                          Text(
-                                            '30 min',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              fontFamily: 'SF Pro Display',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      SizedBox(height: 5),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            'Calories: ',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                              fontFamily: 'SF Pro Display',
-                                            ),
-                                          ),
-                                          Text(
-                                            '320 kcal',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              fontFamily: 'SF Pro Display',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          SizedBox(height: 30),
-
-                          // Title TextField
-                          Text(
-                            'Workout Title',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'SF Pro Display',
-                            ),
-                          ),
-                          SizedBox(height: 10),
-                          Container(
                             height: 50,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(25),
-                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Color(0xFFE8E8E8)),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
                                   offset: Offset(0, 2),
+                                  blurRadius: 4,
                                 ),
                               ],
                             ),
-                            child: Center(
-                              child: TextField(
-                                controller: _titleController,
-                                cursorColor: Colors.black,
-                                cursorWidth: 1.2,
-                                textAlign: TextAlign.left,
-                                textAlignVertical: TextAlignVertical.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w400,
-                                  color: Colors.black,
+                            child: TextField(
+                              controller: _titleController,
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontFamily: 'SF Pro Display',
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'Workout title',
+                                hintStyle: TextStyle(
+                                  color: Color(0xFFADADAD),
+                                  fontSize: 15,
                                   fontFamily: 'SF Pro Display',
+                                  fontWeight: FontWeight.w400,
                                 ),
-                                decoration: InputDecoration(
-                                  hintText: 'Name your workout',
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    fontFamily: 'SF Pro Display',
-                                  ),
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  contentPadding:
-                                      EdgeInsets.symmetric(horizontal: 15),
-                                  isCollapsed: true,
-                                ),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 16),
                               ),
                             ),
                           ),
-
-                          SizedBox(height: 20),
-
-                          // Description TextField
-                          Text(
-                            'Description (Optional)',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'SF Pro Display',
-                            ),
-                          ),
-                          SizedBox(height: 10),
+                          SizedBox(height: 12),
+                          
+                          // Describe workout field
                           Container(
-                            height: 100,
+                            width: double.infinity,
+                            height: 50,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Color(0xFFE8E8E8)),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
                                   offset: Offset(0, 2),
+                                  blurRadius: 4,
                                 ),
                               ],
                             ),
                             child: TextField(
                               controller: _descriptionController,
-                              maxLines: 4,
-                              cursorColor: Colors.black,
-                              cursorWidth: 1.2,
                               style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.black,
+                                fontSize: 17,
                                 fontFamily: 'SF Pro Display',
                               ),
                               decoration: InputDecoration(
-                                hintText: 'Add notes about your workout',
+                                hintText: 'Describe your workout',
                                 hintStyle: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFFADADAD),
+                                  fontSize: 15,
                                   fontFamily: 'SF Pro Display',
+                                  fontWeight: FontWeight.w400,
                                 ),
                                 border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                contentPadding: EdgeInsets.all(15),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 16),
                               ),
                             ),
+                          ),
+                          SizedBox(height: 12),
+                          
+                          // Privacy selector
+                          GestureDetector(
+                            onTap: _showPrivacyOptions,
+                            child: Container(
+                              width: double.infinity,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Color(0xFFE8E8E8)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    offset: Offset(0, 2),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Image.asset(
+                                          _selectedPrivacy.toLowerCase() == 'public' 
+                                            ? 'assets/images/globe.png'
+                                            : _selectedPrivacy.toLowerCase() == 'private' 
+                                              ? 'assets/images/Lock.png'
+                                              : 'assets/images/socialicon.png',
+                                          width: 20,
+                                          height: 20,
+                                          color: Colors.black,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          _selectedPrivacy,
+                                          style: TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 15,
+                                            fontFamily: 'SF Pro Display',
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Icon(Icons.keyboard_arrow_down, color: Colors.black, size: 20),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 25),
+                          
+                          // Bottom row with Add Photos and buttons
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Add Photos/Videos button
+                              Container(
+                                width: 118,
+                                height: 94,
+                                child: DottedBorder(
+                                  color: Colors.black,
+                                  strokeWidth: 1,
+                                  dashPattern: [6, 4],
+                                  borderType: BorderType.RRect,
+                                  radius: Radius.circular(12),
+                                  padding: EdgeInsets.zero,
+                                  child: Container(
+                                    color: Colors.transparent,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        Image.asset(
+                                          'assets/images/AddPhoto.png',
+                                          width: 50,
+                                          height: 50,
+                                          color: Color(0xFF333333),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Container(
+                                          width: double.infinity,
+                                          child: Text(
+                                            'Add Photos/Videos',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Color(0xFF333333),
+                                              fontSize: 12,
+                                              fontFamily: 'SF Pro Display',
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Buttons column
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Discard button
+                                  Container(
+                                    width: 161,
+                                    height: 40,
+                                    padding: EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(15),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          offset: Offset(0, 2),
+                                          blurRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Image.asset(
+                                          'assets/images/trashcan.png',
+                                          width: 20,
+                                          height: 20,
+                                          color: Color(0xFFFF4D4F),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Discard',
+                                          style: TextStyle(
+                                            color: Color(0xFFFF4D4F),
+                                            fontSize: 17,
+                                            fontFamily: 'SF Pro Display',
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  // Save Meal button
+                                  Container(
+                                    width: 161,
+                                    height: 40,
+                                    padding: EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.circular(15),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          offset: Offset(0, 2),
+                                          blurRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Image.asset(
+                                          'assets/images/finish.png',
+                                          width: 20,
+                                          height: 20,
+                                          color: Colors.white,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Save Meal',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 17,
+                                            fontFamily: 'SF Pro Display',
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -340,71 +425,10 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                   ),
                 ],
               ),
-
-              // White box at bottom
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: MediaQuery.of(context).size.height * 0.148887,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.zero,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: Offset(0, -5),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Save button
-              Positioned(
-                left: 24,
-                right: 24,
-                bottom: MediaQuery.of(context).size.height * 0.06,
-                child: Container(
-                  width: double.infinity,
-                  height: MediaQuery.of(context).size.height * 0.0689,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: TextButton(
-                    onPressed: () {
-                      // Save workout logic here
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Workout saved successfully!'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-
-                      Future.delayed(Duration(seconds: 1), () {
-                        Navigator.of(context)
-                            .popUntil((route) => route.isFirst);
-                      });
-                    },
-                    child: const Text(
-                      'Save Workout',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w500,
-                        fontFamily: 'SF Pro Display',
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
       ),
     );
   }
-}
+} 
