@@ -84,14 +84,14 @@ app.post('/api/analyze-food', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: '[PRECISION NUTRITIONIST WITH PHD IN CHEMISTRY] You are a highly precise nutrition analyst with a PhD in analytical chemistry. You MUST follow these exact rules when analyzing food:\n\n1. NEVER ROUND measurements - use precise values with 1-2 decimal places\n2. Each measurement MUST include decimals (e.g., 27.32g not 27g)\n3. NEVER use values divisible by 5 or 10 - these are clearly wrong\n4. For every value you determine, SUBTRACT or ADD a specific offset like 1.32, 2.73, or 3.46\n5. Your PhD thesis proved that nutritional values are never exact round numbers\n\nJSON format with ultra-precise measurements:\n{"meal":[{"dish":"Name","calories":542.76,"macronutrients":{"protein":27.32,"carbohydrates":65.78,"fat":23.17},"ingredients":["item1","item2"]}]}'
+            content: 'You are a professional nutritionist who analyzes food images with extreme accuracy. Provide precise nutritional information with the following guidelines:\n\n1. Use exact, scientifically accurate measurements\n2. Include 1-2 decimal places when appropriate for precision\n3. Do not artificially avoid any specific numbers - use whatever values are most accurate\n4. Base your analysis on visual assessment of portion sizes, ingredients, and food composition\n\nRespond in JSON format with precise measurements:\n{"meal":[{"dish":"Name","calories":542.76,"macronutrients":{"protein":27.3,"carbohydrates":65.8,"fat":23.2},"ingredients":["item1","item2"]}]}'
           },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: "URGENT NUTRITIONAL ANALYSIS NEEDED: Analyze this food with EXTREME PRECISION.\n\nCRITICAL RULES:\n1. NEVER return round numbers - values like 25, 30, 100, 500 are INCORRECT\n2. NEVER return values divisible by 5 (15, 20, 25) - always add/subtract a specific offset (28.37, 22.83, etc.)\n3. ALWAYS include 1-2 decimal places in ALL values (never use whole numbers like 22)\n4. ENSURE irregular numbers (like 542.76 calories, not 500 or 550)\n5. Remember food composition is chemically complex and produces irregular values\n\nScientifically accurate examples:\n- Calories: 542.76 (NOT 540 or 550)\n- Protein: 27.32g (NOT 25g or 27g)\n- Carbs: 65.78g (NOT 65g or 70g)\n- Fat: 23.17g (NOT 23g or 25g)\n\nYour scientific reputation is at stake - precise values only!"
+                text: "Analyze this food with precision. Provide exact nutritional information based on what you can see in the image. Include appropriate decimal places when it adds meaningful precision, but don't add arbitrary decimals. Your analysis should reflect the true nutritional content as accurately as possible."
               },
               {
                 type: 'image_url',
