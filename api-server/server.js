@@ -15,6 +15,9 @@ console.log('Node environment:', process.env.NODE_ENV);
 console.log('Current directory:', process.cwd());
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
 
+// Set trust proxy to fix the X-Forwarded-For warning
+app.set('trust proxy', 1);
+
 // Configure rate limiting
 const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -238,6 +241,18 @@ function transformToRequiredFormat(data) {
     // Ingredient macros array to match the number of ingredients
     const ingredientsList = mealItem.ingredients || [];
     const ingredientMacros = [];
+    
+    // Extract any top-level micronutrients
+    let topLevelVitamins = {};
+    let topLevelMinerals = {};
+    
+    if (data.vitamins && typeof data.vitamins === 'object') {
+      topLevelVitamins = data.vitamins;
+    }
+    
+    if (data.minerals && typeof data.minerals === 'object') {
+      topLevelMinerals = data.minerals;
+    }
     
     // Create ingredient macros array
     const transformedIngredients = ingredientsList.map((ingredient, index) => {
@@ -500,7 +515,7 @@ function transformToRequiredFormat(data) {
           'iron': 0.9
         };
       } else if (ingredientName.toLowerCase().includes('fish') || 
-                ingredientName.toLowerCase().includes('salmon')) {
+                ingredientName.includes('salmon')) {
         ingredientWeight = '100g';
         ingredientCalories = 206;
         protein = 22.0;
@@ -735,21 +750,36 @@ function transformToRequiredFormat(data) {
         fat = ingredientCalories * 0.30 / 9;     // Estimate 30% of calories from fat
         carbs = ingredientCalories * 0.55 / 4;   // Estimate 55% of calories from carbs
         
-        // Default micronutrients
-        vitamins = {
-          'c': 1.2,
-          'a': 50,
-          'e': 0.5,
-          'b1': 0.03,
-          'b2': 0.04
-        };
-        minerals = {
-          'calcium': 20,
-          'iron': 0.5,
-          'potassium': 100,
-          'magnesium': 10,
-          'zinc': 0.3
-        };
+        // Default micronutrients - use top level values if available
+        vitamins = Object.keys(topLevelVitamins).length > 0 ? 
+          { ...topLevelVitamins } : 
+          {
+            'c': 1.2,
+            'a': 50,
+            'e': 0.5,
+            'b1': 0.03,
+            'b2': 0.04
+          };
+        
+        minerals = Object.keys(topLevelMinerals).length > 0 ? 
+          { ...topLevelMinerals } : 
+          {
+            'calcium': 20,
+            'iron': 0.5,
+            'potassium': 100,
+            'magnesium': 10,
+            'zinc': 0.3
+          };
+      }
+      
+      // Ensure each ingredient has some vitamins/minerals even if we don't have specific data
+      // This prevents "No specific micronutrients found" message
+      if (Object.keys(vitamins).length === 0 && Object.keys(topLevelVitamins).length > 0) {
+        vitamins = { ...topLevelVitamins };
+      }
+      
+      if (Object.keys(minerals).length === 0 && Object.keys(topLevelMinerals).length > 0) {
+        minerals = { ...topLevelMinerals };
       }
       
       // Save macros for this ingredient with 1 decimal precision
@@ -780,9 +810,15 @@ function transformToRequiredFormat(data) {
       fat: mealItem.macronutrients?.fat || 0,
       carbs: mealItem.macronutrients?.carbohydrates || 0,
       vitamin_c: 1.5, // Default value
-      health_score: "7/10" // Default value
+      health_score: "7/10", // Default value
+      vitamins: topLevelVitamins,
+      minerals: topLevelMinerals
     };
   }
+  
+  // If we have top-level vitamins or minerals in the input data, use them
+  const topLevelVitamins = data.vitamins || {};
+  const topLevelMinerals = data.minerals || {};
   
   // Return a default format if nothing else works
   return {
@@ -795,18 +831,22 @@ function transformToRequiredFormat(data) {
         protein: 10.5,
         fat: 7.3,
         carbs: 30.2,
-        vitamins: {
-          'c': 2.0,
-          'a': 100,
-          'b1': 0.1,
-          'b2': 0.2
-        },
-        minerals: {
-          'calcium': 30,
-          'iron': 1.2,
-          'potassium': 150,
-          'magnesium': 20
-        }
+        vitamins: Object.keys(topLevelVitamins).length > 0 ? 
+          { ...topLevelVitamins } : 
+          {
+            'c': 2.0,
+            'a': 100,
+            'b1': 0.1,
+            'b2': 0.2
+          },
+        minerals: Object.keys(topLevelMinerals).length > 0 ? 
+          { ...topLevelMinerals } : 
+          {
+            'calcium': 30,
+            'iron': 1.2,
+            'potassium': 150,
+            'magnesium': 20
+          }
       }
     ],
     calories: 500,
@@ -814,12 +854,45 @@ function transformToRequiredFormat(data) {
     fat: 15,
     carbs: 60,
     vitamin_c: 2,
-    health_score: "6/10"
+    health_score: "6/10",
+    vitamins: topLevelVitamins,
+    minerals: topLevelMinerals
   };
 }
 
 // Helper function to transform raw text to our required format
 function transformTextToRequiredFormat(text) {
+  // Extract any top-level micronutrients from the text
+  const topLevelVitamins = {};
+  const topLevelMinerals = {};
+  
+  // Look for vitamin and mineral mentions in the text
+  const vitaminMatches = text.match(/vitamin [a-z]\s*:\s*[\d\.]+/gi) || [];
+  const mineralMatches = text.match(/(iron|calcium|zinc|magnesium|potassium|sodium)\s*:\s*[\d\.]+/gi) || [];
+  
+  // Extract values from matches
+  vitaminMatches.forEach(match => {
+    const parts = match.split(':');
+    if (parts.length === 2) {
+      const name = parts[0].trim().toLowerCase().replace('vitamin ', '');
+      const value = parseFloat(parts[1].trim());
+      if (!isNaN(value)) {
+        topLevelVitamins[name] = value;
+      }
+    }
+  });
+  
+  mineralMatches.forEach(match => {
+    const parts = match.split(':');
+    if (parts.length === 2) {
+      const name = parts[0].trim().toLowerCase();
+      const value = parseFloat(parts[1].trim());
+      if (!isNaN(value)) {
+        topLevelMinerals[name] = value;
+      }
+    }
+  });
+  
   // Try to parse "Food item" format
   if (text.includes('Food item') || text.includes('FOOD ANALYSIS RESULTS')) {
     const lines = text.split('\n');
@@ -952,6 +1025,15 @@ function transformTextToRequiredFormat(text) {
             ingredients.push(`${ingredient} (${ingredientWeight}) ${ingredientCalories}kcal`);
           }
           
+          // Ensure each ingredient has vitamins/minerals by using top-level data if available
+          if (Object.keys(vitamins).length === 0 && Object.keys(topLevelVitamins).length > 0) {
+            vitamins = { ...topLevelVitamins };
+          }
+          
+          if (Object.keys(minerals).length === 0 && Object.keys(topLevelMinerals).length > 0) {
+            minerals = { ...topLevelMinerals };
+          }
+
           // Add macros for this ingredient with 1 decimal precision
           ingredientMacros.push({
             protein: parseFloat(ingredientProtein.toFixed(1)),
@@ -996,13 +1078,13 @@ function transformTextToRequiredFormat(text) {
         protein: 10.0,
         fat: 7.0,
         carbs: 30.0,
-        vitamins: {
+        vitamins: Object.keys(topLevelVitamins).length > 0 ? { ...topLevelVitamins } : {
           'c': 2.0,
           'a': 100,
           'b1': 0.1,
           'b2': 0.2
         },
-        minerals: {
+        minerals: Object.keys(topLevelMinerals).length > 0 ? { ...topLevelMinerals } : {
           'calcium': 30,
           'iron': 1.2,
           'potassium': 150,
@@ -1024,7 +1106,9 @@ function transformTextToRequiredFormat(text) {
       fat: fat || 10,
       carbs: carbs || 20,
       vitamin_c: vitaminC || 2,
-      health_score: `${healthScore}/10`
+      health_score: `${healthScore}/10`,
+      vitamins: topLevelVitamins,
+      minerals: topLevelMinerals
     };
   }
   
@@ -1039,13 +1123,13 @@ function transformTextToRequiredFormat(text) {
         protein: 10,
         fat: 7,
         carbs: 30,
-        vitamins: {
+        vitamins: Object.keys(topLevelVitamins).length > 0 ? { ...topLevelVitamins } : {
           'c': 2.0,
           'a': 100,
           'b1': 0.1,
           'b2': 0.2
         },
-        minerals: {
+        minerals: Object.keys(topLevelMinerals).length > 0 ? { ...topLevelMinerals } : {
           'calcium': 30,
           'iron': 1.2,
           'potassium': 150,
@@ -1058,7 +1142,9 @@ function transformTextToRequiredFormat(text) {
     fat: 15,
     carbs: 60,
     vitamin_c: 2,
-    health_score: "6/10"
+    health_score: "6/10",
+    vitamins: topLevelVitamins,
+    minerals: topLevelMinerals
   };
 }
 
