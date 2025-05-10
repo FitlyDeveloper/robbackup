@@ -31,6 +31,8 @@ class FoodAnalyzerApi {
               'detail_level': 'high',
               'include_ingredient_macros': true,
               'return_ingredient_nutrition': true,
+              'per_ingredient_breakdown': true,
+              'nutrition_threshold': 0.4,
               'include_additional_nutrition': true,
               'include_vitamins_minerals': true,
             }),
@@ -49,38 +51,74 @@ class FoodAnalyzerApi {
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       // Check for API-level errors
-      if (responseData['success'] != true) {
+      if (responseData.containsKey('success') &&
+          responseData['success'] != true) {
         throw Exception('API error: ${responseData['error']}');
       }
 
+      // Extract the data from the response
+      Map<String, dynamic> data;
+      if (responseData.containsKey('data') && responseData['data'] is Map) {
+        data = Map<String, dynamic>.from(responseData['data']);
+      } else {
+        // If 'data' field is not present, use the entire response
+        data = responseData;
+      }
+
       // If we got here, confirm that we received the expected format
-      print(
-          'API response format: ${responseData['data'] is Map ? 'Map' : 'Other type'}');
-      if (responseData['data'] is Map) {
-        print('Keys in data: ${(responseData['data'] as Map).keys.join(', ')}');
+      print('API response format: ${data is Map ? 'Map' : 'Other type'}');
+      if (data is Map) {
+        print('Keys in data: ${data.keys.join(', ')}');
 
         // Log additional nutritional information when available
-        final data = responseData['data'] as Map<String, dynamic>;
-
         if (data.containsKey('vitamins')) {
-          print('Vitamins detected in API response');
+          print('Vitamins detected in API response: ${data['vitamins']}');
         }
 
         if (data.containsKey('minerals')) {
-          print('Minerals detected in API response');
+          print('Minerals detected in API response: ${data['minerals']}');
         }
 
-        if (data.containsKey('amino_acids')) {
-          print('Amino acids detected in API response');
+        // Check for ingredient nutrients (new format)
+        if (data.containsKey('ingredient_nutrients') &&
+            data['ingredient_nutrients'] is List) {
+          print(
+              'Ingredients with nutrients detected: ${(data['ingredient_nutrients'] as List).length} ingredients');
+
+          // Log the first ingredient as an example
+          if ((data['ingredient_nutrients'] as List).isNotEmpty) {
+            var firstIngredient = (data['ingredient_nutrients'] as List).first;
+            print('Example ingredient structure: $firstIngredient');
+
+            if (firstIngredient is Map &&
+                firstIngredient.containsKey('nutrients')) {
+              print(
+                  'Nutrients in first ingredient: ${firstIngredient['nutrients']}');
+            }
+          }
+        }
+        // Check for ingredients (original format)
+        else if (data.containsKey('ingredients') &&
+            data['ingredients'] is List) {
+          print(
+              'Ingredients detected: ${(data['ingredients'] as List).length} ingredients');
+
+          // Log the first ingredient as an example
+          if ((data['ingredients'] as List).isNotEmpty) {
+            var firstIngredient = (data['ingredients'] as List).first;
+            print('Example ingredient structure: $firstIngredient');
+          }
         }
 
-        if (data.containsKey('nutrition_other')) {
-          print('Other nutrition values detected in API response');
+        // Check for basic nutrition
+        if (data.containsKey('calories')) {
+          print('Basic nutrition detected: calories=${data['calories']}, ' +
+              'protein=${data['protein']}, fat=${data['fat']}, carbs=${data['carbs']}');
         }
       }
 
-      // Return the data
-      return responseData['data'];
+      // Return the data directly
+      return data;
     } catch (e) {
       print('Error analyzing food image: $e');
       rethrow;
