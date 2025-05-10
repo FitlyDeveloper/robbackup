@@ -757,11 +757,9 @@ function transformToRequiredFormat(data) {
         protein: parseFloat(protein.toFixed(1)),
         fat: parseFloat(fat.toFixed(1)),
         carbs: parseFloat(carbs.toFixed(1)),
-        // Add nutrition data with vitamins and minerals
-        nutrition: {
-          vitamins: vitamins,
-          minerals: minerals
-        }
+        // Add vitamins and minerals directly at the root level for easier access
+        vitamins: vitamins,
+        minerals: minerals
       };
       
       ingredientMacros.push(macroData);
@@ -797,19 +795,17 @@ function transformToRequiredFormat(data) {
         protein: 10.5,
         fat: 7.3,
         carbs: 30.2,
-        nutrition: {
-          vitamins: {
-            'c': 2.0,
-            'a': 100,
-            'b1': 0.1,
-            'b2': 0.2
-          },
-          minerals: {
-            'calcium': 30,
-            'iron': 1.2,
-            'potassium': 150,
-            'magnesium': 20
-          }
+        vitamins: {
+          'c': 2.0,
+          'a': 100,
+          'b1': 0.1,
+          'b2': 0.2
+        },
+        minerals: {
+          'calcium': 30,
+          'iron': 1.2,
+          'potassium': 150,
+          'magnesium': 20
         }
       }
     ],
@@ -949,8 +945,6 @@ function transformTextToRequiredFormat(text) {
             };
           }
 
-          // ... [existing code for other ingredients] ...
-          
           if (ingredient.includes('(') && ingredient.includes(')')) {
             ingredients.push(ingredient);
           } else {
@@ -958,15 +952,13 @@ function transformTextToRequiredFormat(text) {
             ingredients.push(`${ingredient} (${ingredientWeight}) ${ingredientCalories}kcal`);
           }
           
-          // Add macros for this ingredient with 1 decimal precision and nutrition data
+          // Add macros for this ingredient with 1 decimal precision
           ingredientMacros.push({
             protein: parseFloat(ingredientProtein.toFixed(1)),
             fat: parseFloat(ingredientFat.toFixed(1)),
             carbs: parseFloat(ingredientCarbs.toFixed(1)),
-            nutrition: {
-              vitamins: vitamins,
-              minerals: minerals
-            }
+            vitamins: vitamins,
+            minerals: minerals
           });
         }
       }
@@ -1004,19 +996,17 @@ function transformTextToRequiredFormat(text) {
         protein: 10.0,
         fat: 7.0,
         carbs: 30.0,
-        nutrition: {
-          vitamins: {
-            'c': 2.0,
-            'a': 100,
-            'b1': 0.1,
-            'b2': 0.2
-          },
-          minerals: {
-            'calcium': 30,
-            'iron': 1.2,
-            'potassium': 150,
-            'magnesium': 20
-          }
+        vitamins: {
+          'c': 2.0,
+          'a': 100,
+          'b1': 0.1,
+          'b2': 0.2
+        },
+        minerals: {
+          'calcium': 30,
+          'iron': 1.2,
+          'potassium': 150,
+          'magnesium': 20
         }
       });
     }
@@ -1049,19 +1039,17 @@ function transformTextToRequiredFormat(text) {
         protein: 10,
         fat: 7,
         carbs: 30,
-        nutrition: {
-          vitamins: {
-            'c': 2.0,
-            'a': 100,
-            'b1': 0.1,
-            'b2': 0.2
-          },
-          minerals: {
-            'calcium': 30,
-            'iron': 1.2,
-            'potassium': 150,
-            'magnesium': 20
-          }
+        vitamins: {
+          'c': 2.0,
+          'a': 100,
+          'b1': 0.1,
+          'b2': 0.2
+        },
+        minerals: {
+          'calcium': 30,
+          'iron': 1.2,
+          'potassium': 150,
+          'magnesium': 20
         }
       }
     ],
