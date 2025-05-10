@@ -54,7 +54,16 @@ app.get('/', (req, res) => {
 app.post('/api/analyze-food', limiter, async (req, res) => {
   try {
     logToFile('Analyze food endpoint called');
-    const { image } = req.body;
+    const { 
+      image, 
+      detail_level, 
+      include_ingredient_macros, 
+      return_ingredient_nutrition, 
+      per_ingredient_breakdown, 
+      nutrition_threshold,
+      include_additional_nutrition,
+      include_vitamins_minerals
+    } = req.body;
 
     if (!image) {
       logToFile('No image provided in request');
@@ -67,6 +76,15 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
     // Debug logging
     logToFile(`Received image data, length: ${image.length}`);
     logToFile(`Image data starts with: ${image.substring(0, 50)}`);
+    logToFile(`Additional params: ${JSON.stringify({
+      detail_level,
+      include_ingredient_macros,
+      return_ingredient_nutrition,
+      per_ingredient_breakdown,
+      nutrition_threshold,
+      include_additional_nutrition,
+      include_vitamins_minerals
+    })}`);
 
     // Check for API key
     if (!process.env.OPENAI_API_KEY) {
@@ -80,6 +98,80 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
     // Call OpenAI API
     logToFile('Calling OpenAI API...');
     
+    // Create system prompt with additional parameters if provided
+    let systemPrompt = '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\n[CRITICAL NUTRITION ANALYSIS RULES]\nYou MUST calculate nutritional values BASED ON THE FOOD INGREDIENTS AND THEIR TYPICAL COMPOSITION:\n- Calculate protein, fats, and carbs based on actual typical nutritional composition of the identified ingredients\n- DO NOT inflate protein content - be realistic (e.g., donuts should have LOW protein, around 3-7g per serving)\n- CALORIES MUST BE PRECISE WHOLE NUMBERS - NO ROUNDING to multiples of 10 or 50\n- For example: if a food has 283 calories, return 283 (NOT 280 or 300)\n- Use common food nutrition databases as reference for standard values\n- Sweet foods should typically have higher carbs, lower protein\n- Meat dishes should have higher protein\n- Avoid unrealistic macros like high protein in desserts or high fat in fruits';
+    
+    // Add per-ingredient breakdown instruction if requested
+    if (per_ingredient_breakdown) {
+      systemPrompt += '\n\n[PER-INGREDIENT NUTRIENT BREAKDOWN]\n- For each ingredient, provide detailed nutrition breakdown\n- Include all nutrients (macros and micros) per ingredient\n- Only include nutrients with values ≥ ' + (nutrition_threshold || 0.4) + ' units (to avoid trace amounts)\n- Format each nutrient as: "nutrient_name": numeric_value (no units in the value)';
+    }
+
+    // Add instruction about nutrition threshold if specified
+    if (nutrition_threshold) {
+      systemPrompt += `\n- Only include nutrients where value is ≥ ${nutrition_threshold} units in the output`;
+    }
+    
+    systemPrompt += '\n\n[CRITICAL INGREDIENT NAMING RULES]\n- EACH INGREDIENT NAME MUST BE 14 CHARACTERS OR LESS (including spaces, commas, hyphens)\n- NEVER USE THE WORD "WITH" IN INGREDIENT NAMES - split ingredients instead\n- If a full ingredient name would be longer than 14 characters, split it into SEPARATE INGREDIENTS\n- For example: "Chocolate with Nuts" is INCORRECT, instead use "Chocolate" and "Nuts" as separate ingredients\n- Another example: "Whole Wheat Bread" (17 chars) should be split into "Whole Wheat" and "Bread" as separate ingredients\n- Each component still gets its own weight and calories\n- Do not abbreviate ingredient names, split them instead\n- Be as specific and accurate as possible with each ingredient name';
+
+    systemPrompt += '\n\nFORMAT RULES:\n1. Return a single meal name for the entire image (e.g., "Pasta Meal")\n2. List ingredients with weights and calories (e.g., "Pasta (100g) 200kcal")\n3. Return PRECISE nutritional values that accurately reflect the food content\n4. Calculate a health score (1-10) based on ingredient quality and nutritional value';
+
+    systemPrompt += '\n\nHEALTH SCORE CRITERIA:\n• Positive indicators (+): Whole/unprocessed foods, healthy fats, high fiber foods\n• Negative indicators (-): Highly processed/fried ingredients, added sugars, high saturated fats\n• Score meaning: 9-10 (Very healthy), 7-8 (Healthy), 5-6 (Moderate), 3-4 (Unhealthy), 1-2 (Very unhealthy)';
+
+    systemPrompt += '\n\nYOU WILL BE PENALIZED SEVERELY IF YOU GENERATE UNREALISTIC NUTRITIONAL VALUES, ROUNDED CALORIES, OR INGREDIENT NAMES LONGER THAN 14 CHARACTERS OR CONTAINING THE WORD "WITH".';
+
+    // Create response format based on requested parameters
+    let responseFormat = {
+      "meal_name": "Meal Name",
+      "ingredients": ["Item1 (weight) calories", "Item2 (weight) calories"],
+      "calories": "precise calorie count (exact number, not rounded to 10s or 50s)",
+      "protein": "realistic protein amount in grams based on ingredients",
+      "fat": "realistic fat amount in grams based on ingredients",
+      "carbs": "realistic carb amount in grams based on ingredients"
+    };
+
+    // Add vitamins and minerals if requested
+    if (include_vitamins_minerals) {
+      responseFormat["vitamin_c"] = "realistic vitamin C amount in mg based on ingredients";
+      responseFormat["calcium"] = "realistic calcium amount in mg based on ingredients";
+      responseFormat["iron"] = "realistic iron amount in mg based on ingredients";
+    }
+
+    // Add additional nutrition if requested
+    if (include_additional_nutrition) {
+      responseFormat["fiber"] = "realistic fiber amount in grams based on ingredients";
+      responseFormat["sugar"] = "realistic sugar amount in grams based on ingredients";
+      responseFormat["sodium"] = "realistic sodium amount in mg based on ingredients";
+    }
+
+    // Add per-ingredient breakdown if requested
+    if (per_ingredient_breakdown) {
+      responseFormat["ingredient_nutrients"] = [
+        {
+          "name": "Ingredient 1 name",
+          "amount": "weight of ingredient",
+          "calories": "calories for this ingredient",
+          "nutrients": {
+            "protein": "protein amount in g",
+            "fat": "fat amount in g",
+            "carbs": "carbs amount in g",
+            "fiber": "fiber amount in g if significant",
+            "vitamin_c": "vitamin C amount in mg if significant"
+            // Additional nutrients depending on the ingredient
+          }
+        },
+        {
+          "name": "Ingredient 2 name",
+          "amount": "weight of ingredient",
+          "calories": "calories for this ingredient",
+          "nutrients": { /* Nutrients for this ingredient */ }
+        }
+      ];
+    }
+
+    responseFormat["health_score"] = "score/10";
+
+    systemPrompt += `\n\nEXACT FORMAT REQUIRED:\n${JSON.stringify(responseFormat, null, 2)}`;
+    
     // Force JSON response format
     const requestBody = {
       model: 'gpt-4o',
@@ -87,14 +179,14 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\n[CRITICAL NUTRITION ANALYSIS RULES]\nYou MUST calculate nutritional values BASED ON THE FOOD INGREDIENTS AND THEIR TYPICAL COMPOSITION:\n- Calculate protein, fats, and carbs based on actual typical nutritional composition of the identified ingredients\n- DO NOT inflate protein content - be realistic (e.g., donuts should have LOW protein, around 3-7g per serving)\n- CALORIES MUST BE PRECISE WHOLE NUMBERS - NO ROUNDING to multiples of 10 or 50\n- For example: if a food has 283 calories, return 283 (NOT 280 or 300)\n- Use common food nutrition databases as reference for standard values\n- Sweet foods should typically have higher carbs, lower protein\n- Meat dishes should have higher protein\n- Avoid unrealistic macros like high protein in desserts or high fat in fruits\n\n[CRITICAL INGREDIENT NAMING RULES]\n- EACH INGREDIENT NAME MUST BE 14 CHARACTERS OR LESS (including spaces, commas, hyphens)\n- NEVER USE THE WORD "WITH" IN INGREDIENT NAMES - split ingredients instead\n- If a full ingredient name would be longer than 14 characters, split it into SEPARATE INGREDIENTS\n- For example: "Chocolate with Nuts" is INCORRECT, instead use "Chocolate" and "Nuts" as separate ingredients\n- Another example: "Whole Wheat Bread" (17 chars) should be split into "Whole Wheat" and "Bread" as separate ingredients\n- Each component still gets its own weight and calories\n- Do not abbreviate ingredient names, split them instead\n- Be as specific and accurate as possible with each ingredient name\n\nFORMAT RULES:\n1. Return a single meal name for the entire image (e.g., "Pasta Meal")\n2. List ingredients with weights and calories (e.g., "Pasta (100g) 200kcal")\n3. Return PRECISE nutritional values that accurately reflect the food content\n4. Calculate a health score (1-10) based on ingredient quality and nutritional value\n\nHEALTH SCORE CRITERIA:\n• Positive indicators (+): Whole/unprocessed foods, healthy fats, high fiber foods\n• Negative indicators (-): Highly processed/fried ingredients, added sugars, high saturated fats\n• Score meaning: 9-10 (Very healthy), 7-8 (Healthy), 5-6 (Moderate), 3-4 (Unhealthy), 1-2 (Very unhealthy)\n\nYOU WILL BE PENALIZED SEVERELY IF YOU GENERATE UNREALISTIC NUTRITIONAL VALUES, ROUNDED CALORIES, OR INGREDIENT NAMES LONGER THAN 14 CHARACTERS OR CONTAINING THE WORD "WITH".\n\nEXACT FORMAT REQUIRED:\n{\n  "meal_name": "Meal Name",\n  "ingredients": ["Item1 (weight) calories", "Item2 (weight) calories"],\n  "calories": precise calorie count (exact number, not rounded to 10s or 50s),\n  "protein": realistic protein amount in grams based on ingredients,\n  "fat": realistic fat amount in grams based on ingredients,\n  "carbs": realistic carb amount in grams based on ingredients,\n  "vitamin_c": realistic vitamin C amount in mg based on ingredients,\n  "health_score": "score/10"\n}'
+          content: systemPrompt
         },
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              text: "RETURN ONLY RAW JSON. Analyze this food image with the MOST ACCURATE values possible based on the typical nutritional composition of the identified ingredients. Use PRECISE CALORIE COUNTS - do not round to multiples of 10 or 50 (e.g., if a food has 283 calories, return 283, not 280 or 300). IMPORTANT: Each ingredient name MUST BE 14 CHARACTERS OR LESS - split longer names into separate ingredients with their own weights and calories. NEVER use the word \"with\" in ingredient names - split them into separate ingredients instead. Ensure all nutritional values are realistic for the type of food shown.\n\n{\n  \"meal_name\": string (single name for entire meal),\n  \"ingredients\": array of strings with weights and calories (EACH INGREDIENT NAME ≤ 14 CHARS, NO \"WITH\"),\n  \"calories\": precise calorie count (exact number, not rounded),\n  \"protein\": realistic protein amount in grams based on ingredients,\n  \"fat\": realistic fat amount in grams based on ingredients,\n  \"carbs\": realistic carb amount in grams based on ingredients,\n  \"vitamin_c\": realistic vitamin C amount in mg based on ingredients,\n  \"health_score\": string\n}"
+              text: "RETURN ONLY RAW JSON. Analyze this food image with the MOST ACCURATE values possible based on the typical nutritional composition of the identified ingredients. Use PRECISE CALORIE COUNTS - do not round to multiples of 10 or 50 (e.g., if a food has 283 calories, return 283, not 280 or 300). IMPORTANT: Each ingredient name MUST BE 14 CHARACTERS OR LESS - split longer names into separate ingredients with their own weights and calories. NEVER use the word \"with\" in ingredient names - split them into separate ingredients instead. Ensure all nutritional values are realistic for the type of food shown."
             },
             {
               type: 'image_url',
@@ -172,7 +264,13 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       
       return res.json({
         success: true,
-        data: parsedData
+        data: parsedData,
+        metadata: {
+          per_ingredient_breakdown: !!per_ingredient_breakdown,
+          nutrition_threshold: nutrition_threshold || 0.4,
+          include_additional_nutrition: !!include_additional_nutrition,
+          include_vitamins_minerals: !!include_vitamins_minerals
+        }
       });
     } catch (error) {
       logToFile(`Direct JSON parsing failed: ${error.message}`);
@@ -192,7 +290,13 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
           return res.json({
             success: true,
             data: parsedData,
-            note: 'JSON was extracted from text response'
+            note: 'JSON was extracted from text response',
+            metadata: {
+              per_ingredient_breakdown: !!per_ingredient_breakdown,
+              nutrition_threshold: nutrition_threshold || 0.4,
+              include_additional_nutrition: !!include_additional_nutrition,
+              include_vitamins_minerals: !!include_vitamins_minerals
+            }
           });
         } catch (err) {
           logToFile(`JSON extraction failed: ${err.message}`);
