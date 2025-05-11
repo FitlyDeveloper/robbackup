@@ -4718,6 +4718,23 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       print('INGREDIENT ADD: Adding new ingredient: $newIngredient');
 
+      // Store all micronutrient data in the ingredient object
+      Map<String, dynamic> micronutrients = {};
+
+      // Extract all keys that aren't the standard macronutrients
+      for (var key in newIngredient.keys) {
+        if (!['name', 'amount', 'calories', 'protein', 'fat', 'carbs']
+            .contains(key)) {
+          micronutrients[key] = newIngredient[key];
+        }
+      }
+
+      // Add micronutrients as a separate field if they exist
+      if (micronutrients.isNotEmpty) {
+        newIngredient['micronutrients'] = micronutrients;
+        print('INGREDIENT ADD: Stored micronutrients: $micronutrients');
+      }
+
       // Add the ingredient
       setState(() {
         _ingredients.add(newIngredient);
@@ -4742,15 +4759,371 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             '[${i + 1}] ${_ingredients[i]['name']} - ${_ingredients[i]['amount']} - ${_ingredients[i]['calories']} kcal');
       }
 
-      // Calculate total nutrition from all ingredients
+      // Update nutrition values locally without saving
+      _markAsUnsaved();
       _calculateTotalNutrition();
 
-      // Save the data immediately to ensure it's reflected in the Nutrition screen
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _saveData();
-      });
+      // Update Nutrition.dart with micronutrient data - only if the user hasn't chosen to discard changes
+      _updateNutritionDartValues(newIngredient, isAddition: true);
     } catch (e) {
       print('ERROR adding ingredient to list: $e');
+    }
+  }
+
+  // Helper method to update Nutrition.dart with ingredient micronutrient data
+  void _updateNutritionDartValues(Map<String, dynamic> ingredient,
+      {bool isAddition = true}) {
+    try {
+      // Skip if no micronutrients
+      if (!ingredient.containsKey('micronutrients') &&
+          !_containsMicronutrients(ingredient)) {
+        print(
+            'No micronutrients found in ingredient, skipping Nutrition.dart update');
+        return;
+      }
+      
+      // Get micronutrients either from dedicated field or from root object
+      Map<String, dynamic> micronutrients = 
+          ingredient.containsKey('micronutrients') 
+              ? Map<String, dynamic>.from(ingredient['micronutrients'])
+              : _extractMicronutrientsFromIngredient(ingredient);
+      
+      // If there are no micronutrients, return
+      if (micronutrients.isEmpty) {
+        return;
+      }
+      
+      print('Updating Nutrition.dart with ${isAddition ? "added" : "removed"} values: $micronutrients');
+      
+      // Create unique ID for this meal if not already created
+      String scanId = 'food_nutrition_${_foodName.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
+      
+      // Prepare the data to pass to Nutrition.dart
+      Map<String, dynamic> nutritionData = {};
+      
+      // Add each micronutrient to the nutritionData map
+      micronutrients.forEach((key, value) {
+        // Multiply by -1 if this is a removal (ingredient deletion)
+        double amount = double.tryParse(value.toString()) ?? 0.0;
+        if (!isAddition) {
+          amount = -amount; // Negative value for removal
+        }
+        nutritionData[key] = amount;
+      });
+      
+      // Only proceed if we have data to update
+      if (nutritionData.isNotEmpty) {
+        _addMicronutrientsToNutritionDart(nutritionData, scanId);
+      }
+    } catch (e) {
+      print('ERROR updating Nutrition.dart: $e');
+    }
+  }
+  
+  // Helper to check if an ingredient contains any micronutrients directly at the root
+  bool _containsMicronutrients(Map<String, dynamic> ingredient) {
+    // Standard keys that are not micronutrients
+    final standardKeys = ['name', 'amount', 'calories', 'protein', 'fat', 'carbs', 'micronutrients'];
+    
+    // Check each key in the ingredient
+    for (var key in ingredient.keys) {
+      if (!standardKeys.contains(key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Helper to extract micronutrients from an ingredient object's root level
+  Map<String, dynamic> _extractMicronutrientsFromIngredient(
+      Map<String, dynamic> ingredient) {
+    Map<String, dynamic> micronutrients = {};
+    final standardKeys = [
+      'name',
+      'amount',
+      'calories',
+      'protein',
+      'fat',
+      'carbs',
+      'micronutrients'
+    ];
+
+    ingredient.forEach((key, value) {
+      if (!standardKeys.contains(key)) {
+        micronutrients[key] = value;
+      }
+    });
+
+    return micronutrients;
+  }
+
+  // Helper to add micronutrients to Nutrition.dart
+  void _addMicronutrientsToNutritionDart(
+      Map<String, dynamic> nutritionData, String scanId) {
+    try {
+      // Navigate to Nutrition screen with the nutrition data
+      if (!mounted) return;
+
+      print('Adding micronutrients to Nutrition.dart: $nutritionData');
+
+      // Save micronutrient data to SharedPreferences for Nutrition.dart
+      _saveMicronutrientsToPrefs(nutritionData, scanId);
+
+      // Optional: You could also navigate to the Nutrition screen if needed
+      // But usually just saving to SharedPreferences is enough as Nutrition.dart
+      // reads from there when it loads
+    } catch (e) {
+      print('ERROR adding micronutrients to Nutrition.dart: $e');
+    }
+  }
+
+  // Save micronutrient data to SharedPreferences for Nutrition.dart to use
+  Future<void> _saveMicronutrientsToPrefs(
+      Map<String, dynamic> nutritionData, String scanId) async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      // Get any existing global nutrition data
+      String? existingDataStr =
+          prefs.getString('PERMANENT_GLOBAL_NUTRITION_DATA');
+      Map<String, dynamic> existingData = {};
+
+      if (existingDataStr != null && existingDataStr.isNotEmpty) {
+        try {
+          existingData = json.decode(existingDataStr);
+        } catch (e) {
+          print('Error parsing existing nutrition data: $e');
+        }
+      }
+
+      // Create or update vitamins, minerals, and other nutrients based on the new data
+      Map<String, dynamic> vitamins = existingData.containsKey('vitamins')
+          ? Map<String, dynamic>.from(existingData['vitamins'])
+          : {};
+
+      Map<String, dynamic> minerals = existingData.containsKey('minerals')
+          ? Map<String, dynamic>.from(existingData['minerals'])
+          : {};
+
+      Map<String, dynamic> other = existingData.containsKey('other')
+          ? Map<String, dynamic>.from(existingData['other'])
+          : {};
+
+      // Update the values based on the new nutritionData
+      _updateNutrientCategory(nutritionData, vitamins, 'vitamins');
+      _updateNutrientCategory(nutritionData, minerals, 'minerals');
+      _updateNutrientCategory(nutritionData, other, 'other');
+
+      // Combine all data back together
+      Map<String, dynamic> updatedData = {
+        'scanId': scanId,
+        'lastSaved': DateTime.now().millisecondsSinceEpoch,
+        'vitamins': vitamins,
+        'minerals': minerals,
+        'other': other,
+      };
+
+      // Save the updated data
+      await prefs.setString(
+          'PERMANENT_GLOBAL_NUTRITION_DATA', json.encode(updatedData));
+      print('Successfully saved micronutrient data to SharedPreferences');
+    } catch (e) {
+      print('ERROR saving micronutrients to SharedPreferences: $e');
+    }
+  }
+
+  // Helper to update a nutrient category (vitamins, minerals, or other)
+  void _updateNutrientCategory(Map<String, dynamic> nutritionData,
+      Map<String, dynamic> category, String categoryType) {
+    // Mapping of API keys to category keys
+    Map<String, Map<String, String>> categoryMappings = {
+      'vitamins': {
+        'vitamin_a': 'Vitamin A',
+        'vitamin_c': 'Vitamin C',
+        'vitamin_d': 'Vitamin D',
+        'vitamin_e': 'Vitamin E',
+        'vitamin_k': 'Vitamin K',
+        'vitamin_b1': 'Vitamin B1',
+        'thiamin': 'Vitamin B1',
+        'vitamin_b2': 'Vitamin B2',
+        'riboflavin': 'Vitamin B2',
+        'vitamin_b3': 'Vitamin B3',
+        'niacin': 'Vitamin B3',
+        'vitamin_b5': 'Vitamin B5',
+        'pantothenic_acid': 'Vitamin B5',
+        'vitamin_b6': 'Vitamin B6',
+        'pyridoxine': 'Vitamin B6',
+        'vitamin_b7': 'Vitamin B7',
+        'biotin': 'Vitamin B7',
+        'vitamin_b9': 'Vitamin B9',
+        'folate': 'Vitamin B9',
+        'folic_acid': 'Vitamin B9',
+        'vitamin_b12': 'Vitamin B12',
+        'cobalamin': 'Vitamin B12',
+      },
+      'minerals': {
+        'calcium': 'Calcium',
+        'iron': 'Iron',
+        'magnesium': 'Magnesium',
+        'phosphorus': 'Phosphorus',
+        'potassium': 'Potassium',
+        'sodium': 'Sodium',
+        'zinc': 'Zinc',
+        'copper': 'Copper',
+        'manganese': 'Manganese',
+        'selenium': 'Selenium',
+        'chloride': 'Chloride',
+        'chromium': 'Chromium',
+        'iodine': 'Iodine',
+        'molybdenum': 'Molybdenum',
+        'fluoride': 'Fluoride',
+      },
+      'other': {
+        'fiber': 'Fiber',
+        'dietary_fiber': 'Fiber',
+        'fibre': 'Fiber',
+        'cholesterol': 'Cholesterol',
+        'sugar': 'Sugar',
+        'sugars': 'Sugar',
+        'total_sugar': 'Sugar',
+        'saturated_fat': 'Saturated Fats',
+        'saturated_fats': 'Saturated Fats',
+        'sat_fat': 'Saturated Fats',
+        'omega_3': 'Omega-3',
+        'omega3': 'Omega-3',
+        'omega_6': 'Omega-6',
+        'omega6': 'Omega-6',
+      }
+    };
+
+    // Get the relevant mappings for this category
+    Map<String, String> mappings = categoryMappings[categoryType] ?? {};
+
+    // For each key in nutritionData, check if it belongs to this category
+    nutritionData.forEach((key, value) {
+      String keyLower = key.toLowerCase();
+
+      // Find a matching key in the mappings
+      for (var entry in mappings.entries) {
+        if (keyLower.contains(entry.key)) {
+          // Found a match, update the category
+          String categoryKey = entry.value;
+
+          // Convert the value to a numeric value
+          double amount = double.tryParse(value.toString()) ?? 0.0;
+
+          // Only proceed if we have a valid amount
+          if (amount != 0.0) {
+            // If the category doesn't have this key yet, initialize it
+            if (!category.containsKey(categoryKey)) {
+              category[categoryKey] = {
+                'name': categoryKey,
+                'value': '0/0 g',
+                'percent': '0%',
+                'progress': 0.0,
+                'progressColor': {'r': 255, 'g': 0, 'b': 0, 'opacity': 1.0},
+                'hasInfo': false,
+              };
+            }
+
+            // Get the current progress
+            double currentProgress = 0.0;
+            if (category[categoryKey] is Map &&
+                category[categoryKey].containsKey('progress')) {
+              currentProgress = double.tryParse(
+                      category[categoryKey]['progress'].toString()) ??
+                  0.0;
+            }
+
+            // Add the amount to the progress
+            double newProgress = currentProgress +
+                (amount / 100.0); // Assume the target is 100% of daily value
+
+            // Update the category with the new progress
+            if (category[categoryKey] is Map) {
+              category[categoryKey]['progress'] = newProgress;
+
+              // Update other fields
+              int percentValue = (newProgress * 100).round();
+              category[categoryKey]['percent'] = '$percentValue%';
+
+              // Extract current value and target from the value string
+              String valueString = category[categoryKey]['value'];
+              List<String> valueParts = valueString.split('/');
+              double currentValue = double.tryParse(valueParts[0]) ?? 0.0;
+              String targetWithUnit =
+                  valueParts.length > 1 ? valueParts[1] : '0 g';
+
+              // Parse target value and unit
+              RegExp regExp = RegExp(r'(\d+\.?\d*)\s*([a-zA-Z]+)');
+              Match? match = regExp.firstMatch(targetWithUnit);
+              double targetValue = 0.0;
+              String unit = 'g';
+
+              if (match != null) {
+                targetValue = double.tryParse(match.group(1) ?? '0') ?? 0.0;
+                unit = match.group(2) ?? 'g';
+              }
+
+              // Calculate the new current value
+              double newValue = currentValue + amount;
+
+              // Update the value string
+              category[categoryKey]['value'] = '$newValue/$targetValue $unit';
+
+              // Update the color based on progress
+              if (newProgress < 0.5) {
+                category[categoryKey]['progressColor'] = {
+                  'r': 255,
+                  'g': 0,
+                  'b': 0,
+                  'opacity': 1.0
+                };
+              } else if (newProgress < 0.75) {
+                category[categoryKey]['progressColor'] = {
+                  'r': 243,
+                  'g': 217,
+                  'b': 96,
+                  'opacity': 1.0
+                };
+              } else {
+                category[categoryKey]['progressColor'] = {
+                  'r': 120,
+                  'g': 198,
+                  'b': 122,
+                  'opacity': 1.0
+                };
+              }
+            }
+            break;
+          }
+        }
+      }
+    });
+  }
+
+  // Handle ingredient deletion with micronutrient tracking
+  void _handleIngredientDeletion(int index) {
+    if (index >= 0 && index < _ingredients.length) {
+      // Get the ingredient before removing it
+      Map<String, dynamic> deletedIngredient = _ingredients[index];
+
+      // Update Nutrition.dart with the deleted ingredient's micronutrients
+      // (using isAddition: false to subtract the values)
+      _updateNutritionDartValues(deletedIngredient, isAddition: false);
+
+      // Remove the ingredient from the list
+      setState(() {
+        _ingredients.removeAt(index);
+        _hasUnsavedChanges = true; // Mark as having unsaved changes
+      });
+
+      // Recalculate nutrition totals
+      _calculateTotalNutrition();
+
+      // Debug output
+      print(
+          'Deleted ingredient at index $index, remaining: ${_ingredients.length}');
     }
   }
 
@@ -5196,13 +5569,23 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                         borderRadius: BorderRadius.circular(20),
                                         onTap: () {
                                           Navigator.pop(context);
-                                          _showDeleteIngredientConfirmation(
-                                              name,
-                                              amount,
-                                              calories,
-                                              protein,
-                                              fat,
-                                              carbs);
+                                          // Find the ingredient by matching all properties
+                                          int indexToRemove = -1;
+                                          for (int i = 0;
+                                              i < _ingredients.length;
+                                              i++) {
+                                            if (_ingredients[i]['name'] ==
+                                                    name &&
+                                                _ingredients[i]['amount'] ==
+                                                    amount) {
+                                              indexToRemove = i;
+                                              break;
+                                            }
+                                          }
+                                          if (indexToRemove != -1) {
+                                            _handleIngredientDeletion(
+                                                indexToRemove);
+                                          }
                                         },
                                       ),
                                     ),
@@ -6016,8 +6399,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                               borderRadius: BorderRadius.circular(20),
                               onTap: () {
                                 Navigator.pop(context);
-                                _deleteIngredient(name, amount, calories,
-                                    protein, fat, carbs);
+                                _handleIngredientDeletion(name, amount,
+                                    calories, protein, fat, carbs);
                               },
                             ),
                           ),
@@ -6087,8 +6470,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   }
 
   // Method to delete an ingredient and update nutrition values
-  void _deleteIngredient(String name, String amount, String calories,
-      String protein, String fat, String carbs) {
+  void _deleteIngredientByProperties(String name, String amount,
+      String calories, String protein, String fat, String carbs) {
     // Find the ingredient in the _ingredients list
     int indexToRemove = -1;
 
