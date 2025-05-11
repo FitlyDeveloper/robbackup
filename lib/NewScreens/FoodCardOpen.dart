@@ -2099,6 +2099,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     bool isDialogShowing = false;
 
     try {
+      // Updated to include micronutrient extraction for Nutrition.dart integration
       print('STARTING NUTRITION CALCULATION for: $foodName ($servingSize)');
 
       // Show loading dialog if context is still valid
