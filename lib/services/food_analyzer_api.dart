@@ -9,6 +9,9 @@ class FoodAnalyzerApi {
   // Endpoint for food analysis
   static const String analyzeEndpoint = '/api/analyze-food';
 
+  // Endpoint for ingredient analysis
+  static const String analyzeIngredientEndpoint = '/api/analyze-ingredient';
+
   // Method to analyze a food image
   static Future<Map<String, dynamic>> analyzeFoodImage(
       Uint8List imageBytes) async {
@@ -87,35 +90,32 @@ class FoodAnalyzerApi {
     }
   }
 
-  // Method to analyze a single ingredient using text-based input
+  // Method to analyze a single ingredient
   static Future<Map<String, dynamic>> analyzeIngredient(
       String foodName, String servingSize) async {
     try {
       print(
-          'Calling API endpoint to analyze ingredient: $baseUrl$analyzeEndpoint');
+          'Calling ingredient API endpoint: $baseUrl$analyzeIngredientEndpoint');
+      print('Food name: $foodName, serving size: $servingSize');
 
-      // Call our secure API endpoint with text-based input
+      // Call our API endpoint for ingredient analysis
       final response = await http
           .post(
-            Uri.parse('$baseUrl$analyzeEndpoint'),
+            Uri.parse('$baseUrl$analyzeIngredientEndpoint'),
             headers: {
               'Content-Type': 'application/json',
             },
             body: jsonEncode({
               'food_name': foodName,
               'serving_size': servingSize,
-              'is_ingredient': true,
-              'detail_level': 'high',
-              'include_vitamins_minerals': true,
             }),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       // Check for HTTP errors
       if (response.statusCode != 200) {
         print('API error: ${response.statusCode}, ${response.body}');
-        throw Exception(
-            'Service error: ${response.statusCode}, ${response.body}');
+        throw Exception('Failed to analyze ingredient: ${response.statusCode}');
       }
 
       // Parse the response
@@ -126,7 +126,7 @@ class FoodAnalyzerApi {
         throw Exception('API error: ${responseData['error']}');
       }
 
-      // Return the data
+      print('Ingredient analysis successful: ${responseData['data']}');
       return responseData['data'];
     } catch (e) {
       print('Error analyzing ingredient: $e');
