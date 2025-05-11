@@ -2157,25 +2157,29 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
       }
 
-      // Create the request data - using the exact format the server expects
+      // Create the request data similar to _fixFoodWithAI method
       final requestData = {
-        'text': 'Analyze $foodName with serving size $servingSize',
+        'food_name': foodName,
+        'serving_size': servingSize,
+        'operation_type': 'NUTRITION_CALCULATION',
+        'include_micronutrients': true // Request micronutrient data as well
       };
 
-      print('NUTRITION CALCULATOR: Creating request to analyze ingredient');
+      print(
+          'NUTRITION CALCULATOR: Creating request to Render.com DeepSeek service');
       print('NUTRITION CALCULATOR: Request data: ${jsonEncode(requestData)}');
 
-      // Use the existing endpoint with the proper structure
+      // Use the same endpoint as Fix with AI
       final response = await http
           .post(
-        Uri.parse('https://deepseek-uhrc.onrender.com/api/analyze'),
+        Uri.parse('https://deepseek-uhrc.onrender.com/api/nutrition'),
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode(requestData),
       )
           .timeout(const Duration(minutes: 1), onTimeout: () {
-        print('FOOD CALCULATOR: Request timed out');
+        print('FOOD FIXER: Request timed out');
         // Safely show error dialog on timeout without navigating away
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -2207,7 +2211,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                         ),
                         SizedBox(height: 16),
                         Text(
-                          'The food analysis service is currently unavailable. Please try again later.',
+                          'The food modification service is currently unavailable. Please try again later.',
                           style: TextStyle(
                             fontSize: 17,
                             fontFamily: 'SF Pro Display',
@@ -2242,12 +2246,22 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           }
         });
 
+        // Show error dialog and return error result
+        if (mounted) {
+          _showStandardDialog(
+            title: "Service Timeout",
+            message:
+                "The food modification service timed out. Please try again later.",
+            positiveButtonText: "OK",
+          );
+        }
+
         // Return error result
         return http.Response(
           jsonEncode({
             'error': true,
             'message':
-                'The food analysis service timed out. Please try again later.'
+                'The food modification service timed out. Please try again later.'
           }),
           408,
           headers: {'content-type': 'application/json'},
@@ -2255,7 +2269,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       });
 
       print(
-          'NUTRITION CALCULATOR: Received ingredient analysis response with status: ${response.statusCode}');
+          'NUTRITION CALCULATOR: Received Render.com service response with status: ${response.statusCode}');
 
       // Safely dismiss the loading dialog if it's showing
       _safelyDismissDialog(dialogContext, isDialogShowing);
@@ -2281,269 +2295,308 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           nutritionData = responseData;
         }
 
-        // Extract micronutrients from the response structure
-        Map<String, dynamic> vitamins = {};
-        Map<String, dynamic> minerals = {};
-
-        // Check if vitamins exist in the top level or in ingredient_macros
-        if (nutritionData.containsKey('vitamins') &&
-            nutritionData['vitamins'] is Map) {
-          vitamins = Map<String, dynamic>.from(nutritionData['vitamins']);
-        } else if (nutritionData.containsKey('ingredient_macros') &&
-            nutritionData['ingredient_macros'] is List &&
-            nutritionData['ingredient_macros'].isNotEmpty &&
-            nutritionData['ingredient_macros'][0] is Map &&
-            nutritionData['ingredient_macros'][0].containsKey('vitamins')) {
-          vitamins = Map<String, dynamic>.from(
-              nutritionData['ingredient_macros'][0]['vitamins']);
+        // If nutritionData contains a 'nutrition' key, extract from it
+        if (nutritionData.containsKey('nutrition') &&
+            nutritionData['nutrition'] is Map) {
+          nutritionData = Map<String, dynamic>.from(nutritionData['nutrition']);
+        }
+        // If nutritionData contains a 'nutrition_values' key, extract from it
+        if (nutritionData.containsKey('nutrition_values') &&
+            nutritionData['nutrition_values'] is Map) {
+          nutritionData =
+              Map<String, dynamic>.from(nutritionData['nutrition_values']);
         }
 
-        // Check if minerals exist in the top level or in ingredient_macros
-        if (nutritionData.containsKey('minerals') &&
-            nutritionData['minerals'] is Map) {
-          minerals = Map<String, dynamic>.from(nutritionData['minerals']);
-        } else if (nutritionData.containsKey('ingredient_macros') &&
-            nutritionData['ingredient_macros'] is List &&
-            nutritionData['ingredient_macros'].isNotEmpty &&
-            nutritionData['ingredient_macros'][0] is Map &&
-            nutritionData['ingredient_macros'][0].containsKey('minerals')) {
-          minerals = Map<String, dynamic>.from(
-              nutritionData['ingredient_macros'][0]['minerals']);
+        print('NUTRITION CALCULATOR: Parsed nutrition data: $nutritionData');
+
+        // Check if the model identified this as an invalid food or serving size
+        if (nutritionData.containsKey('invalid_food') &&
+            nutritionData['invalid_food'] == true) {
+          print(
+              'NUTRITION CALCULATOR: Invalid food name or serving size detected: $foodName ($servingSize)');
+
+          // Show the invalid ingredient dialog
+          if (mounted) {
+            _showStandardDialog(
+              title: "Invalid Food Item",
+              message:
+                  "Sorry, the food name or serving size you entered is not recognized. Please try a more specific name or common serving size.",
+              positiveButtonText: "OK",
+            );
+          }
+
+          return {'invalid_food': true};
         }
 
-        // Log micronutrients to the terminal
-        if (vitamins.isNotEmpty) {
-          print('\n======== VITAMINS for $foodName ($servingSize) ========');
-          vitamins.forEach((key, value) {
-            print('$key: $value');
-          });
-        }
+        // Extract micronutrients from the response
+        // Start with an empty result with basic macros
+        Map<String, dynamic> result = {
+          'calories': _extractNumericValue(
+              nutritionData, ['calories', 'kcal', 'energy']),
+          'protein':
+              _extractNumericValue(nutritionData, ['protein', 'proteins']),
+          'carbs':
+              _extractNumericValue(nutritionData, ['carbs', 'carbohydrates']),
+          'fat':
+              _extractNumericValue(nutritionData, ['fat', 'fats', 'total_fat']),
+        };
 
-        if (minerals.isNotEmpty) {
-          print('\n======== MINERALS for $foodName ($servingSize) ========');
-          minerals.forEach((key, value) {
-            print('$key: $value');
-          });
-        }
+        // Add vitamins
+        _extractVitaminsFromData(nutritionData, result);
 
-        print('\n====================================================\n');
+        // Add minerals
+        _extractMineralsFromData(nutritionData, result);
 
-        // Check if the response contains an ingredient_macros list
-        if (nutritionData.containsKey('ingredient_macros') &&
-            nutritionData['ingredient_macros'] is List &&
-            nutritionData['ingredient_macros'].isNotEmpty) {
-          // Extract the first ingredient's macros
-          var ingredientMacro = nutritionData['ingredient_macros'][0];
+        // Add other nutrients
+        _extractOtherNutrientsFromData(nutritionData, result);
 
-          // Prepare the result with extracted macronutrients and micronutrients
-          Map<String, dynamic> result = {
-            'calories': ingredientMacro['calories'] ?? 0,
-            'protein': ingredientMacro['protein'] ?? 0,
-            'fat': ingredientMacro['fat'] ?? 0,
-            'carbs': ingredientMacro['carbs'] ?? 0,
-            'vitamins': vitamins,
-            'minerals': minerals,
-          };
-
-          print('COMPLETED nutrition calculation with micronutrients: $result');
-          return result;
-        } else {
-          // Use top-level nutrition data as fallback
-          Map<String, dynamic> result = {
-            'calories': nutritionData['calories'] ?? 0,
-            'protein': nutritionData['protein'] ?? 0,
-            'fat': nutritionData['fat'] ?? 0,
-            'carbs': nutritionData['carbs'] ?? 0,
-            'vitamins': vitamins,
-            'minerals': minerals,
-          };
-
-          print('COMPLETED nutrition calculation with micronutrients: $result');
-          return result;
-        }
+        print('COMPLETED nutrition calculation: $result');
+        return result;
       } else {
         // Handle error in response
-        print('NUTRITION CALCULATOR: Error in response: $responseData');
+        print(
+            'NUTRITION CALCULATOR: Error in response: ${responseData['error'] ?? "Unknown error"}');
         throw Exception(
-            'Error analyzing ingredient: ${responseData['error'] ?? 'Unknown error'}');
+            'Service error: ${responseData['error'] ?? "Unknown error"}');
       }
     } catch (e) {
-      print('NUTRITION CALCULATOR: Error calculating nutrition: $e');
+      print('CRITICAL ERROR calculating nutrition: $e');
 
       // Safely dismiss the loading dialog if it's showing
       _safelyDismissDialog(dialogContext, isDialogShowing);
 
-      // Show error dialog if mounted
+      // Show a properly styled error dialog to the user
       if (mounted) {
         _showStandardDialog(
           title: "Calculation Error",
           message:
-              "There was an error calculating nutrition information. Please try again.",
+              "We couldn't calculate the nutrition for this ingredient. Using estimated values instead.",
           positiveButtonText: "OK",
         );
       }
 
-      // Return empty result with scan_failed flag
-      return {'scan_failed': true};
+      // Use fallback estimation for nutrition values
+      double estimatedCalories =
+          _estimateCaloriesForFood(foodName, servingSize);
+
+      // Estimate macros based on food type
+      double estimatedProtein = 0.0;
+      double estimatedFat = 0.0;
+      double estimatedCarbs = 0.0;
+
+      // Simple rules for macro distribution based on food types
+      if (foodName.toLowerCase().contains('meat') ||
+          foodName.toLowerCase().contains('chicken') ||
+          foodName.toLowerCase().contains('fish')) {
+        // High protein foods
+        estimatedProtein =
+            estimatedCalories * 0.4 / 4; // 40% of calories from protein
+        estimatedFat = estimatedCalories * 0.4 / 9; // 40% of calories from fat
+        estimatedCarbs =
+            estimatedCalories * 0.2 / 4; // 20% of calories from carbs
+      } else if (foodName.toLowerCase().contains('salad') ||
+          foodName.toLowerCase().contains('vegetable')) {
+        // Vegetable-based foods
+        estimatedProtein = estimatedCalories * 0.15 / 4; // 15% protein
+        estimatedFat = estimatedCalories * 0.25 / 9; // 25% fat
+        estimatedCarbs = estimatedCalories * 0.6 / 4; // 60% carbs
+      } else if (foodName.toLowerCase().contains('dessert') ||
+          foodName.toLowerCase().contains('cake') ||
+          foodName.toLowerCase().contains('sweet') ||
+          foodName.toLowerCase().contains('cookie')) {
+        // Desserts and sweets
+        estimatedProtein = estimatedCalories * 0.05 / 4; // 5% protein
+        estimatedFat = estimatedCalories * 0.3 / 9; // 30% fat
+        estimatedCarbs = estimatedCalories * 0.65 / 4; // 65% carbs
+      } else {
+        // Default balanced distribution
+        estimatedProtein = estimatedCalories * 0.2 / 4; // 20% protein
+        estimatedFat = estimatedCalories * 0.3 / 9; // 30% fat
+        estimatedCarbs = estimatedCalories * 0.5 / 4; // 50% carbs
+      }
+
+      // Round to one decimal place
+      final result = {
+        'calories': double.parse(estimatedCalories.toStringAsFixed(1)),
+        'protein': double.parse(estimatedProtein.toStringAsFixed(1)),
+        'carbs': double.parse(estimatedCarbs.toStringAsFixed(1)),
+        'fat': double.parse(estimatedFat.toStringAsFixed(1)),
+      };
+
+      print('Using estimated nutrition values: $result');
+      return result;
     }
   }
 
-  // Helper method to generate estimated vitamins for fallback
-  Map<String, dynamic> _generateEstimatedVitamins(
-      String foodName, double calories) {
-    Map<String, dynamic> estimatedVitamins = {};
+  // Helper function to extract vitamins from nutrition data
+  void _extractVitaminsFromData(
+      Map<String, dynamic> nutritionData, Map<String, dynamic> result) {
+    // Define mapping of possible API keys to vitamin names
+    final vitaminMappings = {
+      'vitamin_a': 'vitamin_a',
+      'vitamin_c': 'vitamin_c',
+      'vitamin_d': 'vitamin_d',
+      'vitamin_e': 'vitamin_e',
+      'vitamin_k': 'vitamin_k',
+      'vitamin_b1': 'vitamin_b1',
+      'thiamin': 'vitamin_b1',
+      'vitamin_b2': 'vitamin_b2',
+      'riboflavin': 'vitamin_b2',
+      'vitamin_b3': 'vitamin_b3',
+      'niacin': 'vitamin_b3',
+      'vitamin_b5': 'vitamin_b5',
+      'pantothenic_acid': 'vitamin_b5',
+      'vitamin_b6': 'vitamin_b6',
+      'pyridoxine': 'vitamin_b6',
+      'vitamin_b7': 'vitamin_b7',
+      'biotin': 'vitamin_b7',
+      'vitamin_b9': 'vitamin_b9',
+      'folate': 'vitamin_b9',
+      'folic_acid': 'vitamin_b9',
+      'vitamin_b12': 'vitamin_b12',
+      'cobalamin': 'vitamin_b12',
+    };
 
-    // Common vitamins with default values scaled by calories
-    final lowercaseName = foodName.toLowerCase();
-    final caloriesFactor =
-        calories / 100; // Scale based on calories per 100 calories
+    // Loop through nutrition data keys and extract vitamins
+    nutritionData.forEach((key, value) {
+      // Convert key to lowercase for case-insensitive matching
+      String keyLower = key.toLowerCase();
 
-    // Base amounts - will be adjusted by food type
-    double vitaminA = 3.0 * caloriesFactor;
-    double vitaminC = 4.0 * caloriesFactor;
-    double vitaminD = 0.1 * caloriesFactor;
-    double vitaminE = 0.5 * caloriesFactor;
-    double vitaminK = 8.0 * caloriesFactor;
-    double vitaminB1 = 0.06 * caloriesFactor;
-    double vitaminB2 = 0.08 * caloriesFactor;
-    double vitaminB3 = 0.8 * caloriesFactor;
-    double vitaminB5 = 0.3 * caloriesFactor;
-    double vitaminB6 = 0.1 * caloriesFactor;
-    double vitaminB7 = 1.5 * caloriesFactor;
-    double vitaminB9 = 15.0 * caloriesFactor;
-    double vitaminB12 = 0.1 * caloriesFactor;
+      // Check if this key corresponds to a vitamin
+      for (var entry in vitaminMappings.entries) {
+        if (keyLower.contains(entry.key)) {
+          // Found a match - extract the value
+          double amount = 0.0;
+          if (value is num) {
+            amount = value.toDouble();
+          } else if (value is String) {
+            try {
+              amount =
+                  double.tryParse(value.replaceAll(RegExp(r'[^\d\.]'), '')) ??
+                      0.0;
+            } catch (e) {
+              print('Error parsing vitamin value: $e');
+            }
+          }
 
-    // Adjust based on food type
-    if (lowercaseName.contains('fruit') ||
-        lowercaseName.contains('vegetable') ||
-        lowercaseName.contains('salad') ||
-        lowercaseName.contains('green')) {
-      // Fruits and vegetables are high in vitamins
-      vitaminA *= 3;
-      vitaminC *= 5;
-      vitaminK *= 3;
-    } else if (lowercaseName.contains('meat') ||
-        lowercaseName.contains('chicken') ||
-        lowercaseName.contains('fish') ||
-        lowercaseName.contains('beef')) {
-      // Meats are higher in B vitamins
-      vitaminB1 *= 2;
-      vitaminB2 *= 2;
-      vitaminB3 *= 3;
-      vitaminB5 *= 2;
-      vitaminB6 *= 3;
-      vitaminB12 *= 5;
-    } else if (lowercaseName.contains('dairy') ||
-        lowercaseName.contains('milk') ||
-        lowercaseName.contains('cheese') ||
-        lowercaseName.contains('yogurt')) {
-      // Dairy is higher in vitamins A, D and B12
-      vitaminA *= 2;
-      vitaminD *= 4;
-      vitaminB2 *= 3;
-      vitaminB12 *= 3;
-    }
-
-    // Set values in the map
-    estimatedVitamins['vitamin_a'] = vitaminA.toStringAsFixed(1);
-    estimatedVitamins['vitamin_c'] = vitaminC.toStringAsFixed(1);
-    estimatedVitamins['vitamin_d'] = vitaminD.toStringAsFixed(2);
-    estimatedVitamins['vitamin_e'] = vitaminE.toStringAsFixed(2);
-    estimatedVitamins['vitamin_k'] = vitaminK.toStringAsFixed(1);
-    estimatedVitamins['vitamin_b1'] = vitaminB1.toStringAsFixed(2);
-    estimatedVitamins['vitamin_b2'] = vitaminB2.toStringAsFixed(2);
-    estimatedVitamins['vitamin_b3'] = vitaminB3.toStringAsFixed(1);
-    estimatedVitamins['vitamin_b5'] = vitaminB5.toStringAsFixed(2);
-    estimatedVitamins['vitamin_b6'] = vitaminB6.toStringAsFixed(2);
-    estimatedVitamins['vitamin_b7'] = vitaminB7.toStringAsFixed(1);
-    estimatedVitamins['vitamin_b9'] = vitaminB9.toStringAsFixed(1);
-    estimatedVitamins['vitamin_b12'] = vitaminB12.toStringAsFixed(2);
-
-    // Log estimated vitamins
-    print(
-        '\n===== ESTIMATED VITAMINS for $foodName (${calories.toStringAsFixed(0)} kcal) =====');
-    estimatedVitamins.forEach((key, value) {
-      print('$key: $value');
+          // Only add non-zero values
+          if (amount > 0) {
+            result[entry.value] = amount;
+            print('Extracted ${entry.value}: $amount');
+          }
+          break;
+        }
+      }
     });
-
-    return estimatedVitamins;
   }
 
-  // Helper method to generate estimated minerals for fallback
-  Map<String, dynamic> _generateEstimatedMinerals(
-      String foodName, double calories) {
-    Map<String, dynamic> estimatedMinerals = {};
+  // Helper function to extract minerals from nutrition data
+  void _extractMineralsFromData(
+      Map<String, dynamic> nutritionData, Map<String, dynamic> result) {
+    // Define mapping of possible API keys to mineral names
+    final mineralMappings = {
+      'calcium': 'calcium',
+      'iron': 'iron',
+      'magnesium': 'magnesium',
+      'phosphorus': 'phosphorus',
+      'potassium': 'potassium',
+      'sodium': 'sodium',
+      'zinc': 'zinc',
+      'copper': 'copper',
+      'manganese': 'manganese',
+      'selenium': 'selenium',
+      'chloride': 'chloride',
+      'chromium': 'chromium',
+      'iodine': 'iodine',
+      'molybdenum': 'molybdenum',
+      'fluoride': 'fluoride',
+    };
 
-    // Common minerals with default values scaled by calories
-    final lowercaseName = foodName.toLowerCase();
-    final caloriesFactor =
-        calories / 100; // Scale based on calories per 100 calories
+    // Loop through nutrition data keys and extract minerals
+    nutritionData.forEach((key, value) {
+      // Convert key to lowercase for case-insensitive matching
+      String keyLower = key.toLowerCase();
 
-    // Base amounts - will be adjusted by food type
-    double calcium = 20.0 * caloriesFactor;
-    double iron = 0.5 * caloriesFactor;
-    double magnesium = 10.0 * caloriesFactor;
-    double phosphorus = 30.0 * caloriesFactor;
-    double potassium = 100.0 * caloriesFactor;
-    double sodium = 50.0 * caloriesFactor;
-    double zinc = 0.5 * caloriesFactor;
-    double copper = 0.05 * caloriesFactor;
-    double manganese = 0.2 * caloriesFactor;
-    double selenium = 2.0 * caloriesFactor;
+      // Check if this key corresponds to a mineral
+      for (var entry in mineralMappings.entries) {
+        if (keyLower.contains(entry.key)) {
+          // Found a match - extract the value
+          double amount = 0.0;
+          if (value is num) {
+            amount = value.toDouble();
+          } else if (value is String) {
+            try {
+              amount =
+                  double.tryParse(value.replaceAll(RegExp(r'[^\d\.]'), '')) ??
+                      0.0;
+            } catch (e) {
+              print('Error parsing mineral value: $e');
+            }
+          }
 
-    // Adjust based on food type
-    if (lowercaseName.contains('dairy') ||
-        lowercaseName.contains('milk') ||
-        lowercaseName.contains('cheese') ||
-        lowercaseName.contains('yogurt')) {
-      // Dairy is high in calcium and phosphorus
-      calcium *= 4;
-      phosphorus *= 2;
-    } else if (lowercaseName.contains('meat') ||
-        lowercaseName.contains('beef')) {
-      // Meat is high in iron, zinc
-      iron *= 3;
-      zinc *= 4;
-      selenium *= 2;
-    } else if (lowercaseName.contains('leafy') ||
-        lowercaseName.contains('spinach') ||
-        lowercaseName.contains('kale')) {
-      // Leafy greens are high in magnesium, manganese
-      magnesium *= 2;
-      manganese *= 3;
-      iron *= 2;
-    } else if (lowercaseName.contains('banana') ||
-        lowercaseName.contains('avocado') ||
-        lowercaseName.contains('potato')) {
-      // These foods are high in potassium
-      potassium *= 3;
-    } else if (lowercaseName.contains('processed') ||
-        lowercaseName.contains('fast food') ||
-        lowercaseName.contains('snack')) {
-      // Processed foods are high in sodium
-      sodium *= 3;
-    }
-
-    // Set values in the map
-    estimatedMinerals['calcium'] = calcium.toStringAsFixed(1);
-    estimatedMinerals['iron'] = iron.toStringAsFixed(2);
-    estimatedMinerals['magnesium'] = magnesium.toStringAsFixed(1);
-    estimatedMinerals['phosphorus'] = phosphorus.toStringAsFixed(1);
-    estimatedMinerals['potassium'] = potassium.toStringAsFixed(1);
-    estimatedMinerals['sodium'] = sodium.toStringAsFixed(1);
-    estimatedMinerals['zinc'] = zinc.toStringAsFixed(2);
-    estimatedMinerals['copper'] = copper.toStringAsFixed(3);
-    estimatedMinerals['manganese'] = manganese.toStringAsFixed(2);
-    estimatedMinerals['selenium'] = selenium.toStringAsFixed(1);
-
-    // Log estimated minerals
-    print(
-        '\n===== ESTIMATED MINERALS for $foodName (${calories.toStringAsFixed(0)} kcal) =====');
-    estimatedMinerals.forEach((key, value) {
-      print('$key: $value');
+          // Only add non-zero values
+          if (amount > 0) {
+            result[entry.value] = amount;
+            print('Extracted ${entry.value}: $amount');
+          }
+          break;
+        }
+      }
     });
+  }
 
-    return estimatedMinerals;
+  // Helper function to extract other nutrients from nutrition data
+  void _extractOtherNutrientsFromData(
+      Map<String, dynamic> nutritionData, Map<String, dynamic> result) {
+    // Define mapping of possible API keys to other nutrient names
+    final otherNutrientMappings = {
+      'fiber': 'fiber',
+      'dietary_fiber': 'fiber',
+      'fibre': 'fiber',
+      'cholesterol': 'cholesterol',
+      'sugar': 'sugar',
+      'sugars': 'sugar',
+      'total_sugar': 'sugar',
+      'saturated_fat': 'saturated_fat',
+      'saturated_fats': 'saturated_fat',
+      'sat_fat': 'saturated_fat',
+      'omega_3': 'omega_3',
+      'omega3': 'omega_3',
+      'omega_6': 'omega_6',
+      'omega6': 'omega_6',
+    };
+
+    // Loop through nutrition data keys and extract other nutrients
+    nutritionData.forEach((key, value) {
+      // Convert key to lowercase for case-insensitive matching
+      String keyLower = key.toLowerCase();
+
+      // Check if this key corresponds to another nutrient
+      for (var entry in otherNutrientMappings.entries) {
+        if (keyLower.contains(entry.key)) {
+          // Found a match - extract the value
+          double amount = 0.0;
+          if (value is num) {
+            amount = value.toDouble();
+          } else if (value is String) {
+            try {
+              amount =
+                  double.tryParse(value.replaceAll(RegExp(r'[^\d\.]'), '')) ??
+                      0.0;
+            } catch (e) {
+              print('Error parsing nutrient value: $e');
+            }
+          }
+
+          // Only add non-zero values
+          if (amount > 0) {
+            result[entry.value] = amount;
+            print('Extracted ${entry.value}: $amount');
+          }
+          break;
+        }
+      }
+    });
   }
 
   // Helper method to safely dismiss dialog without context errors
@@ -4663,46 +4716,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
 
       print('INGREDIENT ADD: Adding new ingredient: $newIngredient');
-
-      // Check if the ingredient contains micronutrient data
-      bool hasMicronutrients = newIngredient.containsKey('vitamins') ||
-          newIngredient.containsKey('minerals');
-
-      // Log detailed nutritional information to terminal
-      if (hasMicronutrients) {
-        print('\n========== INGREDIENT ADDED WITH NUTRIENTS ==========');
-        print('Name: ${newIngredient['name']}');
-        print('Amount: ${newIngredient['amount']}');
-        print('Calories: ${newIngredient['calories']}');
-        print('Protein: ${newIngredient['protein']}g');
-        print('Fat: ${newIngredient['fat']}g');
-        print('Carbs: ${newIngredient['carbs']}g');
-
-        // Log vitamins if available
-        if (newIngredient.containsKey('vitamins') &&
-            newIngredient['vitamins'] is Map) {
-          print('\nVITAMINS:');
-          Map<String, dynamic> vitamins = newIngredient['vitamins'];
-          vitamins.forEach((key, value) {
-            print('$key: $value');
-          });
-        }
-
-        // Log minerals if available
-        if (newIngredient.containsKey('minerals') &&
-            newIngredient['minerals'] is Map) {
-          print('\nMINERALS:');
-          Map<String, dynamic> minerals = newIngredient['minerals'];
-          minerals.forEach((key, value) {
-            print('$key: $value');
-          });
-        }
-
-        print('=================================================\n');
-      } else {
-        print(
-            'INGREDIENT ADD: No micronutrient data available for this ingredient');
-      }
 
       // Add the ingredient
       setState(() {
