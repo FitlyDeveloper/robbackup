@@ -77,6 +77,194 @@ app.get('/', (req, res) => {
   });
 });
 
+// New endpoint for analyzing single ingredients with detailed micronutrients
+app.post('/api/analyze-ingredient', limiter, checkApiKey, async (req, res) => {
+  try {
+    console.log('Analyze ingredient endpoint called');
+    const { food_name, serving_size } = req.body;
+
+    if (!food_name || !serving_size) {
+      console.error('Missing required parameters');
+      return res.status(400).json({
+        success: false,
+        error: 'Food name and serving size are required'
+      });
+    }
+
+    // Debug logging
+    console.log('Analyzing ingredient:', food_name, 'serving size:', serving_size);
+    
+    // Call OpenAI API
+    console.log('Calling OpenAI API for ingredient analysis...');
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a nutrition expert providing detailed nutritional analysis of food ingredients. Provide accurate macronutrients and micronutrients based on the food type and serving size. Return ONLY JSON with no additional text. Include: calories, protein, fat, carbs, vitamins (A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12), and minerals (calcium, iron, magnesium, phosphorus, potassium, sodium, zinc). Provide REALISTIC values based on typical nutritional composition for the specific food and serving size. Format micronutrients as mg or mcg (as appropriate) amounts with specific values, not percentages.'
+          },
+          {
+            role: 'user',
+            content: `Analyze the nutritional content of ${food_name} with a serving size of ${serving_size}. Return JSON data with all macronutrients and micronutrients.`
+          }
+        ],
+        max_tokens: 1000,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('OpenAI API error:', response.status, errorData);
+      return res.status(response.status).json({
+        success: false,
+        error: `OpenAI API error: ${response.status}`
+      });
+    }
+
+    console.log('OpenAI API response received for ingredient analysis');
+    const data = await response.json();
+    
+    if (!data.choices || 
+        !data.choices[0] || 
+        !data.choices[0].message || 
+        !data.choices[0].message.content) {
+      console.error('Invalid response format from OpenAI:', JSON.stringify(data));
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid response from OpenAI'
+      });
+    }
+
+    const content = data.choices[0].message.content;
+    console.log('OpenAI API response content for ingredient:', content.substring(0, 100) + '...');
+    
+    // Process and parse the response
+    try {
+      const parsedData = JSON.parse(content);
+      console.log('Successfully parsed ingredient JSON response');
+      
+      // Process the nutrition data to ensure we have all required fields
+      const processedData = processIngredientNutritionData(parsedData, food_name, serving_size);
+      
+      return res.json({
+        success: true,
+        data: processedData
+      });
+    } catch (error) {
+      console.error('Error processing ingredient data:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error processing nutrition data'
+      });
+    }
+  } catch (error) {
+    console.error('Server error in ingredient analysis:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error processing ingredient request'
+    });
+  }
+});
+
+// Helper function to process ingredient data and ensure all fields exist
+function processIngredientNutritionData(data, foodName, servingSize) {
+  // Create a standardized data structure
+  const result = {
+    name: foodName,
+    serving_size: servingSize,
+    calories: data.calories || 0,
+    protein: data.protein || 0,
+    fat: data.fat || 0,
+    carbs: data.carbs || 0,
+    vitamins: {},
+    minerals: {}
+  };
+  
+  // Process vitamins
+  const vitaminKeys = {
+    // Map standardized keys to possible API response keys
+    'vitamin_a': ['vitamin_a', 'vitamin a', 'vitaminA', 'vitamin-a'],
+    'vitamin_c': ['vitamin_c', 'vitamin c', 'vitaminC', 'vitamin-c'],
+    'vitamin_d': ['vitamin_d', 'vitamin d', 'vitaminD', 'vitamin-d'],
+    'vitamin_e': ['vitamin_e', 'vitamin e', 'vitaminE', 'vitamin-e'],
+    'vitamin_k': ['vitamin_k', 'vitamin k', 'vitaminK', 'vitamin-k'],
+    'vitamin_b1': ['vitamin_b1', 'vitamin b1', 'vitaminB1', 'thiamin', 'thiamine', 'vitamin-b1'],
+    'vitamin_b2': ['vitamin_b2', 'vitamin b2', 'vitaminB2', 'riboflavin', 'vitamin-b2'],
+    'vitamin_b3': ['vitamin_b3', 'vitamin b3', 'vitaminB3', 'niacin', 'vitamin-b3'],
+    'vitamin_b5': ['vitamin_b5', 'vitamin b5', 'vitaminB5', 'pantothenic_acid', 'pantothenic acid', 'vitamin-b5'],
+    'vitamin_b6': ['vitamin_b6', 'vitamin b6', 'vitaminB6', 'pyridoxine', 'vitamin-b6'],
+    'vitamin_b7': ['vitamin_b7', 'vitamin b7', 'vitaminB7', 'biotin', 'vitamin-b7'],
+    'vitamin_b9': ['vitamin_b9', 'vitamin b9', 'vitaminB9', 'folate', 'folic_acid', 'folic acid', 'vitamin-b9'],
+    'vitamin_b12': ['vitamin_b12', 'vitamin b12', 'vitaminB12', 'cobalamin', 'vitamin-b12']
+  };
+  
+  // Process minerals
+  const mineralKeys = {
+    'calcium': ['calcium', 'ca'],
+    'iron': ['iron', 'fe'],
+    'magnesium': ['magnesium', 'mg'],
+    'phosphorus': ['phosphorus', 'phosphorous', 'p'],
+    'potassium': ['potassium', 'k'],
+    'sodium': ['sodium', 'na'],
+    'zinc': ['zinc', 'zn'],
+    'copper': ['copper', 'cu'],
+    'manganese': ['manganese', 'mn'],
+    'selenium': ['selenium', 'se'],
+    'chloride': ['chloride', 'cl'],
+    'iodine': ['iodine', 'i']
+  };
+  
+  // Extract vitamins from data
+  const vitamins = data.vitamins || {};
+  Object.entries(vitaminKeys).forEach(([standardKey, possibleKeys]) => {
+    // Find first matching key in data
+    let value = null;
+    for (const key of possibleKeys) {
+      if (data[key] !== undefined) {
+        value = data[key];
+        break;
+      }
+      if (vitamins[key] !== undefined) {
+        value = vitamins[key];
+        break;
+      }
+    }
+    
+    // Set value in result, defaulting to 0
+    result.vitamins[standardKey] = value !== null ? value : 0;
+  });
+  
+  // Extract minerals from data
+  const minerals = data.minerals || {};
+  Object.entries(mineralKeys).forEach(([standardKey, possibleKeys]) => {
+    // Find first matching key in data
+    let value = null;
+    for (const key of possibleKeys) {
+      if (data[key] !== undefined) {
+        value = data[key];
+        break;
+      }
+      if (minerals[key] !== undefined) {
+        value = minerals[key];
+        break;
+      }
+    }
+    
+    // Set value in result, defaulting to 0
+    result.minerals[standardKey] = value !== null ? value : 0;
+  });
+  
+  return result;
+}
+
 // OpenAI proxy endpoint for food analysis
 app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
   try {
