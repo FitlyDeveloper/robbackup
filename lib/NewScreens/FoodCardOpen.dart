@@ -4763,7 +4763,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       _markAsUnsaved();
       _calculateTotalNutrition();
 
-      // Update Nutrition.dart with micronutrient data - only if the user hasn't chosen to discard changes
+      // Update Nutrition.dart with micronutrient data
       _updateNutritionDartValues(newIngredient, isAddition: true);
     } catch (e) {
       print('ERROR adding ingredient to list: $e');
@@ -4774,116 +4774,76 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   void _updateNutritionDartValues(Map<String, dynamic> ingredient,
       {bool isAddition = true}) {
     try {
-      // Skip if no micronutrients
-      if (!ingredient.containsKey('micronutrients') &&
-          !_containsMicronutrients(ingredient)) {
-        print(
-            'No micronutrients found in ingredient, skipping Nutrition.dart update');
+      print('DEBUG: Updating Nutrition.dart with ingredient: $ingredient');
+
+      // Create a map to hold all nutrients including micronutrients
+      Map<String, dynamic> allNutrients = {};
+
+      // First, check for direct micronutrients at the root level
+      for (var key in ingredient.keys) {
+        if (![
+          'name',
+          'amount',
+          'calories',
+          'protein',
+          'fat',
+          'carbs',
+          'micronutrients'
+        ].contains(key)) {
+          double value = double.tryParse(ingredient[key].toString()) ?? 0.0;
+          if (value != 0.0) {
+            allNutrients[key] = value;
+          }
+        }
+      }
+
+      // Then check for micronutrients in the dedicated field if it exists
+      if (ingredient.containsKey('micronutrients') &&
+          ingredient['micronutrients'] is Map<String, dynamic>) {
+        Map<String, dynamic> micronutrients = ingredient['micronutrients'];
+        micronutrients.forEach((key, value) {
+          double numValue = double.tryParse(value.toString()) ?? 0.0;
+          if (numValue != 0.0) {
+            allNutrients[key] = numValue;
+          }
+        });
+      }
+
+      // Add main nutrients too
+      ['protein', 'fat', 'carbs'].forEach((nutrient) {
+        if (ingredient.containsKey(nutrient)) {
+          double value =
+              double.tryParse(ingredient[nutrient].toString()) ?? 0.0;
+          if (value != 0.0) {
+            allNutrients[nutrient] = value;
+          }
+        }
+      });
+
+      // If no nutrients found, skip update
+      if (allNutrients.isEmpty) {
+        print('No nutrients found in ingredient to update Nutrition.dart');
         return;
       }
 
-      // Get micronutrients either from dedicated field or from root object
-      Map<String, dynamic> micronutrients =
-          ingredient.containsKey('micronutrients')
-              ? Map<String, dynamic>.from(ingredient['micronutrients'])
-              : _extractMicronutrientsFromIngredient(ingredient);
-
-      // If there are no micronutrients, return
-      if (micronutrients.isEmpty) {
-        return;
+      // If this is for deletion, negate all values
+      if (!isAddition) {
+        allNutrients.forEach((key, value) {
+          allNutrients[key] = -value;
+        });
       }
 
       print(
-          'Updating Nutrition.dart with ${isAddition ? "added" : "removed"} values: $micronutrients');
+          'Updating Nutrition.dart with ${isAddition ? "added" : "removed"} nutrients: $allNutrients');
 
-      // Create unique ID for this meal if not already created
+      // Create unique ID for this meal
       String scanId =
           'food_nutrition_${_foodName.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
 
-      // Prepare the data to pass to Nutrition.dart
-      Map<String, dynamic> nutritionData = {};
-
-      // Add each micronutrient to the nutritionData map
-      micronutrients.forEach((key, value) {
-        // Multiply by -1 if this is a removal (ingredient deletion)
-        double amount = double.tryParse(value.toString()) ?? 0.0;
-        if (!isAddition) {
-          amount = -amount; // Negative value for removal
-        }
-        nutritionData[key] = amount;
-      });
-
-      // Only proceed if we have data to update
-      if (nutritionData.isNotEmpty) {
-        _addMicronutrientsToNutritionDart(nutritionData, scanId);
-      }
+      // Save to SharedPreferences
+      _saveMicronutrientsToPrefs(allNutrients, scanId);
     } catch (e) {
       print('ERROR updating Nutrition.dart: $e');
-    }
-  }
-
-  // Helper to check if an ingredient contains any micronutrients directly at the root
-  bool _containsMicronutrients(Map<String, dynamic> ingredient) {
-    // Standard keys that are not micronutrients
-    final standardKeys = [
-      'name',
-      'amount',
-      'calories',
-      'protein',
-      'fat',
-      'carbs',
-      'micronutrients'
-    ];
-
-    // Check each key in the ingredient
-    for (var key in ingredient.keys) {
-      if (!standardKeys.contains(key)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Helper to extract micronutrients from an ingredient object's root level
-  Map<String, dynamic> _extractMicronutrientsFromIngredient(
-      Map<String, dynamic> ingredient) {
-    Map<String, dynamic> micronutrients = {};
-    final standardKeys = [
-      'name',
-      'amount',
-      'calories',
-      'protein',
-      'fat',
-      'carbs',
-      'micronutrients'
-    ];
-
-    ingredient.forEach((key, value) {
-      if (!standardKeys.contains(key)) {
-        micronutrients[key] = value;
-      }
-    });
-
-    return micronutrients;
-  }
-
-  // Helper to add micronutrients to Nutrition.dart
-  void _addMicronutrientsToNutritionDart(
-      Map<String, dynamic> nutritionData, String scanId) {
-    try {
-      // Navigate to Nutrition screen with the nutrition data
-      if (!mounted) return;
-
-      print('Adding micronutrients to Nutrition.dart: $nutritionData');
-
-      // Save micronutrient data to SharedPreferences for Nutrition.dart
-      _saveMicronutrientsToPrefs(nutritionData, scanId);
-
-      // Optional: You could also navigate to the Nutrition screen if needed
-      // But usually just saving to SharedPreferences is enough as Nutrition.dart
-      // reads from there when it loads
-    } catch (e) {
-      print('ERROR adding micronutrients to Nutrition.dart: $e');
     }
   }
 
@@ -4905,6 +4865,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           print('Error parsing existing nutrition data: $e');
         }
       }
+
+      print('SAVING NUTRIENTS TO PREFS: Current data: $existingData');
+      print('SAVING NUTRIENTS TO PREFS: New data: $nutritionData');
 
       // Create or update vitamins, minerals, and other nutrients based on the new data
       Map<String, dynamic> vitamins = existingData.containsKey('vitamins')
@@ -4933,10 +4896,18 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         'other': other,
       };
 
+      print('SAVING NUTRIENTS TO PREFS: Updated data: $updatedData');
+
       // Save the updated data
       await prefs.setString(
           'PERMANENT_GLOBAL_NUTRITION_DATA', json.encode(updatedData));
       print('Successfully saved micronutrient data to SharedPreferences');
+
+      // Also save the data with a food-specific key to make sure it persists
+      String foodSpecificKey =
+          'NUTRITION_DATA_${_foodName.toLowerCase().replaceAll(' ', '_')}';
+      await prefs.setString(foodSpecificKey, json.encode(updatedData));
+      print('Saved nutrition data with food-specific key: $foodSpecificKey');
     } catch (e) {
       print('ERROR saving micronutrients to SharedPreferences: $e');
     }
@@ -5024,16 +4995,20 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
           // Only proceed if we have a valid amount
           if (amount != 0.0) {
+            print('Updating $categoryType - $categoryKey with amount: $amount');
+
             // If the category doesn't have this key yet, initialize it
             if (!category.containsKey(categoryKey)) {
               category[categoryKey] = {
                 'name': categoryKey,
-                'value': '0/0 g',
+                'value': '0/100 g', // Default target 100g
                 'percent': '0%',
                 'progress': 0.0,
                 'progressColor': {'r': 255, 'g': 0, 'b': 0, 'opacity': 1.0},
                 'hasInfo': false,
               };
+              print(
+                  'Created new nutrient entry for $categoryKey: ${category[categoryKey]}');
             }
 
             // Get the current progress
@@ -5062,16 +5037,16 @@ class _FoodCardOpenState extends State<FoodCardOpen>
               List<String> valueParts = valueString.split('/');
               double currentValue = double.tryParse(valueParts[0]) ?? 0.0;
               String targetWithUnit =
-                  valueParts.length > 1 ? valueParts[1] : '0 g';
+                  valueParts.length > 1 ? valueParts[1] : '100 g';
 
               // Parse target value and unit
               RegExp regExp = RegExp(r'(\d+\.?\d*)\s*([a-zA-Z]+)');
               Match? match = regExp.firstMatch(targetWithUnit);
-              double targetValue = 0.0;
+              double targetValue = 100.0; // Default to 100
               String unit = 'g';
 
               if (match != null) {
-                targetValue = double.tryParse(match.group(1) ?? '0') ?? 0.0;
+                targetValue = double.tryParse(match.group(1) ?? '100') ?? 100.0;
                 unit = match.group(2) ?? 'g';
               }
 
@@ -5104,6 +5079,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                   'opacity': 1.0
                 };
               }
+
+              print('Updated nutrient $categoryKey: ${category[categoryKey]}');
             }
             break;
           }
@@ -5112,314 +5089,50 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     });
   }
 
-  // Handle ingredient deletion with micronutrient tracking
-  void _handleIngredientDeletion(int index) {
-    if (index >= 0 && index < _ingredients.length) {
-      // Get the ingredient before removing it
-      Map<String, dynamic> deletedIngredient = _ingredients[index];
+  // Cleanup helper methods we no longer need
+  // Helper to check if an ingredient contains any micronutrients directly at the root
+  bool _containsMicronutrients(Map<String, dynamic> ingredient) {
+    // Standard keys that are not micronutrients
+    final standardKeys = [
+      'name',
+      'amount',
+      'calories',
+      'protein',
+      'fat',
+      'carbs',
+      'micronutrients'
+    ];
 
-      // Update Nutrition.dart with the deleted ingredient's micronutrients
-      // (using isAddition: false to subtract the values)
-      _updateNutritionDartValues(deletedIngredient, isAddition: false);
-
-      // Remove the ingredient from the list
-      setState(() {
-        _ingredients.removeAt(index);
-        _hasUnsavedChanges = true; // Mark as having unsaved changes
-      });
-
-      // Recalculate nutrition totals
-      _calculateTotalNutrition();
-
-      // Debug output
-      print(
-          'Deleted ingredient at index $index, remaining: ${_ingredients.length}');
+    // Check each key in the ingredient
+    for (var key in ingredient.keys) {
+      if (!standardKeys.contains(key)) {
+        return true;
+      }
     }
+    return false;
   }
 
-  // Calculate total nutrition values from all ingredients
-  void _calculateTotalNutrition() {
-    if (_ingredients.isEmpty) {
-      // If no ingredients, set default values
-      String oldCalories = _calories;
-      String oldProtein = _protein;
-      String oldFat = _fat;
-      String oldCarbs = _carbs;
+  // Helper to extract micronutrients from an ingredient object's root level
+  Map<String, dynamic> _extractMicronutrientsFromIngredient(
+      Map<String, dynamic> ingredient) {
+    Map<String, dynamic> micronutrients = {};
+    final standardKeys = [
+      'name',
+      'amount',
+      'calories',
+      'protein',
+      'fat',
+      'carbs',
+      'micronutrients'
+    ];
 
-      setState(() {
-        _calories = "0";
-        _protein = "0";
-        _fat = "0";
-        _carbs = "0";
-
-        // Only mark as unsaved if values actually changed
-        if (_calories != oldCalories ||
-            _protein != oldProtein ||
-            _fat != oldFat ||
-            _carbs != oldCarbs) {
-          print('Nutrition values changed, marking as unsaved');
-          _hasUnsavedChanges = true;
-        }
-      });
-      return;
-    }
-
-    // Sum up all nutritional values from ingredients - use more efficient loops and calculations
-    double totalCalories = 0;
-    double totalProtein = 0;
-    double totalFat = 0;
-    double totalCarbs = 0;
-
-    // Save old values for comparison
-    String oldCalories = _calories;
-    String oldProtein = _protein;
-    String oldFat = _fat;
-    String oldCarbs = _carbs;
-
-    // Process all ingredients in a single loop - more efficient
-    final int ingredientCount = _ingredients.length;
-    for (int i = 0; i < ingredientCount; i++) {
-      final ingredient = _ingredients[i];
-
-      // Add calories - multiply by counter
-      if (ingredient.containsKey('calories')) {
-        var calories = ingredient['calories'];
-        if (calories is String) {
-          totalCalories += (double.tryParse(calories) ?? 0) * _counter;
-        } else if (calories is num) {
-          totalCalories += calories.toDouble() * _counter;
-        }
-      }
-
-      // Add protein - multiply by counter
-      if (ingredient.containsKey('protein')) {
-        var protein = ingredient['protein'];
-        if (protein is String) {
-          totalProtein += (double.tryParse(protein) ?? 0) * _counter;
-        } else if (protein is num) {
-          totalProtein += protein.toDouble() * _counter;
-        }
-      }
-
-      // Add fat - multiply by counter
-      if (ingredient.containsKey('fat')) {
-        var fat = ingredient['fat'];
-        if (fat is String) {
-          totalFat += (double.tryParse(fat) ?? 0) * _counter;
-        } else if (fat is num) {
-          totalFat += fat.toDouble() * _counter;
-        }
-      }
-
-      // Add carbs - multiply by counter
-      if (ingredient.containsKey('carbs')) {
-        var carbs = ingredient['carbs'];
-        if (carbs is String) {
-          totalCarbs += (double.tryParse(carbs) ?? 0) * _counter;
-        } else if (carbs is num) {
-          totalCarbs += carbs.toDouble() * _counter;
-        }
-      }
-    }
-
-    // Update state with calculated totals using standard rounding (0-0.4 down, 0.5-0.9 up)
-    // Calculate new values before setState to minimize state updates
-    final String newCalories = totalCalories.round().toString();
-    final String newProtein = totalProtein.round().toString();
-    final String newFat = totalFat.round().toString();
-    final String newCarbs = totalCarbs.round().toString();
-
-    // Check if values actually changed before updating state
-    final bool hasChanged = (newCalories != oldCalories ||
-        newProtein != oldProtein ||
-        newFat != oldFat ||
-        newCarbs != oldCarbs);
-
-    setState(() {
-      _calories = newCalories;
-      _protein = newProtein;
-      _fat = newFat;
-      _carbs = newCarbs;
-
-      // Only mark as unsaved if values actually changed
-      if (hasChanged) {
-        print('Nutrition values changed, marking as unsaved');
-        _hasUnsavedChanges = true;
+    ingredient.forEach((key, value) {
+      if (!standardKeys.contains(key)) {
+        micronutrients[key] = value;
       }
     });
 
-    print(
-        'NUTRITION TOTALS: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
-  }
-
-  // Helper method to show API error dialog in premium style
-  void _showApiErrorDialog() {
-    _showStandardDialog(
-      title: "Service Unavailable",
-      message:
-          "The food modification service is currently unavailable. Please try again later.",
-      positiveButtonText: "OK",
-    );
-  }
-
-  // Helper method to show unclear input error dialog in premium style
-  void _showUnclearInputDialog() {
-    _showStandardDialog(
-      title: "Invalid Ingredient",
-      message:
-          "Please enter a valid food name and serving size that we can calculate nutrition for",
-      positiveButtonText: "Try Again",
-      positiveButtonIcon:
-          'assets/images/edit.png', // Make sure this asset exists
-      onPositivePressed: () {
-        Navigator.of(context).pop();
-        _showAddIngredientDialog();
-      },
-    );
-  }
-
-  // Method to show the "Fix Manually" dialog
-  void _showFixManuallyDialog() {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (BuildContext context) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            textSelectionTheme: TextSelectionThemeData(
-              selectionColor: Colors.grey.withOpacity(0.3),
-              cursorColor: Colors.black,
-              selectionHandleColor: Colors.black,
-            ),
-          ),
-          child: Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            elevation: 0,
-            backgroundColor: Colors.white,
-            insetPadding: EdgeInsets.symmetric(horizontal: 32),
-            child: Container(
-              width: 326, // Exactly 326px as specified
-              height: 360, // Adjusted height for proper spacing
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Title
-                        SizedBox(height: 14),
-                        Text(
-                          "Fix Manually",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'SF Pro Display',
-                          ),
-                        ),
-
-                        // Use Expanded to center the image and text as one group
-                        Expanded(
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Pencil icon - exactly 43x43
-                                Image.asset(
-                                  'assets/images/pencilicon.png',
-                                  width: 43.0,
-                                  height: 43.0,
-                                  color: Colors.black,
-                                ),
-
-                                // 28px gap between image and text
-                                SizedBox(height: 28),
-
-                                // Instructions text - already size 18
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 25),
-                                  child: Text(
-                                    "Tap any item to change its name, calories, macros or serving sizes",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontFamily: 'SF Pro Display',
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        // Fix Now button - match "Add" popup spacing
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Container(
-                            width: 280,
-                            height: 48,
-                            margin: EdgeInsets.only(
-                                bottom: 24), // Same margin as Add popup
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                            child: TextButton(
-                              onPressed: () {
-                                // Handle the "Fix Now" action
-                                Navigator.pop(context);
-                                // Set edit mode to show teal outlines
-                                setState(() {
-                                  _isEditMode = true;
-                                });
-                              },
-                              style: ButtonStyle(
-                                overlayColor: MaterialStateProperty.all(
-                                    Colors.transparent),
-                              ),
-                              child: const Text(
-                                'Fix Now',
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w500,
-                                  fontFamily: '.SF Pro Display',
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Close button
-                  Positioned(
-                    top:
-                        23, // Adjusted from 26 to 23 to align with the "Fix Manually" title
-                    right: 20,
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                      },
-                      child: Image.asset(
-                        'assets/images/closeicon.png',
-                        width: 19,
-                        height: 19,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+    return micronutrients;
   }
 
   // Method to show edit and delete options for an ingredient
@@ -8137,5 +7850,315 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         print('Error updating temporary nutrition data: $e');
       }
     });
+  }
+
+  // Handle ingredient deletion with micronutrient tracking
+  void _handleIngredientDeletion(int index) {
+    if (index >= 0 && index < _ingredients.length) {
+      // Get the ingredient before removing it
+      Map<String, dynamic> deletedIngredient = _ingredients[index];
+
+      // Update Nutrition.dart with the deleted ingredient's micronutrients
+      // (using isAddition: false to subtract the values)
+      _updateNutritionDartValues(deletedIngredient, isAddition: false);
+
+      // Remove the ingredient from the list
+      setState(() {
+        _ingredients.removeAt(index);
+        _hasUnsavedChanges = true; // Mark as having unsaved changes
+      });
+
+      // Recalculate nutrition totals
+      _calculateTotalNutrition();
+
+      // Debug output
+      print(
+          'Deleted ingredient at index $index, remaining: ${_ingredients.length}');
+    }
+  }
+
+  // Calculate total nutrition values from all ingredients
+  void _calculateTotalNutrition() {
+    if (_ingredients.isEmpty) {
+      // If no ingredients, set default values
+      String oldCalories = _calories;
+      String oldProtein = _protein;
+      String oldFat = _fat;
+      String oldCarbs = _carbs;
+
+      setState(() {
+        _calories = "0";
+        _protein = "0";
+        _fat = "0";
+        _carbs = "0";
+
+        // Only mark as unsaved if values actually changed
+        if (_calories != oldCalories ||
+            _protein != oldProtein ||
+            _fat != oldFat ||
+            _carbs != oldCarbs) {
+          print('Nutrition values changed, marking as unsaved');
+          _hasUnsavedChanges = true;
+        }
+      });
+      return;
+    }
+
+    // Sum up all nutritional values from ingredients - use more efficient loops and calculations
+    double totalCalories = 0;
+    double totalProtein = 0;
+    double totalFat = 0;
+    double totalCarbs = 0;
+
+    // Save old values for comparison
+    String oldCalories = _calories;
+    String oldProtein = _protein;
+    String oldFat = _fat;
+    String oldCarbs = _carbs;
+
+    // Process all ingredients in a single loop - more efficient
+    final int ingredientCount = _ingredients.length;
+    for (int i = 0; i < ingredientCount; i++) {
+      final ingredient = _ingredients[i];
+
+      // Add calories - multiply by counter
+      if (ingredient.containsKey('calories')) {
+        var calories = ingredient['calories'];
+        if (calories is String) {
+          totalCalories += (double.tryParse(calories) ?? 0) * _counter;
+        } else if (calories is num) {
+          totalCalories += calories.toDouble() * _counter;
+        }
+      }
+
+      // Add protein - multiply by counter
+      if (ingredient.containsKey('protein')) {
+        var protein = ingredient['protein'];
+        if (protein is String) {
+          totalProtein += (double.tryParse(protein) ?? 0) * _counter;
+        } else if (protein is num) {
+          totalProtein += protein.toDouble() * _counter;
+        }
+      }
+
+      // Add fat - multiply by counter
+      if (ingredient.containsKey('fat')) {
+        var fat = ingredient['fat'];
+        if (fat is String) {
+          totalFat += (double.tryParse(fat) ?? 0) * _counter;
+        } else if (fat is num) {
+          totalFat += fat.toDouble() * _counter;
+        }
+      }
+
+      // Add carbs - multiply by counter
+      if (ingredient.containsKey('carbs')) {
+        var carbs = ingredient['carbs'];
+        if (carbs is String) {
+          totalCarbs += (double.tryParse(carbs) ?? 0) * _counter;
+        } else if (carbs is num) {
+          totalCarbs += carbs.toDouble() * _counter;
+        }
+      }
+    }
+
+    // Update state with calculated totals using standard rounding (0-0.4 down, 0.5-0.9 up)
+    // Calculate new values before setState to minimize state updates
+    final String newCalories = totalCalories.round().toString();
+    final String newProtein = totalProtein.round().toString();
+    final String newFat = totalFat.round().toString();
+    final String newCarbs = totalCarbs.round().toString();
+
+    // Check if values actually changed before updating state
+    final bool hasChanged = (newCalories != oldCalories ||
+        newProtein != oldProtein ||
+        newFat != oldFat ||
+        newCarbs != oldCarbs);
+
+    setState(() {
+      _calories = newCalories;
+      _protein = newProtein;
+      _fat = newFat;
+      _carbs = newCarbs;
+
+      // Only mark as unsaved if values actually changed
+      if (hasChanged) {
+        print('Nutrition values changed, marking as unsaved');
+        _hasUnsavedChanges = true;
+      }
+    });
+
+    print(
+        'NUTRITION TOTALS: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
+  }
+
+  // Helper method to show API error dialog in premium style
+  void _showApiErrorDialog() {
+    _showStandardDialog(
+      title: "Service Unavailable",
+      message:
+          "The food modification service is currently unavailable. Please try again later.",
+      positiveButtonText: "OK",
+    );
+  }
+
+  // Helper method to show unclear input error dialog in premium style
+  void _showUnclearInputDialog() {
+    _showStandardDialog(
+      title: "Invalid Ingredient",
+      message:
+          "Please enter a valid food name and serving size that we can calculate nutrition for",
+      positiveButtonText: "Try Again",
+      positiveButtonIcon:
+          'assets/images/edit.png', // Make sure this asset exists
+      onPositivePressed: () {
+        Navigator.of(context).pop();
+        _showAddIngredientDialog();
+      },
+    );
+  }
+
+  // Method to show the "Fix Manually" dialog
+  void _showFixManuallyDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (BuildContext context) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            textSelectionTheme: TextSelectionThemeData(
+              selectionColor: Colors.grey.withOpacity(0.3),
+              cursorColor: Colors.black,
+              selectionHandleColor: Colors.black,
+            ),
+          ),
+          child: Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            elevation: 0,
+            backgroundColor: Colors.white,
+            insetPadding: EdgeInsets.symmetric(horizontal: 32),
+            child: Container(
+              width: 326, // Exactly 326px as specified
+              height: 360, // Adjusted height for proper spacing
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Title
+                        SizedBox(height: 14),
+                        Text(
+                          "Fix Manually",
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'SF Pro Display',
+                          ),
+                        ),
+
+                        // Use Expanded to center the image and text as one group
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Pencil icon - exactly 43x43
+                                Image.asset(
+                                  'assets/images/pencilicon.png',
+                                  width: 43.0,
+                                  height: 43.0,
+                                  color: Colors.black,
+                                ),
+
+                                // 28px gap between image and text
+                                SizedBox(height: 28),
+
+                                // Instructions text - already size 18
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 25),
+                                  child: Text(
+                                    "Tap any item to change its name, calories, macros or serving sizes",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontFamily: 'SF Pro Display',
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Fix Now button - match "Add" popup spacing
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Container(
+                            width: 280,
+                            height: 48,
+                            margin: EdgeInsets.only(
+                                bottom: 24), // Same margin as Add popup
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                            child: TextButton(
+                              onPressed: () {
+                                // Handle the "Fix Now" action
+                                Navigator.pop(context);
+                                // Set edit mode to show teal outlines
+                                setState(() {
+                                  _isEditMode = true;
+                                });
+                              },
+                              style: ButtonStyle(
+                                overlayColor: MaterialStateProperty.all(
+                                    Colors.transparent),
+                              ),
+                              child: const Text(
+                                'Fix Now',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w500,
+                                  fontFamily: '.SF Pro Display',
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Close button
+                  Positioned(
+                    top:
+                        23, // Adjusted from 26 to 23 to align with the "Fix Manually" title
+                    right: 20,
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: Image.asset(
+                        'assets/images/closeicon.png',
+                        width: 19,
+                        height: 19,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
