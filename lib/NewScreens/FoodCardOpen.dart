@@ -4781,26 +4781,28 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             'No micronutrients found in ingredient, skipping Nutrition.dart update');
         return;
       }
-      
+
       // Get micronutrients either from dedicated field or from root object
-      Map<String, dynamic> micronutrients = 
-          ingredient.containsKey('micronutrients') 
+      Map<String, dynamic> micronutrients =
+          ingredient.containsKey('micronutrients')
               ? Map<String, dynamic>.from(ingredient['micronutrients'])
               : _extractMicronutrientsFromIngredient(ingredient);
-      
+
       // If there are no micronutrients, return
       if (micronutrients.isEmpty) {
         return;
       }
-      
-      print('Updating Nutrition.dart with ${isAddition ? "added" : "removed"} values: $micronutrients');
-      
+
+      print(
+          'Updating Nutrition.dart with ${isAddition ? "added" : "removed"} values: $micronutrients');
+
       // Create unique ID for this meal if not already created
-      String scanId = 'food_nutrition_${_foodName.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
-      
+      String scanId =
+          'food_nutrition_${_foodName.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
+
       // Prepare the data to pass to Nutrition.dart
       Map<String, dynamic> nutritionData = {};
-      
+
       // Add each micronutrient to the nutritionData map
       micronutrients.forEach((key, value) {
         // Multiply by -1 if this is a removal (ingredient deletion)
@@ -4810,7 +4812,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
         nutritionData[key] = amount;
       });
-      
+
       // Only proceed if we have data to update
       if (nutritionData.isNotEmpty) {
         _addMicronutrientsToNutritionDart(nutritionData, scanId);
@@ -4819,12 +4821,20 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print('ERROR updating Nutrition.dart: $e');
     }
   }
-  
+
   // Helper to check if an ingredient contains any micronutrients directly at the root
   bool _containsMicronutrients(Map<String, dynamic> ingredient) {
     // Standard keys that are not micronutrients
-    final standardKeys = ['name', 'amount', 'calories', 'protein', 'fat', 'carbs', 'micronutrients'];
-    
+    final standardKeys = [
+      'name',
+      'amount',
+      'calories',
+      'protein',
+      'fat',
+      'carbs',
+      'micronutrients'
+    ];
+
     // Check each key in the ingredient
     for (var key in ingredient.keys) {
       if (!standardKeys.contains(key)) {
@@ -6399,7 +6409,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                               borderRadius: BorderRadius.circular(20),
                               onTap: () {
                                 Navigator.pop(context);
-                                _handleIngredientDeletion(name, amount,
+                                _deleteIngredientByProperties(name, amount,
                                     calories, protein, fat, carbs);
                               },
                             ),
