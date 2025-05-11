@@ -2170,7 +2170,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // Use the existing endpoint with the proper structure
       final response = await http
           .post(
-        Uri.parse('https://deepseek-uhrc.onrender.com/api/analyze-meal'),
+        Uri.parse('https://deepseek-uhrc.onrender.com/api/analyze-food'),
         headers: {
           'Content-Type': 'application/json',
         },
