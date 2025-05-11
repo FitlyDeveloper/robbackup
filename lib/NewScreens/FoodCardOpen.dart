@@ -4793,6 +4793,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           double value = double.tryParse(ingredient[key].toString()) ?? 0.0;
           if (value != 0.0) {
             allNutrients[key] = value;
+            print('Added nutrient from root: $key = $value');
           }
         }
       }
@@ -4805,8 +4806,56 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           double numValue = double.tryParse(value.toString()) ?? 0.0;
           if (numValue != 0.0) {
             allNutrients[key] = numValue;
+            print('Added nutrient from micronutrients map: $key = $numValue');
           }
         });
+      }
+
+      // Specifically check for and explicitly add known micronutrients that might be in the root
+      final knownMicronutrients = [
+        'vitamin_a',
+        'vitamin_c',
+        'vitamin_d',
+        'vitamin_e',
+        'vitamin_k',
+        'vitamin_b1',
+        'vitamin_b2',
+        'vitamin_b3',
+        'vitamin_b5',
+        'vitamin_b6',
+        'vitamin_b7',
+        'vitamin_b9',
+        'vitamin_b12',
+        'calcium',
+        'iron',
+        'magnesium',
+        'phosphorus',
+        'potassium',
+        'sodium',
+        'zinc',
+        'copper',
+        'manganese',
+        'selenium',
+        'chloride',
+        'chromium',
+        'iodine',
+        'molybdenum',
+        'fluoride',
+        'fiber',
+        'cholesterol',
+        'sugar',
+        'saturated_fat'
+      ];
+
+      for (var nutrient in knownMicronutrients) {
+        if (ingredient.containsKey(nutrient)) {
+          double value =
+              double.tryParse(ingredient[nutrient].toString()) ?? 0.0;
+          if (value != 0.0) {
+            allNutrients[nutrient] = value;
+            print('Added known micronutrient: $nutrient = $value');
+          }
+        }
       }
 
       // Add main nutrients too
@@ -4861,9 +4910,20 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       if (existingDataStr != null && existingDataStr.isNotEmpty) {
         try {
           existingData = json.decode(existingDataStr);
+          print('Successfully loaded existing nutrition data: $existingData');
         } catch (e) {
           print('Error parsing existing nutrition data: $e');
         }
+      } else {
+        print('No existing nutrition data found, creating new data');
+        // Initialize with empty categories
+        existingData = {
+          'scanId': scanId,
+          'lastSaved': DateTime.now().millisecondsSinceEpoch,
+          'vitamins': {},
+          'minerals': {},
+          'other': {}
+        };
       }
 
       print('SAVING NUTRIENTS TO PREFS: Current data: $existingData');
@@ -4904,10 +4964,18 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print('Successfully saved micronutrient data to SharedPreferences');
 
       // Also save the data with a food-specific key to make sure it persists
+      // Use a consistent key rather than one with a timestamp to ensure persistence
       String foodSpecificKey =
           'NUTRITION_DATA_${_foodName.toLowerCase().replaceAll(' ', '_')}';
       await prefs.setString(foodSpecificKey, json.encode(updatedData));
       print('Saved nutrition data with food-specific key: $foodSpecificKey');
+
+      // To ensure Nutrition.dart screen updates immediately, also save to the screen-specific key
+      await prefs.setString('NUTRITION_SCREEN_DATA', json.encode(updatedData));
+      print('Saved nutrition data for immediate screen update');
+
+      // Force an update to any visible screens - set a flag
+      await prefs.setBool('NUTRITION_DATA_UPDATED', true);
     } catch (e) {
       print('ERROR saving micronutrients to SharedPreferences: $e');
     }
@@ -4977,6 +5045,82 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
     };
 
+    // Default units for each nutrient category
+    Map<String, String> defaultUnits = {
+      'Vitamin A': 'mcg',
+      'Vitamin C': 'mg',
+      'Vitamin D': 'mcg',
+      'Vitamin E': 'mg',
+      'Vitamin K': 'mcg',
+      'Vitamin B1': 'mg',
+      'Vitamin B2': 'mg',
+      'Vitamin B3': 'mg',
+      'Vitamin B5': 'mg',
+      'Vitamin B6': 'mg',
+      'Vitamin B7': 'mcg',
+      'Vitamin B9': 'mcg',
+      'Vitamin B12': 'mcg',
+      'Calcium': 'mg',
+      'Iron': 'mg',
+      'Magnesium': 'mg',
+      'Phosphorus': 'mg',
+      'Potassium': 'mg',
+      'Sodium': 'mg',
+      'Zinc': 'mg',
+      'Copper': 'mcg',
+      'Manganese': 'mg',
+      'Selenium': 'mcg',
+      'Chloride': 'mg',
+      'Chromium': 'mcg',
+      'Iodine': 'mcg',
+      'Molybdenum': 'mcg',
+      'Fluoride': 'mg',
+      'Fiber': 'g',
+      'Cholesterol': 'mg',
+      'Sugar': 'g',
+      'Saturated Fats': 'g',
+      'Omega-3': 'mg',
+      'Omega-6': 'g',
+    };
+
+    // Default recommended daily values for each nutrient
+    Map<String, double> defaultDailyValues = {
+      'Vitamin A': 700.0,
+      'Vitamin C': 75.0,
+      'Vitamin D': 15.0,
+      'Vitamin E': 15.0,
+      'Vitamin K': 90.0,
+      'Vitamin B1': 1.1,
+      'Vitamin B2': 1.1,
+      'Vitamin B3': 14.0,
+      'Vitamin B5': 5.0,
+      'Vitamin B6': 1.3,
+      'Vitamin B7': 30.0,
+      'Vitamin B9': 400.0,
+      'Vitamin B12': 2.4,
+      'Calcium': 1000.0,
+      'Iron': 18.0,
+      'Magnesium': 400.0,
+      'Phosphorus': 700.0,
+      'Potassium': 3500.0,
+      'Sodium': 2300.0,
+      'Zinc': 11.0,
+      'Copper': 900.0,
+      'Manganese': 2.3,
+      'Selenium': 55.0,
+      'Chloride': 2300.0,
+      'Chromium': 35.0,
+      'Iodine': 150.0,
+      'Molybdenum': 45.0,
+      'Fluoride': 4.0,
+      'Fiber': 30.0,
+      'Cholesterol': 300.0,
+      'Sugar': 100.0,
+      'Saturated Fats': 22.0,
+      'Omega-3': 1500.0,
+      'Omega-6': 14.0,
+    };
+
     // Get the relevant mappings for this category
     Map<String, String> mappings = categoryMappings[categoryType] ?? {};
 
@@ -4999,9 +5143,13 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
             // If the category doesn't have this key yet, initialize it
             if (!category.containsKey(categoryKey)) {
+              // Get the default unit and daily value for this nutrient
+              String unit = defaultUnits[categoryKey] ?? 'g';
+              double targetValue = defaultDailyValues[categoryKey] ?? 100.0;
+
               category[categoryKey] = {
                 'name': categoryKey,
-                'value': '0/100 g', // Default target 100g
+                'value': '0/$targetValue $unit',
                 'percent': '0%',
                 'progress': 0.0,
                 'progressColor': {'r': 255, 'g': 0, 'b': 0, 'opacity': 1.0},
@@ -5011,52 +5159,58 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                   'Created new nutrient entry for $categoryKey: ${category[categoryKey]}');
             }
 
-            // Get the current progress
+            // Get the current progress and value
             double currentProgress = 0.0;
-            if (category[categoryKey] is Map &&
-                category[categoryKey].containsKey('progress')) {
-              currentProgress = double.tryParse(
-                      category[categoryKey]['progress'].toString()) ??
-                  0.0;
+            double currentValue = 0.0;
+
+            if (category[categoryKey] is Map) {
+              if (category[categoryKey].containsKey('progress')) {
+                currentProgress = double.tryParse(
+                        category[categoryKey]['progress'].toString()) ??
+                    0.0;
+              }
+
+              // Extract current value from the value string
+              if (category[categoryKey].containsKey('value')) {
+                String valueString = category[categoryKey]['value'].toString();
+                List<String> valueParts = valueString.split('/');
+                currentValue = double.tryParse(valueParts[0]) ?? 0.0;
+              }
             }
 
-            // Add the amount to the progress
-            double newProgress = currentProgress +
-                (amount / 100.0); // Assume the target is 100% of daily value
+            // Extract target value and unit from the value string
+            String valueString = category[categoryKey]['value'];
+            List<String> valueParts = valueString.split('/');
+            String targetWithUnit =
+                valueParts.length > 1 ? valueParts[1] : '100 g';
 
-            // Update the category with the new progress
+            // Parse target value and unit
+            RegExp regExp = RegExp(r'(\d+\.?\d*)\s*([a-zA-Z]+)');
+            Match? match = regExp.firstMatch(targetWithUnit);
+            double targetValue = defaultDailyValues[categoryKey] ?? 100.0;
+            String unit = defaultUnits[categoryKey] ?? 'g';
+
+            if (match != null) {
+              targetValue =
+                  double.tryParse(match.group(1) ?? '100') ?? targetValue;
+              unit = match.group(2) ?? unit;
+            }
+
+            // Calculate the new current value and progress
+            double newValue = currentValue + amount;
+            double newProgress = targetValue > 0 ? newValue / targetValue : 0.0;
+            if (newProgress > 1.0) newProgress = 1.0; // Cap at 100%
+
+            // Update the category with the new values
             if (category[categoryKey] is Map) {
               category[categoryKey]['progress'] = newProgress;
+              category[categoryKey]['value'] = '$newValue/$targetValue $unit';
 
-              // Update other fields
+              // Update percentage
               int percentValue = (newProgress * 100).round();
               category[categoryKey]['percent'] = '$percentValue%';
 
-              // Extract current value and target from the value string
-              String valueString = category[categoryKey]['value'];
-              List<String> valueParts = valueString.split('/');
-              double currentValue = double.tryParse(valueParts[0]) ?? 0.0;
-              String targetWithUnit =
-                  valueParts.length > 1 ? valueParts[1] : '100 g';
-
-              // Parse target value and unit
-              RegExp regExp = RegExp(r'(\d+\.?\d*)\s*([a-zA-Z]+)');
-              Match? match = regExp.firstMatch(targetWithUnit);
-              double targetValue = 100.0; // Default to 100
-              String unit = 'g';
-
-              if (match != null) {
-                targetValue = double.tryParse(match.group(1) ?? '100') ?? 100.0;
-                unit = match.group(2) ?? 'g';
-              }
-
-              // Calculate the new current value
-              double newValue = currentValue + amount;
-
-              // Update the value string
-              category[categoryKey]['value'] = '$newValue/$targetValue $unit';
-
-              // Update the color based on progress
+              // Update color based on progress
               if (newProgress < 0.5) {
                 category[categoryKey]['progressColor'] = {
                   'r': 255,
@@ -5080,7 +5234,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                 };
               }
 
-              print('Updated nutrient $categoryKey: ${category[categoryKey]}');
+              print(
+                  'Updated nutrient $categoryKey: New value=${category[categoryKey]['value']}, Progress=${category[categoryKey]['progress']}');
             }
             break;
           }
