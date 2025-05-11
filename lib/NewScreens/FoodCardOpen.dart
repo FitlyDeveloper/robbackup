@@ -2159,9 +2159,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // Create the request data - using the exact format the server expects
       final requestData = {
-        'food_name': foodName,
-        'serving_size': servingSize,
-        'type': 'ingredient' // Indicate this is a single ingredient analysis
+        'text': 'Analyze $foodName with serving size $servingSize',
       };
 
       print('NUTRITION CALCULATOR: Creating request to analyze ingredient');
@@ -2170,7 +2168,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // Use the existing endpoint with the proper structure
       final response = await http
           .post(
-        Uri.parse('https://deepseek-uhrc.onrender.com/api/analyze-food'),
+        Uri.parse('https://deepseek-uhrc.onrender.com/api/analyze'),
         headers: {
           'Content-Type': 'application/json',
         },
