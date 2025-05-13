@@ -4663,6 +4663,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     final String newFat = totalFat.round().toString();
     final String newCarbs = totalCarbs.round().toString();
 
+    // When extracting from ingredients, we might have lost units from the API response
+    // This is why macros/proteins aren't being shown correctly on the nutrition screen
+
     // Check if values actually changed before updating state
     final bool hasChanged = (newCalories != oldCalories ||
         newProtein != oldProtein ||
@@ -7453,7 +7456,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Method to update nutrition display without permanently saving data
   void _updateNutritionDisplay() {
-    // Create a map with basic nutrition data
+    // Create a map with basic nutrition data - ALWAYS include units to ensure they display in Nutrition.dart
     Map<String, dynamic> nutritionData = {
       'protein': _addUnitIfMissing(_protein, 'g'),
       'fat': _addUnitIfMissing(_fat, 'g'),
