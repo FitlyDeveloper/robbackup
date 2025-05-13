@@ -1,13 +1,15 @@
 services:
   - type: web
-    name: snap-food
+    name: food-analyzer-api
     env: node
-    buildCommand: npm install
-    startCommand: node server/index.js
+    buildCommand: bash render-build.sh
+    startCommand: node server.js
     envVars:
       - key: PORT
         value: 3000
-      - key: DEEPSEEK_API_KEY
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
         sync: false
     domains:
       - snap-food.onrender.com

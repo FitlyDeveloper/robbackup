@@ -1,16 +1,22 @@
-#!/usr/bin/env bash
-# Exit on error
-set -o errexit
+#!/bin/bash
+# Build script for Render.com deployment
 
-echo "Starting build script..."
+# Copy necessary files
+cp api-server/server.js server.js
 
-# Install dependencies 
+# Install dependencies
 npm install
 
-# Make sure we have express-rate-limit and node-fetch
-npm install express-rate-limit node-fetch
-
-# Copy the correct server.js file
-cp api-server/server.js server.js
+# Create a basic .env file if it doesn't exist
+if [ ! -f .env ]; then
+  echo "Creating .env file..."
+  echo "# Configuration for Food Analyzer API" > .env
+  echo "PORT=3000" >> .env
+  echo "NODE_ENV=production" >> .env
+  
+  # The actual value should be set in Render.com environment variables
+  echo "# OpenAI API key - set in Render Dashboard" >> .env
+  echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env
+fi
 
 echo "Build completed successfully!" 
