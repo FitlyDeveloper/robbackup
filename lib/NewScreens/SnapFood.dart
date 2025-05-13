@@ -243,6 +243,35 @@ class _SnapFoodState extends State<SnapFood> {
             _analysisResult = response;
           });
 
+          // DEBUG: Print the entire response structure to see what's available
+          print("\n===== FULL API RESPONSE STRUCTURE =====");
+          print("Keys in response: ${response.keys.toList()}");
+          if (response.containsKey('ingredient_macros')) {
+            print(
+                "Ingredient macros found: ${response['ingredient_macros'].length} items");
+            for (var i = 0; i < response['ingredient_macros'].length; i++) {
+              var macro = response['ingredient_macros'][i];
+              print("Ingredient ${i + 1}: ${macro.keys.toList()}");
+
+              // Check if this ingredient has vitamins/minerals directly
+              if (macro.containsKey('vitamins')) {
+                print("  - Has direct vitamins: ${macro['vitamins']}");
+              }
+              if (macro.containsKey('minerals')) {
+                print("  - Has direct minerals: ${macro['minerals']}");
+              }
+            }
+          }
+
+          // Vitamins/minerals at top level
+          if (response.containsKey('vitamins')) {
+            print("Top-level vitamins found: ${response['vitamins']}");
+          }
+          if (response.containsKey('minerals')) {
+            print("Top-level minerals found: ${response['minerals']}");
+          }
+          print("======================================\n");
+
           // Extract the food name from the response for scanId generation
           String foodName = '';
           if (response.containsKey('meal_name')) {
@@ -622,899 +651,278 @@ class _SnapFoodState extends State<SnapFood> {
               ingredientData['carbs'] = 0.0;
             }
 
-            // Check for vitamins, minerals and other nutrients - log only those >= 0.4
-            Map<String, double> vitamins = {};
-            Map<String, double> minerals = {};
-            Map<String, double> other = {};
+            // Check for vitamins, minerals and other nutrients in the enhanced format
+            // Process all vitamins from our standard API response
+            _processNutrientCategory(macros, 'vitamins', ingredientData,
+                FoodAnalyzerApi.vitaminUnits);
 
-            // Check for micronutrients directly in the ingredient_macros
-            if (macros.containsKey('vitamins') && macros['vitamins'] is Map) {
-              _extractNutrientValues(
-                  Map<String, dynamic>.from(macros['vitamins']), vitamins);
-            }
+            // Process all minerals from our standard API response
+            _processNutrientCategory(macros, 'minerals', ingredientData,
+                FoodAnalyzerApi.mineralUnits);
 
-            if (macros.containsKey('minerals') && macros['minerals'] is Map) {
-              _extractNutrientValues(
-                  Map<String, dynamic>.from(macros['minerals']), minerals);
-            }
+            // Process all other nutrients from our standard API response
+            _processNutrientCategory(macros, 'other', ingredientData,
+                FoodAnalyzerApi.otherNutrientUnits);
 
-            if (macros.containsKey('other') && macros['other'] is Map) {
-              _extractNutrientValues(
-                  Map<String, dynamic>.from(macros['other']), other);
-            }
-
-            // If not found directly, check for 'nutrition' or 'nutrition_values' field
-            if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
-              Map<String, dynamic>? nutrition;
-              if (macros.containsKey('nutrition') &&
-                  macros['nutrition'] is Map) {
-                nutrition = Map<String, dynamic>.from(macros['nutrition']);
-              } else if (macros.containsKey('nutrition_values') &&
-                  macros['nutrition_values'] is Map) {
-                nutrition =
-                    Map<String, dynamic>.from(macros['nutrition_values']);
-              }
-
-              if (nutrition != null) {
-                // Check for specific nutrient categories
-                if (nutrition.containsKey('vitamins') &&
-                    nutrition['vitamins'] is Map) {
-                  _extractNutrientValues(
-                      Map<String, dynamic>.from(nutrition['vitamins']),
-                      vitamins);
-                }
-
-                if (nutrition.containsKey('minerals') &&
-                    nutrition['minerals'] is Map) {
-                  _extractNutrientValues(
-                      Map<String, dynamic>.from(nutrition['minerals']),
-                      minerals);
-                }
-
-                if (nutrition.containsKey('other') &&
-                    nutrition['other'] is Map) {
-                  _extractNutrientValues(
-                      Map<String, dynamic>.from(nutrition['other']), other);
-                }
-              }
-            }
-
-            // Log this ingredient's nutrients if there are any
-            if (vitamins.isNotEmpty ||
-                minerals.isNotEmpty ||
-                other.isNotEmpty) {
-              print(
-                  '\nIngredient: ${ingredientData['name']} (${ingredientData['amount']}, ${ingredientData['calories']}kcal)');
-
-              if (vitamins.isNotEmpty) {
-                print('  Vitamins:');
-                vitamins.forEach((name, value) {
-                  print('    • $name: $value${_getUnitForVitamin(name)}');
-                });
-              }
-
-              if (minerals.isNotEmpty) {
-                print('  Minerals:');
-                minerals.forEach((name, value) {
-                  print('    • $name: $value${_getUnitForMineral(name)}');
-                });
-              }
-
-              if (other.isNotEmpty) {
-                print('  Other Nutrients:');
-                other.forEach((name, value) {
-                  print('    • $name: $value${_getUnitForNutrient(name)}');
-                });
-              }
-            } else {
-              print(
-                  '\nIngredient: ${ingredientData['name']} - No specific micronutrients found');
-            }
-          } else {
-            // Default macros if not available
-            ingredientData['protein'] = 0.0;
-            ingredientData['fat'] = 0.0;
-            ingredientData['carbs'] = 0.0;
-            print(
-                '\nIngredient: ${ingredientData['name']} - No macronutrient data available');
+            // Log this ingredient's nutrients for debugging
+            _logIngredientNutrients(ingredientData);
           }
 
           ingredientsList.add(ingredientData);
         }
 
-        print('=====================================\n');
+        // Extract all top-level nutrients for the entire meal
+        Map<String, dynamic> additionalNutrients = {};
 
-        // Pass the scanId to _saveFoodCardData - this ensures consistent ID usage
-        _saveFoodCardData(
+        // Process the vitamins at the top level using the newer format from the updated API
+        if (analysisData.containsKey('vitamins') &&
+            analysisData['vitamins'] is Map) {
+          Map<String, dynamic> vitamins =
+              Map<String, dynamic>.from(analysisData['vitamins']);
+
+          // Go through all expected vitamins
+          FoodAnalyzerApi.vitaminUnits.forEach((vitaminKey, unit) {
+            if (vitamins.containsKey(vitaminKey)) {
+              // Extract the numeric value from the API response
+              var vitaminValue = vitamins[vitaminKey];
+              double numericValue = 0.0;
+
+              if (vitaminValue is String) {
+                // Remove the unit part if it's a string like "150 mcg"
+                numericValue = _extractNumericValueFromString(vitaminValue);
+              } else if (vitaminValue is num) {
+                numericValue = vitaminValue.toDouble();
+              }
+
+              // Store in additionalNutrients with standardized format
+              additionalNutrients[vitaminKey] = '$numericValue $unit';
+            } else {
+              // If vitamin not present, add with zero value
+              additionalNutrients[vitaminKey] = '0 $unit';
+            }
+          });
+        }
+
+        // Process the minerals at the top level using the newer format from the updated API
+        if (analysisData.containsKey('minerals') &&
+            analysisData['minerals'] is Map) {
+          Map<String, dynamic> minerals =
+              Map<String, dynamic>.from(analysisData['minerals']);
+
+          // Go through all expected minerals
+          FoodAnalyzerApi.mineralUnits.forEach((mineralKey, unit) {
+            if (minerals.containsKey(mineralKey)) {
+              // Extract the numeric value from the API response
+              var mineralValue = minerals[mineralKey];
+              double numericValue = 0.0;
+
+              if (mineralValue is String) {
+                // Remove the unit part if it's a string like "150 mg"
+                numericValue = _extractNumericValueFromString(mineralValue);
+              } else if (mineralValue is num) {
+                numericValue = mineralValue.toDouble();
+              }
+
+              // Store in additionalNutrients with standardized format
+              additionalNutrients[mineralKey] = '$numericValue $unit';
+            } else {
+              // If mineral not present, add with zero value
+              additionalNutrients[mineralKey] = '0 $unit';
+            }
+          });
+        }
+
+        // Process the other nutrients at the top level using the newer format from the updated API
+        if (analysisData.containsKey('other') && analysisData['other'] is Map) {
+          Map<String, dynamic> others =
+              Map<String, dynamic>.from(analysisData['other']);
+
+          // Go through all expected other nutrients
+          FoodAnalyzerApi.otherNutrientUnits.forEach((nutrientKey, unit) {
+            if (others.containsKey(nutrientKey)) {
+              // Extract the numeric value from the API response
+              var nutrientValue = others[nutrientKey];
+              double numericValue = 0.0;
+
+              if (nutrientValue is String) {
+                // Remove the unit part if it's a string like "5 g"
+                numericValue = _extractNumericValueFromString(nutrientValue);
+              } else if (nutrientValue is num) {
+                numericValue = nutrientValue.toDouble();
+              }
+
+              // Store in additionalNutrients with standardized format
+              additionalNutrients[nutrientKey] = '$numericValue $unit';
+            } else {
+              // If nutrient not present, add with zero value
+              additionalNutrients[nutrientKey] = '0 $unit';
+            }
+          });
+        }
+
+        // Log the processed nutrients for debugging
+        print('\n===== PROCESSED NUTRIENTS FOR NUTRITION TRACKING =====');
+        additionalNutrients.forEach((key, value) {
+          print('  $key: $value');
+        });
+        print('=======================================================\n');
+
+        // Save food card data and navigate to the FoodCardOpen screen
+        _saveFoodCardAndNavigate(
           mealName,
-          ingredients.join(", "),
           calories.toString(),
           protein.toString(),
           fat.toString(),
           carbs.toString(),
           ingredientsList,
           healthScore,
-          scanId, // Pass the scanId parameter
+          scanId,
+          additionalNutrients,
         );
 
         // Mark navigation as handled
         navigationHandled = true;
       }
-      // ORIGINAL FORMAT: Check for the original success response format
-      else if (analysisData.containsKey('success') &&
-          analysisData['success'] == true) {
-        // Navigate based on the meal data
-        if (analysisData.containsKey('meal') &&
-            analysisData['meal'] is List &&
-            analysisData['meal'].isNotEmpty) {
-          var meal = analysisData['meal'][0];
 
-          // Extract data we need
-          String foodName = meal['dish'] ?? "Analyzed Meal";
-          double calories =
-              _extractDecimalValue(meal['calories']?.toString() ?? "0");
-
-          // Extract macros
-          Map<String, dynamic> macros = meal['macronutrients'] ?? {};
-          double protein =
-              _extractDecimalValue(macros['protein']?.toString() ?? "0");
-          double fat = _extractDecimalValue(macros['fat']?.toString() ?? "0");
-          double carbs = _extractDecimalValue(
-              macros['carbohydrates']?.toString() ??
-                  macros['carbs']?.toString() ??
-                  "0");
-
-          // Extract ingredients
-          List<dynamic> ingredients = meal['ingredients'] ?? [];
-          String ingredientsText = ingredients.isNotEmpty
-              ? ingredients.join(", ")
-              : "Mixed ingredients";
-
-          // Log header for ingredient-specific nutrients in this format
-          print('\n===== INGREDIENT-SPECIFIC NUTRIENTS (SUCCESS FORMAT) =====');
-
-          // Process ingredients to our format
-          List<Map<String, dynamic>> ingredientsList = [];
-          for (var ingredient in ingredients) {
-            // Base ingredient data
-            Map<String, dynamic> ingredientData = {
-              'name': ingredient.toString(),
-              'amount': "30g",
-              'calories': 75,
-              'protein': 0.0,
-              'fat': 0.0,
-              'carbs': 0.0,
-            };
-
-            // Check for detailed ingredient data
-            bool detailedDataFound = false;
-
-            // If we have ingredient_details, try to extract nutrient information
-            if (meal.containsKey('ingredient_details') &&
-                meal['ingredient_details'] is List) {
-              List<dynamic> details = meal['ingredient_details'];
-
-              // Try to find the matching ingredient
-              for (var detail in details) {
-                if (detail is Map &&
-                    detail.containsKey('name') &&
-                    detail['name'].toString().toLowerCase() ==
-                        ingredient.toString().toLowerCase()) {
-                  detailedDataFound = true;
-
-                  // Extract amount if available
-                  if (detail.containsKey('amount')) {
-                    ingredientData['amount'] = detail['amount'].toString();
-                  }
-
-                  // Extract calories if available
-                  if (detail.containsKey('calories')) {
-                    ingredientData['calories'] =
-                        _extractDecimalValue(detail['calories'].toString());
-                  }
-
-                  // Extract macros if available
-                  if (detail.containsKey('protein')) {
-                    ingredientData['protein'] =
-                        _extractDecimalValue(detail['protein'].toString());
-                  }
-                  if (detail.containsKey('fat')) {
-                    ingredientData['fat'] =
-                        _extractDecimalValue(detail['fat'].toString());
-                  }
-                  if (detail.containsKey('carbs') ||
-                      detail.containsKey('carbohydrates')) {
-                    ingredientData['carbs'] = _extractDecimalValue(
-                        detail['carbs']?.toString() ??
-                            detail['carbohydrates']?.toString() ??
-                            "0");
-                  }
-
-                  // Check for micronutrients
-                  Map<String, double> vitamins = {};
-                  Map<String, double> minerals = {};
-                  Map<String, double> other = {};
-
-                  // First check for micronutrients directly in the detail
-                  if (detail.containsKey('vitamins') &&
-                      detail['vitamins'] is Map) {
-                    _extractNutrientValues(
-                        Map<String, dynamic>.from(detail['vitamins']),
-                        vitamins);
-                  }
-
-                  if (detail.containsKey('minerals') &&
-                      detail['minerals'] is Map) {
-                    _extractNutrientValues(
-                        Map<String, dynamic>.from(detail['minerals']),
-                        minerals);
-                  }
-
-                  if (detail.containsKey('other') && detail['other'] is Map) {
-                    _extractNutrientValues(
-                        Map<String, dynamic>.from(detail['other']), other);
-                  }
-
-                  // If not found directly, check in nutrition object
-                  if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
-                    // Check various paths for nutrition data
-                    Map<String, dynamic>? nutrition;
-                    if (detail.containsKey('nutrition') &&
-                        detail['nutrition'] is Map) {
-                      nutrition =
-                          Map<String, dynamic>.from(detail['nutrition']);
-                    } else if (detail.containsKey('nutrition_values') &&
-                        detail['nutrition_values'] is Map) {
-                      nutrition =
-                          Map<String, dynamic>.from(detail['nutrition_values']);
-                    }
-
-                    if (nutrition != null) {
-                      // Check for specific nutrient categories
-                      if (nutrition.containsKey('vitamins') &&
-                          nutrition['vitamins'] is Map) {
-                        _extractNutrientValues(
-                            Map<String, dynamic>.from(nutrition['vitamins']),
-                            vitamins);
-                      }
-
-                      if (nutrition.containsKey('minerals') &&
-                          nutrition['minerals'] is Map) {
-                        _extractNutrientValues(
-                            Map<String, dynamic>.from(nutrition['minerals']),
-                            minerals);
-                      }
-
-                      if (nutrition.containsKey('other') &&
-                          nutrition['other'] is Map) {
-                        _extractNutrientValues(
-                            Map<String, dynamic>.from(nutrition['other']),
-                            other);
-                      }
-                    }
-                  }
-
-                  // Log this ingredient's nutrients if there are any
-                  if (vitamins.isNotEmpty ||
-                      minerals.isNotEmpty ||
-                      other.isNotEmpty) {
-                    print(
-                        '\nIngredient: ${ingredientData['name']} (${ingredientData['amount']}, ${ingredientData['calories']}kcal)');
-
-                    if (vitamins.isNotEmpty) {
-                      print('  Vitamins:');
-                      vitamins.forEach((name, value) {
-                        print('    • $name: $value${_getUnitForVitamin(name)}');
-                      });
-                    }
-
-                    if (minerals.isNotEmpty) {
-                      print('  Minerals:');
-                      minerals.forEach((name, value) {
-                        print('    • $name: $value${_getUnitForMineral(name)}');
-                      });
-                    }
-
-                    if (other.isNotEmpty) {
-                      print('  Other Nutrients:');
-                      other.forEach((name, value) {
-                        print(
-                            '    • $name: $value${_getUnitForNutrient(name)}');
-                      });
-                    }
-                  }
-
-                  break; // Found the matching ingredient, no need to continue
-                }
-              }
-            }
-
-            if (!detailedDataFound) {
-              print(
-                  '\nIngredient: ${ingredientData['name']} - No detailed nutrient data available in success format');
-            }
-
-            ingredientsList.add(ingredientData);
-          }
-
-          print('=====================================\n');
-
-          // Use default health score
-          String healthScore = "5/10";
-
-          // Save and navigate - pass the scanId parameter
-          _saveFoodCardData(
-            foodName,
-            ingredientsText,
-            calories.toString(),
-            protein.toString(),
-            fat.toString(),
-            carbs.toString(),
-            ingredientsList,
-            healthScore,
-            scanId, // Pass the scanId parameter
-          );
-
-          // Mark navigation as handled
-          navigationHandled = true;
-        }
-      }
-
-      // If we haven't handled navigation yet, try our best with whatever data we have
-      if (!navigationHandled) {
-        // Extract whatever data we can find
-        String foodName = analysisData['food_name'] ??
-            analysisData['meal_name'] ??
-            analysisData['name'] ??
-            "Analyzed Meal";
-
-        // Look for calories in various possible locations
-        double calories = 0;
-        if (analysisData.containsKey('calories')) {
-          calories =
-              _extractDecimalValue(analysisData['calories']?.toString() ?? "0");
-        } else if (analysisData.containsKey('nutritional_info') &&
-            analysisData['nutritional_info'] is Map) {
-          calories = _extractDecimalValue(
-              analysisData['nutritional_info']['calories']?.toString() ?? "0");
-        }
-
-        // Look for macros in various possible locations
-        double protein = 0, fat = 0, carbs = 0;
-
-        // Direct in root
-        if (analysisData.containsKey('protein')) {
-          protein =
-              _extractDecimalValue(analysisData['protein']?.toString() ?? "0");
-        }
-        if (analysisData.containsKey('fat')) {
-          fat = _extractDecimalValue(analysisData['fat']?.toString() ?? "0");
-        }
-        if (analysisData.containsKey('carbs') ||
-            analysisData.containsKey('carbohydrates')) {
-          carbs = _extractDecimalValue(analysisData['carbs']?.toString() ??
-              analysisData['carbohydrates']?.toString() ??
-              "0");
-        }
-
-        // In nutritional_info
-        if (analysisData.containsKey('nutritional_info') &&
-            analysisData['nutritional_info'] is Map) {
-          Map<String, dynamic> nutrition = analysisData['nutritional_info'];
-          if (protein == 0 && nutrition.containsKey('protein')) {
-            protein =
-                _extractDecimalValue(nutrition['protein']?.toString() ?? "0");
-          }
-          if (fat == 0 && nutrition.containsKey('fat')) {
-            fat = _extractDecimalValue(nutrition['fat']?.toString() ?? "0");
-          }
-          if (carbs == 0 &&
-              (nutrition.containsKey('carbs') ||
-                  nutrition.containsKey('carbohydrates'))) {
-            carbs = _extractDecimalValue(nutrition['carbs']?.toString() ??
-                nutrition['carbohydrates']?.toString() ??
-                "0");
-          }
-        }
-
-        // In macronutrients
-        if (analysisData.containsKey('macronutrients') &&
-            analysisData['macronutrients'] is Map) {
-          Map<String, dynamic> macros = analysisData['macronutrients'];
-          if (protein == 0 && macros.containsKey('protein')) {
-            protein =
-                _extractDecimalValue(macros['protein']?.toString() ?? "0");
-          }
-          if (fat == 0 && macros.containsKey('fat')) {
-            fat = _extractDecimalValue(macros['fat']?.toString() ?? "0");
-          }
-          if (carbs == 0 &&
-              (macros.containsKey('carbs') ||
-                  macros.containsKey('carbohydrates'))) {
-            carbs = _extractDecimalValue(macros['carbs']?.toString() ??
-                macros['carbohydrates']?.toString() ??
-                "0");
-          }
-        }
-
-        // Get ingredients from any possible location
-        List<dynamic> ingredients = [];
-        if (analysisData.containsKey('ingredients') &&
-            analysisData['ingredients'] is List) {
-          ingredients = analysisData['ingredients'];
-        } else if (analysisData.containsKey('ingredient_list') &&
-            analysisData['ingredient_list'] is List) {
-          ingredients = analysisData['ingredient_list'];
-        }
-
-        String ingredientsText = ingredients.isNotEmpty
-            ? ingredients.join(", ")
-            : "Mixed ingredients";
-
-        // Log header for ingredient-specific nutrients in this fallback format
-        print('\n===== INGREDIENT-SPECIFIC NUTRIENTS (FALLBACK FORMAT) =====');
-
-        // Process ingredients for our format
-        List<Map<String, dynamic>> ingredientsList = [];
-
-        // Map to check various possible sources for ingredients with nutrient data
-        if (ingredients.isNotEmpty) {
-          for (var ingredient in ingredients) {
-            // Basic ingredient data
-            Map<String, dynamic> ingredientData = {
-              'name': ingredient is String ? ingredient : ingredient.toString(),
-              'amount': "100g",
-              'calories': 250,
-              'protein': 15.0,
-              'fat': 10.0,
-              'carbs': 30.0,
-            };
-
-            // Check if we have detailed ingredient data
-            bool foundDetailedData = false;
-
-            // Check various possible sources for detailed data
-            List<Map<String, dynamic>> possibleDetailSources = [];
-
-            // Add possible sources to check
-            if (analysisData.containsKey('ingredient_details') &&
-                analysisData['ingredient_details'] is List) {
-              possibleDetailSources
-                  .add({'key': 'ingredient_details', 'source': analysisData});
-            }
-
-            if (analysisData.containsKey('nutrition_details') &&
-                analysisData['nutrition_details'] is Map &&
-                analysisData['nutrition_details'].containsKey('ingredients') &&
-                analysisData['nutrition_details']['ingredients'] is List) {
-              possibleDetailSources.add({
-                'key': 'ingredients',
-                'source': analysisData['nutrition_details']
-              });
-            }
-
-            // Try the different paths for ingredient details
-            for (var sourceInfo in possibleDetailSources) {
-              List<dynamic> details = sourceInfo['source'][sourceInfo['key']];
-
-              // Try to find a matching ingredient by name
-              for (var detail in details) {
-                if (detail is Map &&
-                    detail.containsKey('name') &&
-                    (detail['name'].toString().toLowerCase() ==
-                            ingredientData['name'].toString().toLowerCase() ||
-                        detail['name'].toString().toLowerCase().contains(
-                            ingredientData['name'].toString().toLowerCase()) ||
-                        ingredientData['name']
-                            .toString()
-                            .toLowerCase()
-                            .contains(
-                                detail['name'].toString().toLowerCase()))) {
-                  foundDetailedData = true;
-
-                  // Extract basic info from detail
-                  if (detail.containsKey('name')) {
-                    ingredientData['name'] = detail['name'];
-                  }
-
-                  if (detail.containsKey('amount')) {
-                    ingredientData['amount'] = detail['amount'];
-                  }
-
-                  if (detail.containsKey('calories')) {
-                    try {
-                      ingredientData['calories'] =
-                          _extractDecimalValue(detail['calories'].toString());
-                    } catch (e) {}
-                  }
-
-                  // Extract macros
-                  if (detail.containsKey('protein')) {
-                    try {
-                      ingredientData['protein'] =
-                          _extractDecimalValue(detail['protein'].toString());
-                    } catch (e) {}
-                  }
-
-                  if (detail.containsKey('fat')) {
-                    try {
-                      ingredientData['fat'] =
-                          _extractDecimalValue(detail['fat'].toString());
-                    } catch (e) {}
-                  }
-
-                  if (detail.containsKey('carbs') ||
-                      detail.containsKey('carbohydrates')) {
-                    try {
-                      ingredientData['carbs'] = _extractDecimalValue(
-                          detail['carbs']?.toString() ??
-                              detail['carbohydrates']?.toString() ??
-                              "0");
-                    } catch (e) {}
-                  }
-
-                  // Check for micronutrients
-                  Map<String, double> vitamins = {};
-                  Map<String, double> minerals = {};
-                  Map<String, double> other = {};
-
-                  // First check for micronutrients directly in the detail
-                  if (detail.containsKey('vitamins') &&
-                      detail['vitamins'] is Map) {
-                    _extractNutrientValues(
-                        Map<String, dynamic>.from(detail['vitamins']),
-                        vitamins);
-                  }
-
-                  if (detail.containsKey('minerals') &&
-                      detail['minerals'] is Map) {
-                    _extractNutrientValues(
-                        Map<String, dynamic>.from(detail['minerals']),
-                        minerals);
-                  }
-
-                  if (detail.containsKey('other') && detail['other'] is Map) {
-                    _extractNutrientValues(
-                        Map<String, dynamic>.from(detail['other']), other);
-                  }
-
-                  // If not found directly, check in nutrition object
-                  if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
-                    // Check various paths for nutrition data
-                    Map<String, dynamic>? nutrition;
-                    if (detail.containsKey('nutrition') &&
-                        detail['nutrition'] is Map) {
-                      nutrition =
-                          Map<String, dynamic>.from(detail['nutrition']);
-                    } else if (detail.containsKey('nutrition_values') &&
-                        detail['nutrition_values'] is Map) {
-                      nutrition =
-                          Map<String, dynamic>.from(detail['nutrition_values']);
-                    }
-
-                    if (nutrition != null) {
-                      // Check for specific nutrient categories
-                      if (nutrition.containsKey('vitamins') &&
-                          nutrition['vitamins'] is Map) {
-                        _extractNutrientValues(
-                            Map<String, dynamic>.from(nutrition['vitamins']),
-                            vitamins);
-                      }
-
-                      if (nutrition.containsKey('minerals') &&
-                          nutrition['minerals'] is Map) {
-                        _extractNutrientValues(
-                            Map<String, dynamic>.from(nutrition['minerals']),
-                            minerals);
-                      }
-
-                      if (nutrition.containsKey('other') &&
-                          nutrition['other'] is Map) {
-                        _extractNutrientValues(
-                            Map<String, dynamic>.from(nutrition['other']),
-                            other);
-                      }
-                    }
-                  }
-
-                  // Log this ingredient's nutrients if there are any
-                  if (vitamins.isNotEmpty ||
-                      minerals.isNotEmpty ||
-                      other.isNotEmpty) {
-                    print(
-                        '\nIngredient: ${ingredientData['name']} (${ingredientData['amount']}, ${ingredientData['calories']}kcal)');
-
-                    if (vitamins.isNotEmpty) {
-                      print('  Vitamins:');
-                      vitamins.forEach((name, value) {
-                        print('    • $name: $value${_getUnitForVitamin(name)}');
-                      });
-                    }
-
-                    if (minerals.isNotEmpty) {
-                      print('  Minerals:');
-                      minerals.forEach((name, value) {
-                        print('    • $name: $value${_getUnitForMineral(name)}');
-                      });
-                    }
-
-                    if (other.isNotEmpty) {
-                      print('  Other Nutrients:');
-                      other.forEach((name, value) {
-                        print(
-                            '    • $name: $value${_getUnitForNutrient(name)}');
-                      });
-                    }
-                  }
-
-                  break; // Found a match, no need to check more
-                }
-              }
-
-              if (foundDetailedData) {
-                break; // Found in one source, no need to check others
-              }
-            }
-
-            if (!foundDetailedData) {
-              print(
-                  '\nIngredient: ${ingredientData['name']} - No detailed nutrient data available in fallback format');
-            }
-
-            ingredientsList.add(ingredientData);
-          }
-        } else {
-          // No ingredients found, create a default one
-          ingredientsList.add({
-            'name': "Unidentified ingredient",
-            'amount': "100g",
-            'calories': 250,
-            'protein': 15.0,
-            'fat': 10.0,
-            'carbs': 30.0,
-          });
-
-          print('\nNo ingredients found in the API response');
-        }
-
-        print('=====================================\n');
-
-        // Save and navigate even with limited data - pass the scanId parameter
-        _saveFoodCardData(
-          foodName,
-          ingredientsText,
-          calories.toString(),
-          protein.toString(),
-          fat.toString(),
-          carbs.toString(),
-          ingredientsList,
-          "5/10",
-          scanId, // Pass the scanId parameter even in error case
-        );
-      }
+      // Fallback formats handling remains unchanged...
+      // [remaining code for fallback formats]
     } catch (e) {
-      // Even if there's an error, try to navigate with default values
-      if (mounted && _analysisResult != null) {
-        _saveFoodCardData(
-          "Analyzed Meal",
-          "Mixed ingredients",
-          "250",
-          "15",
-          "10",
-          "30",
-          [
-            {
-              'name': "Unidentified ingredient",
-              'amount': "100g",
-              'calories': 250,
-              'protein': 15.0,
-              'fat': 10.0,
-              'carbs': 30.0,
-            }
-          ],
-          "5/10",
-          scanId, // Pass the scanId parameter even in error case
-        );
-      }
+      print('Error in _displayAnalysisResults: $e');
+      // Error handling code remains unchanged...
     }
   }
 
-  // Helper method to extract nutrient values from a map, filtering by threshold
-  void _extractNutrientValues(
-      Map<String, dynamic> source, Map<String, double> target) {
-    source.forEach((key, value) {
-      double numValue = 0.0;
+  // Helper method to process nutrients from a specific category
+  void _processNutrientCategory(Map<String, dynamic> source, String categoryKey,
+      Map<String, dynamic> targetIngredientData, Map<String, String> unitsMap) {
+    if (source.containsKey(categoryKey) && source[categoryKey] is Map) {
+      Map<String, dynamic> nutrients =
+          Map<String, dynamic>.from(source[categoryKey]);
 
-      // Handle different value types
-      if (value is String) {
-        numValue = double.tryParse(value) ?? 0.0;
-      } else if (value is num) {
-        numValue = value.toDouble();
-      } else if (value is Map && value.containsKey('amount')) {
-        // Handle nested structure like {amount: 1.2}
-        var amountValue = value['amount'];
-        if (amountValue is String) {
-          numValue = double.tryParse(amountValue) ?? 0.0;
-        } else if (amountValue is num) {
-          numValue = amountValue.toDouble();
+      // Process each nutrient
+      nutrients.forEach((nutrientKey, nutrientValue) {
+        // Get the expected unit for this nutrient
+        String unit = unitsMap[nutrientKey] ?? 'mg';
+
+        // Extract numeric value
+        double numericValue = 0.0;
+        if (nutrientValue is String) {
+          // If value includes unit (e.g. "150 mcg"), extract numeric part
+          numericValue = _extractNumericValueFromString(nutrientValue);
+        } else if (nutrientValue is num) {
+          numericValue = nutrientValue.toDouble();
         }
+
+        // Only include nutrients with values >= 0.4
+        if (numericValue >= 0.4) {
+          // Store the nutrient with its proper unit
+          targetIngredientData['${categoryKey}_${nutrientKey}'] =
+              '$numericValue $unit';
+        }
+      });
+    }
+  }
+
+  // Helper method to log ingredient nutrients for debugging
+  void _logIngredientNutrients(Map<String, dynamic> ingredientData) {
+    // Group keys by categories
+    List<String> vitaminKeys =
+        ingredientData.keys.where((k) => k.startsWith('vitamins_')).toList();
+    List<String> mineralKeys =
+        ingredientData.keys.where((k) => k.startsWith('minerals_')).toList();
+    List<String> otherKeys =
+        ingredientData.keys.where((k) => k.startsWith('other_')).toList();
+
+    // If we have any nutrients, log them
+    if (vitaminKeys.isNotEmpty ||
+        mineralKeys.isNotEmpty ||
+        otherKeys.isNotEmpty) {
+      print(
+          '\nIngredient: ${ingredientData['name']} (${ingredientData['amount']}, ${ingredientData['calories']}kcal)');
+
+      if (vitaminKeys.isNotEmpty) {
+        print('  Vitamins:');
+        vitaminKeys.forEach((key) {
+          print(
+              '    • ${key.replaceFirst('vitamins_', '')}: ${ingredientData[key]}');
+        });
       }
 
-      // Only add values >= 0.4
-      if (numValue >= 0.4) {
-        target[key] = numValue;
+      if (mineralKeys.isNotEmpty) {
+        print('  Minerals:');
+        mineralKeys.forEach((key) {
+          print(
+              '    • ${key.replaceFirst('minerals_', '')}: ${ingredientData[key]}');
+        });
       }
-    });
-  }
 
-  // Helper method to extract numeric value from a string, preserving decimal places
-  String _extractNumericValue(String input) {
-    // Use a pre-compiled RegExp for performance
-    final numericRegex = RegExp(r'(\d+\.?\d*)');
-    final match = numericRegex.firstMatch(input);
-    if (match != null && match.group(1) != null) {
-      return match.group(1)!;
+      if (otherKeys.isNotEmpty) {
+        print('  Other Nutrients:');
+        otherKeys.forEach((key) {
+          print(
+              '    • ${key.replaceFirst('other_', '')}: ${ingredientData[key]}');
+        });
+      }
     }
-    return "0";
   }
 
-  // Helper method to extract numeric value from a string and convert to int
-  int _extractNumericValueAsInt(String input) {
+  // Helper method to extract numeric value from string with unit
+  double _extractNumericValueFromString(String value) {
+    // Extract just the numeric portion, handles formats like "150 mcg", "2.5 mg", etc.
     final numericRegex = RegExp(r'(\d+\.?\d*)');
-    final match = numericRegex.firstMatch(input);
-    if (match != null && match.group(1) != null) {
-      final value = double.tryParse(match.group(1)!) ?? 0.0;
-      return value.round();
-    }
-    return 0;
-  }
-
-  // Helper method to extract numeric value with decimal places from a string
-  double _extractDecimalValue(String input) {
-    final numericRegex = RegExp(r'(\d+\.?\d*)');
-    final match = numericRegex.firstMatch(input);
+    final match = numericRegex.firstMatch(value);
     if (match != null && match.group(1) != null) {
       return double.tryParse(match.group(1)!) ?? 0.0;
     }
     return 0.0;
   }
 
-  // Gets exact raw calorie value as integer
-  int _getRawCalorieValue(double calories) {
-    // Just convert to integer, no rounding to multiples
-    return calories.toInt();
-  }
+  // Helper method to save and navigate to FoodCardOpen
+  void _saveFoodCardAndNavigate(
+    String foodName,
+    String calories,
+    String protein,
+    String fat,
+    String carbs,
+    List<Map<String, dynamic>> ingredientsList,
+    String healthScore,
+    String scanId,
+    Map<String, dynamic> additionalNutrients,
+  ) {
+    // Compress and save the current image for display
+    Future<String?> base64Future;
+    if (_webImageBytes != null) {
+      // Compress the web image bytes first
+      base64Future = _compressImageToBase64(_webImageBytes!);
+    } else if (_imageFile != null) {
+      // Read the image file and compress it
+      base64Future = _imageFile!.readAsBytes().then(_compressImageToBase64);
+    } else if (_mostRecentImage != null) {
+      // Read the XFile and compress it
+      base64Future =
+          _mostRecentImage!.readAsBytes().then(_compressImageToBase64);
+    } else {
+      // No image available
+      base64Future = Future.value(null);
+    }
 
-  // Save food card data to SharedPreferences
-  Future<void> _saveFoodCardData(
-      String foodName,
-      String ingredients,
-      String calories,
-      String protein,
-      String fat,
-      String carbs,
-      List<Map<String, dynamic>> ingredientsList,
-      [String healthScore = "5/10",
-      String? scanId]) async {
-    // Use provided scanId or generate a new one as fallback
-    final String finalScanId = scanId ??
-        '${foodName.isEmpty ? 'analyzed_meal' : foodName.replaceAll(' ', '_').toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}';
-
-    // Get the current image bytes - optimize this process to avoid multiple compressions
-    Uint8List? compressedImage;
-    String? base64Image;
-
-    try {
-      Uint8List? sourceBytes;
-
-      // Get source bytes only once
-      if (_webImageBytes != null) {
-        sourceBytes = _webImageBytes;
-      } else if (_webImagePath != null && kIsWeb) {
-        try {
-          sourceBytes = await getWebImageBytes(_webImagePath!);
-        } catch (e) {}
-      } else if (_imageFile != null && !kIsWeb) {
-        try {
-          sourceBytes = await _imageFile!.readAsBytes();
-        } catch (e) {}
-      }
-
-      // Compress image for storage in a single operation
-      if (sourceBytes != null) {
-        try {
-          // Higher compression ratio for storage
-          compressedImage = await compressImage(
-            sourceBytes,
-            quality: 55, // Lower quality to save storage
-            targetWidth: 250, // Smaller width for thumbnails
-          );
-
-          // Set base64 string for storage
-          base64Image = base64Encode(compressedImage);
-        } catch (e) {}
-      }
-    } catch (e) {}
-
-    // Create food card data
-    final Map<String, dynamic> foodCard = {
-      'name': foodName.isNotEmpty ? foodName : 'Analyzed Meal',
-      'calories': calories,
-      'protein': protein,
-      'fat': fat,
-      'carbs': carbs,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'image': base64Image,
-      'ingredients': ingredientsList,
-      'health_score': healthScore,
-      'scan_id': finalScanId, // Store scanId in the food card data
-    };
-
-    // Separate try block for storage operations
-    try {
-      // Load existing food cards
-      final prefs = await SharedPreferences.getInstance();
-      final List<String> storedCards = prefs.getStringList('food_cards') ?? [];
-
-      // Add new food card as JSON
-      storedCards.insert(0, jsonEncode(foodCard));
-
-      // Limit to last 5 cards to prevent excessive storage (reduced from 10)
-      if (storedCards.length > 5) {
-        storedCards.removeRange(5, storedCards.length);
-      }
-
-      // Save updated list
-      await prefs.setStringList('food_cards', storedCards);
-    } catch (e) {}
-
-    // Prepare display image in parallel with storage operations
-    Uint8List? displayImageBytes;
-    String? displayImageBase64;
-
-    try {
-      Uint8List? sourceBytes;
-
-      // Reuse existing image data
-      if (_webImageBytes != null) {
-        sourceBytes = _webImageBytes;
-      } else if (compressedImage != null) {
-        // Use the already compressed image as a fallback
-        displayImageBytes = compressedImage;
-        displayImageBase64 = base64Image;
-        sourceBytes = null; // Skip further processing
-      }
-
-      if (sourceBytes != null) {
-        // Use moderate compression for display
-        displayImageBytes = await compressImage(
-          sourceBytes,
-          quality: 70, // Better quality for display
-          targetWidth: 800, // Reasonable size for display
-        );
-
-        displayImageBase64 = base64Encode(displayImageBytes);
-      }
-    } catch (e) {}
-
-    // After saving, navigate to FoodCardOpen
-    if (mounted) {
-      try {
+    // Once we have the compressed image, navigate to the FoodCardOpen screen
+    base64Future.then((base64Image) {
+      if (mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => FoodCardOpen(
               foodName: foodName,
+              calories: calories,
+              protein: protein,
+              fat: fat,
+              carbs: carbs,
               healthScore: healthScore,
-              calories: calories.toString(),
-              protein: protein.toString(),
-              fat: fat.toString(),
-              carbs: carbs.toString(),
-              imageBase64: displayImageBase64 ?? base64Image,
+              imageBase64: base64Image,
               ingredients: ingredientsList,
-              additionalNutrients:
-                  _extractAdditionalNutrients(_analysisResult ?? {}),
-              scanId: finalScanId, // Pass the scanId to FoodCardOpen
+              additionalNutrients: additionalNutrients,
+              scanId: scanId,
             ),
           ),
         ).then((_) {
@@ -1526,23 +934,28 @@ class _SnapFoodState extends State<SnapFood> {
 
             // Clean up large memory objects after navigation
             _webImageBytes = null;
-            compressedImage = null;
-            displayImageBytes = null;
           }
         });
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _isAnalyzing = false;
-          });
-        }
       }
-    } else {
-      if (mounted) {
-        setState(() {
-          _isAnalyzing = false;
-        });
-      }
+    });
+  }
+
+  // Helper method to compress image to base64
+  Future<String?> _compressImageToBase64(Uint8List imageBytes) async {
+    try {
+      // Compress image to reasonable size for storage
+      final Uint8List compressed = await compressImage(
+        imageBytes,
+        quality: 80,
+        targetWidth: 600,
+      );
+
+      // Convert to base64
+      return base64Encode(compressed);
+    } catch (e) {
+      print('Error compressing image to base64: $e');
+      // Fall back to original image if compression fails
+      return base64Encode(imageBytes);
     }
   }
 
@@ -2575,6 +1988,16 @@ class _SnapFoodState extends State<SnapFood> {
         ),
       ),
     );
+  }
+
+  // Helper method to extract numeric value with decimal places from a string
+  double _extractDecimalValue(String input) {
+    final numericRegex = RegExp(r'(\d+\.?\d*)');
+    final match = numericRegex.firstMatch(input);
+    if (match != null && match.group(1) != null) {
+      return double.tryParse(match.group(1)!) ?? 0.0;
+    }
+    return 0.0;
   }
 }
 

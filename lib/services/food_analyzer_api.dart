@@ -9,6 +9,52 @@ class FoodAnalyzerApi {
   // Endpoint for food analysis
   static const String analyzeEndpoint = '/api/analyze-food';
 
+  // Define vitamin units for API consistency
+  static const Map<String, String> vitaminUnits = {
+    'vitamin_a': 'mcg',
+    'vitamin_c': 'mg',
+    'vitamin_d': 'mcg',
+    'vitamin_e': 'mg',
+    'vitamin_k': 'mcg',
+    'vitamin_b1': 'mg',
+    'vitamin_b2': 'mg',
+    'vitamin_b3': 'mg',
+    'vitamin_b5': 'mg',
+    'vitamin_b6': 'mg',
+    'vitamin_b7': 'mcg',
+    'vitamin_b9': 'mcg',
+    'vitamin_b12': 'mcg',
+  };
+
+  // Define mineral units for API consistency
+  static const Map<String, String> mineralUnits = {
+    'calcium': 'mg',
+    'chloride': 'mg',
+    'chromium': 'mcg',
+    'copper': 'mcg',
+    'fluoride': 'mg',
+    'iodine': 'mcg',
+    'iron': 'mg',
+    'magnesium': 'mg',
+    'manganese': 'mg',
+    'molybdenum': 'mcg',
+    'phosphorus': 'mg',
+    'potassium': 'mg',
+    'selenium': 'mcg',
+    'sodium': 'mg',
+    'zinc': 'mg',
+  };
+
+  // Define other nutrient units for API consistency
+  static const Map<String, String> otherNutrientUnits = {
+    'fiber': 'g',
+    'cholesterol': 'mg',
+    'sugar': 'g',
+    'saturated_fats': 'g',
+    'omega_3': 'mg',
+    'omega_6': 'g',
+  };
+
   // Method to analyze a food image
   static Future<Map<String, dynamic>> analyzeFoodImage(
       Uint8List imageBytes) async {
@@ -19,7 +65,7 @@ class FoodAnalyzerApi {
 
       print('Calling API endpoint: $baseUrl$analyzeEndpoint');
 
-      // Call our secure API endpoint
+      // Call our secure API endpoint with detailed nutritional requirements
       final response = await http
           .post(
             Uri.parse('$baseUrl$analyzeEndpoint'),
@@ -31,10 +77,22 @@ class FoodAnalyzerApi {
               'detail_level': 'high',
               'include_ingredient_macros': true,
               'return_ingredient_nutrition': true,
-              'per_ingredient_breakdown': true,
-              'nutrition_threshold': 0.4,
               'include_additional_nutrition': true,
               'include_vitamins_minerals': true,
+              'expected_nutrients': {
+                'vitamins': vitaminUnits.keys.toList(),
+                'minerals': mineralUnits.keys.toList(),
+                'other': otherNutrientUnits.keys.toList(),
+              },
+              'nutrient_units': {
+                'vitamins': vitaminUnits,
+                'minerals': mineralUnits,
+                'other': otherNutrientUnits,
+              },
+              'unit_requirements':
+                  'strict', // Enforce using our specified units
+              'nutrient_format':
+                  'app_compatible', // Request app-compatible format
             }),
           )
           .timeout(const Duration(
@@ -51,77 +109,88 @@ class FoodAnalyzerApi {
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       // Check for API-level errors
-      if (responseData.containsKey('success') &&
-          responseData['success'] != true) {
+      if (responseData['success'] != true) {
         throw Exception('API error: ${responseData['error']}');
       }
 
-      // Extract the data from the response
-      Map<String, dynamic> data;
-      if (responseData.containsKey('data') && responseData['data'] is Map) {
-        data = Map<String, dynamic>.from(responseData['data']);
-      } else {
-        // If 'data' field is not present, use the entire response
-        data = responseData;
-      }
-
       // If we got here, confirm that we received the expected format
-      print('API response format: ${data is Map ? 'Map' : 'Other type'}');
-      if (data is Map) {
-        print('Keys in data: ${data.keys.join(', ')}');
+      print(
+          'API response format: ${responseData['data'] is Map ? 'Map' : 'Other type'}');
+      if (responseData['data'] is Map) {
+        print('Keys in data: ${(responseData['data'] as Map).keys.join(', ')}');
 
         // Log additional nutritional information when available
-        if (data.containsKey('vitamins')) {
-          print('Vitamins detected in API response: ${data['vitamins']}');
-        }
+        final data = responseData['data'] as Map<String, dynamic>;
 
-        if (data.containsKey('minerals')) {
-          print('Minerals detected in API response: ${data['minerals']}');
-        }
-
-        // Check for ingredient nutrients (new format)
-        if (data.containsKey('ingredient_nutrients') &&
-            data['ingredient_nutrients'] is List) {
-          print(
-              'Ingredients with nutrients detected: ${(data['ingredient_nutrients'] as List).length} ingredients');
-
-          // Log the first ingredient as an example
-          if ((data['ingredient_nutrients'] as List).isNotEmpty) {
-            var firstIngredient = (data['ingredient_nutrients'] as List).first;
-            print('Example ingredient structure: $firstIngredient');
-
-            if (firstIngredient is Map &&
-                firstIngredient.containsKey('nutrients')) {
-              print(
-                  'Nutrients in first ingredient: ${firstIngredient['nutrients']}');
-            }
-          }
-        }
-        // Check for ingredients (original format)
-        else if (data.containsKey('ingredients') &&
-            data['ingredients'] is List) {
-          print(
-              'Ingredients detected: ${(data['ingredients'] as List).length} ingredients');
-
-          // Log the first ingredient as an example
-          if ((data['ingredients'] as List).isNotEmpty) {
-            var firstIngredient = (data['ingredients'] as List).first;
-            print('Example ingredient structure: $firstIngredient');
-          }
-        }
-
-        // Check for basic nutrition
-        if (data.containsKey('calories')) {
-          print('Basic nutrition detected: calories=${data['calories']}, ' +
-              'protein=${data['protein']}, fat=${data['fat']}, carbs=${data['carbs']}');
-        }
+        // Validate that nutrients match our expected units
+        _validateNutrientUnits(data);
       }
 
-      // Return the data directly
-      return data;
+      // Return the data
+      return responseData['data'];
     } catch (e) {
       print('Error analyzing food image: $e');
       rethrow;
+    }
+  }
+
+  // Helper method to validate that nutrients have correct units
+  static void _validateNutrientUnits(Map<String, dynamic> data) {
+    // Check vitamins
+    if (data.containsKey('vitamins') && data['vitamins'] is Map) {
+      print('Vitamins detected in API response - validating units');
+      Map<String, dynamic> vitamins = data['vitamins'];
+
+      // Check that vitamins use our expected units
+      vitaminUnits.forEach((vitamin, expectedUnit) {
+        if (vitamins.containsKey(vitamin)) {
+          print('✓ $vitamin present in response');
+          // Check if unit is included or needs to be added
+          var value = vitamins[vitamin];
+          if (value is num || value is String) {
+            // Ensure value has unit attached
+            vitamins[vitamin] = '$value $expectedUnit';
+          }
+        }
+      });
+    }
+
+    // Check minerals
+    if (data.containsKey('minerals') && data['minerals'] is Map) {
+      print('Minerals detected in API response - validating units');
+      Map<String, dynamic> minerals = data['minerals'];
+
+      // Check that minerals use our expected units
+      mineralUnits.forEach((mineral, expectedUnit) {
+        if (minerals.containsKey(mineral)) {
+          print('✓ $mineral present in response');
+          // Check if unit is included or needs to be added
+          var value = minerals[mineral];
+          if (value is num || value is String) {
+            // Ensure value has unit attached
+            minerals[mineral] = '$value $expectedUnit';
+          }
+        }
+      });
+    }
+
+    // Check other nutrients
+    if (data.containsKey('other') && data['other'] is Map) {
+      print('Other nutrients detected in API response - validating units');
+      Map<String, dynamic> other = data['other'];
+
+      // Check that other nutrients use our expected units
+      otherNutrientUnits.forEach((nutrient, expectedUnit) {
+        if (other.containsKey(nutrient)) {
+          print('✓ $nutrient present in response');
+          // Check if unit is included or needs to be added
+          var value = other[nutrient];
+          if (value is num || value is String) {
+            // Ensure value has unit attached
+            other[nutrient] = '$value $expectedUnit';
+          }
+        }
+      });
     }
   }
 
