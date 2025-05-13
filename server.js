@@ -39,6 +39,9 @@ const limiter = rateLimit({
 // Configure CORS
 app.use(cors());
 
+// Set trust proxy for proper IP detection behind reverse proxies (fixes express-rate-limit warning)
+app.set('trust proxy', 1);
+
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
 
