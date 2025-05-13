@@ -550,6 +550,20 @@ class _SnapFoodState extends State<SnapFood> {
       if (analysisData.containsKey('meal_name')) {
         String mealName = analysisData['meal_name'];
         List<dynamic> ingredients = analysisData['ingredients'] ?? [];
+
+        // Extract nutritional values with their units
+        var caloriesData =
+            _extractValueAndUnit(analysisData['calories']?.toString() ?? "0");
+        var proteinData =
+            _extractValueAndUnit(analysisData['protein']?.toString() ?? "0");
+        var fatData =
+            _extractValueAndUnit(analysisData['fat']?.toString() ?? "0");
+        var carbsData =
+            _extractValueAndUnit(analysisData['carbs']?.toString() ?? "0");
+        var vitaminCData =
+            _extractValueAndUnit(analysisData['vitamin_c']?.toString() ?? "0");
+
+        // Extract numeric values for calculations
         double calories =
             _extractDecimalValue(analysisData['calories']?.toString() ?? "0");
         double protein =
@@ -560,7 +574,23 @@ class _SnapFoodState extends State<SnapFood> {
             _extractDecimalValue(analysisData['carbs']?.toString() ?? "0");
         double vitaminC =
             _extractDecimalValue(analysisData['vitamin_c']?.toString() ?? "0");
+
         String healthScore = analysisData['health_score']?.toString() ?? "5/10";
+
+        // Create a map for nutrient values with units
+        Map<String, String> nutrientUnits = {
+          'protein': proteinData['unit']?.isEmpty ?? true
+              ? 'g'
+              : proteinData['unit'] ?? 'g',
+          'fat':
+              fatData['unit']?.isEmpty ?? true ? 'g' : fatData['unit'] ?? 'g',
+          'carbs': carbsData['unit']?.isEmpty ?? true
+              ? 'g'
+              : carbsData['unit'] ?? 'g',
+          'vitamin_c': vitaminCData['unit']?.isEmpty ?? true
+              ? 'mg'
+              : vitaminCData['unit'] ?? 'mg',
+        };
 
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
@@ -673,6 +703,16 @@ class _SnapFoodState extends State<SnapFood> {
 
         // Extract all top-level nutrients for the entire meal
         Map<String, dynamic> additionalNutrients = {};
+
+        // Add core nutrients with their units
+        additionalNutrients['protein'] =
+            '${proteinData['value']} ${nutrientUnits['protein']}';
+        additionalNutrients['fat'] =
+            '${fatData['value']} ${nutrientUnits['fat']}';
+        additionalNutrients['carbs'] =
+            '${carbsData['value']} ${nutrientUnits['carbs']}';
+        additionalNutrients['vitamin_c'] =
+            '${vitaminCData['value']} ${nutrientUnits['vitamin_c']}';
 
         // Process the vitamins at the top level using the newer format from the updated API
         if (analysisData.containsKey('vitamins') &&
@@ -1990,14 +2030,83 @@ class _SnapFoodState extends State<SnapFood> {
     );
   }
 
-  // Helper method to extract numeric value with decimal places from a string
-  double _extractDecimalValue(String input) {
-    final numericRegex = RegExp(r'(\d+\.?\d*)');
-    final match = numericRegex.firstMatch(input);
-    if (match != null && match.group(1) != null) {
-      return double.tryParse(match.group(1)!) ?? 0.0;
+  // Extract a decimal value from a string that may contain units
+  double _extractDecimalValue(String value) {
+    // If the value is empty, return 0
+    if (value.isEmpty) return 0.0;
+
+    try {
+      // First try direct parsing in case it's a clean number
+      double? direct = double.tryParse(value);
+      if (direct != null) return direct;
+
+      // Otherwise, extract numeric part from strings like "24g" or "45 mg"
+      RegExp numericRegex = RegExp(r'(\d+\.?\d*)');
+      var match = numericRegex.firstMatch(value);
+      if (match != null && match.group(1) != null) {
+        return double.tryParse(match.group(1)!) ?? 0.0;
+      }
+    } catch (e) {
+      print('Error extracting decimal value from "$value": $e');
     }
+
     return 0.0;
+  }
+
+  // Extract both value and unit from a string
+  Map<String, String> _extractValueAndUnit(String input) {
+    // Default response
+    Map<String, String> result = {'value': '0', 'unit': ''};
+
+    // Handle empty input
+    if (input.isEmpty) return result;
+
+    try {
+      // Check if the input is just a number
+      double? directValue = double.tryParse(input);
+      if (directValue != null) {
+        result['value'] = directValue.toString();
+        return result;
+      }
+
+      // Extract numeric part using regex
+      RegExp numericRegex = RegExp(r'(\d+\.?\d*)');
+      Match? numericMatch = numericRegex.firstMatch(input);
+
+      if (numericMatch != null && numericMatch.group(1) != null) {
+        String value = numericMatch.group(1) ?? '0';
+        result['value'] = value;
+
+        // Look for common unit patterns
+        if (input.contains('kcal')) {
+          result['unit'] = 'kcal';
+        } else if (input.toLowerCase().contains('cal')) {
+          result['unit'] = 'kcal';
+        } else if (input.contains('g')) {
+          result['unit'] = 'g';
+        } else if (input.contains('mg')) {
+          result['unit'] = 'mg';
+        } else if (input.contains('mcg') || input.contains('μg')) {
+          result['unit'] = 'mcg';
+        }
+
+        // If no unit found but there's text after the number, try to extract it
+        if ((result['unit'] == null || result['unit']!.isEmpty) &&
+            numericMatch.end < input.length) {
+          String remaining = input.substring(numericMatch.end).trim();
+          // Simple extraction of alphabetic characters
+          RegExp alphaRegex = RegExp(r'([a-zA-Z]+)');
+          Match? alphaMatch = alphaRegex.firstMatch(remaining);
+          if (alphaMatch != null) {
+            result['unit'] = alphaMatch.group(1) ?? '';
+          }
+        }
+      }
+    } catch (e) {
+      print('Error extracting value and unit from "$input": $e');
+    }
+
+    return result;
   }
 }
 
