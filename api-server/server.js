@@ -108,13 +108,15 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         temperature: 0.2,
         messages: [
           {
-                        role: 'system',            content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\nFORMAT RULES:\n1. Return a single meal name for the entire image (e.g., "Pasta Meal", "Breakfast Plate")\n2. List ingredients with weights and calories (e.g., "Pasta (100g) 200kcal")\n3. Return total values for calories, protein, fat, carbs, and ALL vitamins and minerals\n4. Add a health score (1-10)\n5. CRITICAL: provide EXACT macronutrient breakdown for EACH ingredient (protein, fat, carbs) - THIS IS THE MOST IMPORTANT PART\n6. Use decimal places and realistic estimates\n7. DO NOT respond with markdown code blocks or text explanations\n8. DO NOT prefix your response with "json" or ```\n9. ONLY RETURN A RAW JSON OBJECT\n10. FAILURE TO FOLLOW THESE INSTRUCTIONS WILL RESULT IN REJECTION\n\nEXACT FORMAT REQUIRED:\n{\n  "meal_name": "Meal Name",\n  "ingredients": ["Item1 (weight) calories", "Item2 (weight) calories"],\n  "ingredient_macros": [\n    {"protein": 12.5, "fat": 5.2, "carbs": 45.7},\n    {"protein": 8.3, "fat": 3.1, "carbs": 28.3}\n  ],\n  "calories": number,\n  "protein": number,\n  "fat": number,\n  "carbs": number,\n  "vitamins": {\n    "vitamin_a": number,\n    "vitamin_c": number,\n    "vitamin_d": number,\n    "vitamin_e": number,\n    "vitamin_k": number,\n    "vitamin_b1": number,\n    "vitamin_b2": number,\n    "vitamin_b3": number,\n    "vitamin_b5": number,\n    "vitamin_b6": number,\n    "vitamin_b7": number,\n    "vitamin_b9": number,\n    "vitamin_b12": number\n  },\n  "minerals": {\n    "calcium": number,\n    "chloride": number,\n    "chromium": number,\n    "copper": number,\n    "fluoride": number,\n    "iodine": number,\n    "iron": number,\n    "magnesium": number,\n    "manganese": number,\n    "molybdenum": number,\n    "phosphorus": number,\n    "potassium": number,\n    "selenium": number,\n    "sodium": number,\n    "zinc": number\n  },\n  "other": {\n    "fiber": number,\n    "cholesterol": number,\n    "sugar": number,\n    "saturated_fats": number,\n    "omega_3": number,\n    "omega_6": number\n  },\n  "health_score": "score/10"\n}'
+            role: 'system',
+            content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\nFORMAT RULES:\n1. Return a single meal name for the entire image (e.g., "Pasta Meal", "Breakfast Plate")\n2. List ingredients with weights and calories (e.g., "Pasta (100g) 200kcal")\n3. Return total values for calories, protein, fat, carbs, fiber, sugar, ALL vitamins (A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12), and ALL minerals (calcium, iron, magnesium, phosphorus, potassium, sodium, zinc, copper, manganese, selenium, iodine, chromium, molybdenum, fluoride, chloride)\n4. Add a health score (1-10)\n5. CRITICAL: provide EXACT macronutrient and micronutrient breakdown for EACH ingredient (calories, protein, fat, carbs, fiber, sugar, all vitamins, all minerals) - THIS IS THE MOST IMPORTANT PART\n6. Use decimal places and realistic estimates\n7. DO NOT respond with markdown code blocks or text explanations\n8. DO NOT prefix your response with "json" or ```\n9. ONLY RETURN A RAW JSON OBJECT\n10. FAILURE TO FOLLOW THESE INSTRUCTIONS WILL RESULT IN REJECTION\n\nEXACT FORMAT REQUIRED:\n{\n  "meal_name": "Meal Name",\n  "ingredients": ["Item1 (weight) calories", "Item2 (weight) calories"],\n  "ingredient_nutrients": [\n    {"calories": 100, "protein": 12.5, "fat": 5.2, "carbs": 45.7, "fiber": 2, "sugar": 3, "vitamin_a": 100, "vitamin_c": 20, "vitamin_d": 1, "vitamin_e": 2, "vitamin_k": 3, "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 1.5, "vitamin_b5": 0.5, "vitamin_b6": 0.3, "vitamin_b7": 0.01, "vitamin_b9": 0.04, "vitamin_b12": 0.002, "calcium": 50, "iron": 1, "magnesium": 10, "phosphorus": 20, "potassium": 100, "sodium": 5, "zinc": 0.5, "copper": 0.1, "manganese": 0.2, "selenium": 0.01, "iodine": 0.03, "chromium": 0.002, "molybdenum": 0.001, "fluoride": 0.05, "chloride": 10},\n    {"calories": 50, "protein": 8.3, "fat": 3.1, "carbs": 28.3, "fiber": 1, "sugar": 2, "vitamin_a": 50, "vitamin_c": 10, "vitamin_d": 0.5, "vitamin_e": 1, "vitamin_k": 2, "vitamin_b1": 0.05, "vitamin_b2": 0.1, "vitamin_b3": 0.8, "vitamin_b5": 0.25, "vitamin_b6": 0.15, "vitamin_b7": 0.005, "vitamin_b9": 0.02, "vitamin_b12": 0.001, "calcium": 25, "iron": 0.5, "magnesium": 5, "phosphorus": 10, "potassium": 50, "sodium": 2.5, "zinc": 0.25, "copper": 0.05, "manganese": 0.1, "selenium": 0.005, "iodine": 0.015, "chromium": 0.001, "molybdenum": 0.0005, "fluoride": 0.025, "chloride": 5}\n  ],\n  "calories": number,\n  "protein": number,\n  "fat": number,\n  "carbs": number,\n  "fiber": number,\n  "sugar": number,\n  "vitamins": { ... },\n  "minerals": { ... },\n  "health_score": "score/10"\n}'
           },
           {
             role: 'user',
             content: [
               {
-                                type: 'text',                text: "RETURN ONLY RAW JSON - NO TEXT, NO CODE BLOCKS, NO EXPLANATIONS. Analyze this food image and return complete nutrition data in this EXACT format with no deviations. YOU MUST PROVIDE ACCURATE PROTEIN, FAT, AND CARB VALUES FOR EACH INGREDIENT, ALONG WITH ALL VITAMINS AND MINERALS:\n\n{\n  \"meal_name\": string (single name for entire meal),\n  \"ingredients\": array of strings with weights and calories,\n  \"ingredient_macros\": array of objects with protein, fat, carbs for each ingredient,\n  \"calories\": number,\n  \"protein\": number,\n  \"fat\": number,\n  \"carbs\": number,\n  \"vitamins\": object with all vitamins (a, c, d, e, k, b1, b2, b3, b5, b6, b7, b9, b12),\n  \"minerals\": object with all minerals (calcium, iron, magnesium, etc.),\n  \"other\": object with fiber, cholesterol, sugar, etc.,\n  \"health_score\": string\n}"
+                type: 'text',
+                text: "RETURN ONLY RAW JSON - NO TEXT, NO CODE BLOCKS, NO EXPLANATIONS. Analyze this food image and return complete nutrition data in this EXACT format with no deviations. YOU MUST PROVIDE ACCURATE CALORIES, PROTEIN, FAT, CARBS, FIBER, SUGAR, ALL VITAMINS, AND ALL MINERALS FOR EACH INGREDIENT:\n\n{\n  \"meal_name\": string (single name for entire meal),\n  \"ingredients\": array of strings with weights and calories,\n  \"ingredient_nutrients\": array of objects with calories, protein, fat, carbs, fiber, sugar, all vitamins, all minerals for each ingredient,\n  \"calories\": number,\n  \"protein\": number,\n  \"fat\": number,\n  \"carbs\": number,\n  \"fiber\": number,\n  \"sugar\": number,\n  \"vitamins\": object with all vitamins (a, c, d, e, k, b1, b2, b3, b5, b6, b7, b9, b12),\n  \"minerals\": object with all minerals (calcium, iron, magnesium, etc.),\n  \"health_score\": string\n}"
               },
               {
                 type: 'image_url',
@@ -372,7 +374,7 @@ function transformToRequiredFormat(data) {
         }
         return 'Unknown Ingredient';
       }),
-      ingredient_macros: transformedIngredients,
+      ingredient_nutrients: transformedIngredients,
       calories: totalCalories,
       protein: totalProtein,
       fat: totalFat,
@@ -453,7 +455,7 @@ function transformToRequiredFormat(data) {
   return {
     meal_name: data.meal_name || "Mixed Meal",
     ingredients: data.ingredients || ["Mixed ingredients (100g) 200kcal"],
-    ingredient_macros: data.ingredient_macros || [
+    ingredient_nutrients: data.ingredient_nutrients || [
       {
         protein: protein/2,
         fat: fat/2,
@@ -496,45 +498,12 @@ function transformToRequiredFormat(data) {
       iron: (topLevelMinerals.iron !== undefined) ? topLevelMinerals.iron : Math.round(totalCalories * 0.08),
       magnesium: (topLevelMinerals.magnesium !== undefined) ? topLevelMinerals.magnesium : Math.round(totalCalories * 0.15),
       manganese: (topLevelMinerals.manganese !== undefined) ? topLevelMinerals.manganese : Math.round(totalCalories * 0.05),
-    calories: calories,
-    protein: protein,
-    fat: fat,
-    carbs: carbs,
-    health_score: data.health_score || "6/10",
-    // Ensure vitamin object with all expected vitamins
-    vitamins: {
-      vitamin_a: (topLevelVitamins.vitamin_a !== undefined) ? topLevelVitamins.vitamin_a : Math.round(calories * 0.1),
-      vitamin_c: (topLevelVitamins.vitamin_c !== undefined) ? topLevelVitamins.vitamin_c : Math.round(calories * 0.06),
-      vitamin_d: (topLevelVitamins.vitamin_d !== undefined) ? topLevelVitamins.vitamin_d : Math.round(calories * 0.02),
-      vitamin_e: (topLevelVitamins.vitamin_e !== undefined) ? topLevelVitamins.vitamin_e : Math.round(calories * 0.05),
-      vitamin_k: (topLevelVitamins.vitamin_k !== undefined) ? topLevelVitamins.vitamin_k : Math.round(calories * 0.04),
-      vitamin_b1: (topLevelVitamins.vitamin_b1 !== undefined) ? topLevelVitamins.vitamin_b1 : Math.round(calories * 0.03),
-      vitamin_b2: (topLevelVitamins.vitamin_b2 !== undefined) ? topLevelVitamins.vitamin_b2 : Math.round(calories * 0.03),
-      vitamin_b3: (topLevelVitamins.vitamin_b3 !== undefined) ? topLevelVitamins.vitamin_b3 : Math.round(calories * 0.05),
-      vitamin_b5: (topLevelVitamins.vitamin_b5 !== undefined) ? topLevelVitamins.vitamin_b5 : Math.round(calories * 0.02),
-      vitamin_b6: (topLevelVitamins.vitamin_b6 !== undefined) ? topLevelVitamins.vitamin_b6 : Math.round(calories * 0.03),
-      vitamin_b7: (topLevelVitamins.vitamin_b7 !== undefined) ? topLevelVitamins.vitamin_b7 : Math.round(calories * 0.01),
-      vitamin_b9: (topLevelVitamins.vitamin_b9 !== undefined) ? topLevelVitamins.vitamin_b9 : Math.round(calories * 0.04),
-      vitamin_b12: (topLevelVitamins.vitamin_b12 !== undefined) ? topLevelVitamins.vitamin_b12 : Math.round(calories * 0.02),
-      ...topLevelVitamins
-    },
-    // Ensure minerals object with all expected minerals
-    minerals: {
-      calcium: (topLevelMinerals.calcium !== undefined) ? topLevelMinerals.calcium : Math.round(calories * 0.2),
-      chloride: (topLevelMinerals.chloride !== undefined) ? topLevelMinerals.chloride : Math.round(calories * 0.1),
-      chromium: (topLevelMinerals.chromium !== undefined) ? topLevelMinerals.chromium : Math.round(calories * 0.01),
-      copper: (topLevelMinerals.copper !== undefined) ? topLevelMinerals.copper : Math.round(calories * 0.03),
-      fluoride: (topLevelMinerals.fluoride !== undefined) ? topLevelMinerals.fluoride : Math.round(calories * 0.02),
-      iodine: (topLevelMinerals.iodine !== undefined) ? topLevelMinerals.iodine : Math.round(calories * 0.01),
-      iron: (topLevelMinerals.iron !== undefined) ? topLevelMinerals.iron : Math.round(calories * 0.08),
-      magnesium: (topLevelMinerals.magnesium !== undefined) ? topLevelMinerals.magnesium : Math.round(calories * 0.15),
-      manganese: (topLevelMinerals.manganese !== undefined) ? topLevelMinerals.manganese : Math.round(calories * 0.05),
-      molybdenum: (topLevelMinerals.molybdenum !== undefined) ? topLevelMinerals.molybdenum : Math.round(calories * 0.01),
-      phosphorus: (topLevelMinerals.phosphorus !== undefined) ? topLevelMinerals.phosphorus : Math.round(calories * 0.15),
-      potassium: (topLevelMinerals.potassium !== undefined) ? topLevelMinerals.potassium : Math.round(calories * 0.3),
-      selenium: (topLevelMinerals.selenium !== undefined) ? topLevelMinerals.selenium : Math.round(calories * 0.02),
-      sodium: (topLevelMinerals.sodium !== undefined) ? topLevelMinerals.sodium : Math.round(calories * 0.2),
-      zinc: (topLevelMinerals.zinc !== undefined) ? topLevelMinerals.zinc : Math.round(calories * 0.05),
+      molybdenum: (topLevelMinerals.molybdenum !== undefined) ? topLevelMinerals.molybdenum : Math.round(totalCalories * 0.01),
+      phosphorus: (topLevelMinerals.phosphorus !== undefined) ? topLevelMinerals.phosphorus : Math.round(totalCalories * 0.15),
+      potassium: (topLevelMinerals.potassium !== undefined) ? topLevelMinerals.potassium : Math.round(totalCalories * 0.3),
+      selenium: (topLevelMinerals.selenium !== undefined) ? topLevelMinerals.selenium : Math.round(totalCalories * 0.02),
+      sodium: (topLevelMinerals.sodium !== undefined) ? topLevelMinerals.sodium : Math.round(totalCalories * 0.2),
+      zinc: (topLevelMinerals.zinc !== undefined) ? topLevelMinerals.zinc : Math.round(totalCalories * 0.05),
       ...topLevelMinerals
     },
     // Ensure other nutrients object with all expected nutrients
@@ -796,7 +765,7 @@ function transformTextToRequiredFormat(text) {
     return {
       meal_name: mealName,
       ingredients: ingredients,
-      ingredient_macros: ingredientMacros,
+      ingredient_nutrients: ingredientMacros,
       calories: totalCalories,
       protein: totalProtein,
       fat: totalFat,
@@ -862,7 +831,7 @@ function transformTextToRequiredFormat(text) {
     ingredients: [
       "Mixed ingredients (100g) 200kcal"
     ],
-    ingredient_macros: [
+    ingredient_nutrients: [
       {
         protein: 10,
         fat: 7,
