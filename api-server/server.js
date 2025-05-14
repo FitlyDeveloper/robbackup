@@ -109,14 +109,14 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\nFORMAT RULES:\n1. Return a single meal name for the entire image (e.g., "Pasta Meal", "Breakfast Plate")\n2. List ingredients with weights and calories (e.g., "Pasta (100g) 200kcal")\n3. Return total values for calories, protein, fat, carbs, fiber, sugar, ALL vitamins (A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12), and ALL minerals (calcium, iron, magnesium, phosphorus, potassium, sodium, zinc, copper, manganese, selenium, iodine, chromium, molybdenum, fluoride, chloride)\n4. Add a health score (1-10)\n5. CRITICAL: provide EXACT macronutrient and micronutrient breakdown for EACH ingredient (calories, protein, fat, carbs, fiber, sugar, all vitamins, all minerals) - THIS IS THE MOST IMPORTANT PART\n6. Use decimal places and realistic estimates\n7. DO NOT respond with markdown code blocks or text explanations\n8. DO NOT prefix your response with "json" or ```\n9. ONLY RETURN A RAW JSON OBJECT\n10. FAILURE TO FOLLOW THESE INSTRUCTIONS WILL RESULT IN REJECTION\n\nEXACT FORMAT REQUIRED:\n{\n  "meal_name": "Meal Name",\n  "ingredients": ["Item1 (weight) calories", "Item2 (weight) calories"],\n  "ingredient_nutrients": [\n    {"calories": 100, "protein": 12.5, "fat": 5.2, "carbs": 45.7, "fiber": 2, "sugar": 3, "vitamin_a": 100, "vitamin_c": 20, "vitamin_d": 1, "vitamin_e": 2, "vitamin_k": 3, "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 1.5, "vitamin_b5": 0.5, "vitamin_b6": 0.3, "vitamin_b7": 0.01, "vitamin_b9": 0.04, "vitamin_b12": 0.002, "calcium": 50, "iron": 1, "magnesium": 10, "phosphorus": 20, "potassium": 100, "sodium": 5, "zinc": 0.5, "copper": 0.1, "manganese": 0.2, "selenium": 0.01, "iodine": 0.03, "chromium": 0.002, "molybdenum": 0.001, "fluoride": 0.05, "chloride": 10},\n    {"calories": 50, "protein": 8.3, "fat": 3.1, "carbs": 28.3, "fiber": 1, "sugar": 2, "vitamin_a": 50, "vitamin_c": 10, "vitamin_d": 0.5, "vitamin_e": 1, "vitamin_k": 2, "vitamin_b1": 0.05, "vitamin_b2": 0.1, "vitamin_b3": 0.8, "vitamin_b5": 0.25, "vitamin_b6": 0.15, "vitamin_b7": 0.005, "vitamin_b9": 0.02, "vitamin_b12": 0.001, "calcium": 25, "iron": 0.5, "magnesium": 5, "phosphorus": 10, "potassium": 50, "sodium": 2.5, "zinc": 0.25, "copper": 0.05, "manganese": 0.1, "selenium": 0.005, "iodine": 0.015, "chromium": 0.001, "molybdenum": 0.0005, "fluoride": 0.025, "chloride": 5}\n  ],\n  "calories": number,\n  "protein": number,\n  "fat": number,\n  "carbs": number,\n  "fiber": number,\n  "sugar": number,\n  "vitamins": { ... },\n  "minerals": { ... },\n  "health_score": "score/10"\n}'
+            content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\nFORMAT RULES:\n1. Return a single meal name for the entire image (e.g., "Pasta Meal", "Breakfast Plate")\n2. List ingredients with weights and calories (e.g., "Pasta (100g) 200kcal")\n3. Return total values for calories, protein, fat, carbs, fiber, sugar, ALL vitamins (A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12), and ALL minerals (calcium, iron, magnesium, phosphorus, potassium, sodium, zinc, copper, manganese, selenium, iodine, chromium, molybdenum, fluoride, chloride)\n4. Add a health score (1-10)\n5. CRITICAL: provide EXACT macronutrient and micronutrient breakdown for EACH ingredient (calories, protein, fat, carbs, fiber, sugar, all vitamins, all minerals) - THIS IS THE MOST IMPORTANT PART\n6. Use decimal places and realistic estimates\n7. DO NOT respond with markdown code blocks or text explanations\n8. DO NOT prefix your response with "json" or ```\n9. ONLY RETURN A RAW JSON OBJECT\n10. FAILURE TO FOLLOW THESE INSTRUCTIONS WILL RESULT IN REJECTION\n\nEXACT FORMAT REQUIRED:\n{\n  "meal_name": "Meal Name",\n  "ingredients": ["Item1 (weight) calories", "Item2 (weight) calories"],\n  "ingredient_nutrients": [\n    {\n      "calories": 100,\n      "protein": 12.5,\n      "fat": 5.2,\n      "carbs": 45.7,\n      "fiber": 2,\n      "sugar": 3,\n      "vitamin_a": 100,\n      "vitamin_c": 20,\n      "vitamin_d": 1,\n      "vitamin_e": 2,\n      "vitamin_k": 3,\n      "vitamin_b1": 0.1,\n      "vitamin_b2": 0.2,\n      "vitamin_b3": 1.5,\n      "vitamin_b5": 0.5,\n      "vitamin_b6": 0.3,\n      "vitamin_b7": 0.01,\n      "vitamin_b9": 0.04,\n      "vitamin_b12": 0.002,\n      "calcium": 50,\n      "iron": 1,\n      "magnesium": 10,\n      "phosphorus": 20,\n      "potassium": 100,\n      "sodium": 5,\n      "zinc": 0.5,\n      "copper": 0.1,\n      "manganese": 0.2,\n      "selenium": 0.01,\n      "iodine": 0.03,\n      "chromium": 0.002,\n      "molybdenum": 0.001,\n      "fluoride": 0.05,\n      "chloride": 10\n    }\n  ],\n  "calories": number,\n  "protein": number,\n  "fat": number,\n  "carbs": number,\n  "fiber": number,\n  "sugar": number,\n  "vitamins": {\n    "vitamin_a": number,\n    "vitamin_c": number,\n    "vitamin_d": number,\n    "vitamin_e": number,\n    "vitamin_k": number,\n    "vitamin_b1": number,\n    "vitamin_b2": number,\n    "vitamin_b3": number,\n    "vitamin_b5": number,\n    "vitamin_b6": number,\n    "vitamin_b7": number,\n    "vitamin_b9": number,\n    "vitamin_b12": number\n  },\n  "minerals": {\n    "calcium": number,\n    "chloride": number,\n    "chromium": number,\n    "copper": number,\n    "fluoride": number,\n    "iodine": number,\n    "iron": number,\n    "magnesium": number,\n    "manganese": number,\n    "molybdenum": number,\n    "phosphorus": number,\n    "potassium": number,\n    "selenium": number,\n    "sodium": number,\n    "zinc": number\n  },\n  "health_score": "score/10"\n}'
           },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: "RETURN ONLY RAW JSON - NO TEXT, NO CODE BLOCKS, NO EXPLANATIONS. Analyze this food image and return complete nutrition data in this EXACT format with no deviations. YOU MUST PROVIDE ACCURATE CALORIES, PROTEIN, FAT, CARBS, FIBER, SUGAR, ALL VITAMINS, AND ALL MINERALS FOR EACH INGREDIENT:\n\n{\n  \"meal_name\": string (single name for entire meal),\n  \"ingredients\": array of strings with weights and calories,\n  \"ingredient_nutrients\": array of objects with calories, protein, fat, carbs, fiber, sugar, all vitamins, all minerals for each ingredient,\n  \"calories\": number,\n  \"protein\": number,\n  \"fat\": number,\n  \"carbs\": number,\n  \"fiber\": number,\n  \"sugar\": number,\n  \"vitamins\": object with all vitamins (a, c, d, e, k, b1, b2, b3, b5, b6, b7, b9, b12),\n  \"minerals\": object with all minerals (calcium, iron, magnesium, etc.),\n  \"health_score\": string\n}"
+                text: "RETURN ONLY RAW JSON - NO TEXT, NO CODE BLOCKS, NO EXPLANATIONS. Analyze this food image and return complete nutrition data in this EXACT format with no deviations. YOU MUST PROVIDE ACCURATE CALORIES, PROTEIN, FAT, CARBS, FIBER, SUGAR, ALL VITAMINS, AND ALL MINERALS FOR EACH INGREDIENT. EVERY INGREDIENT MUST HAVE ALL THESE FIELDS:\n\n{\n  \"meal_name\": string (single name for entire meal),\n  \"ingredients\": array of strings with weights and calories,\n  \"ingredient_nutrients\": array of objects with calories, protein, fat, carbs, fiber, sugar, all vitamins, all minerals for each ingredient,\n  \"calories\": number,\n  \"protein\": number,\n  \"fat\": number,\n  \"carbs\": number,\n  \"fiber\": number,\n  \"sugar\": number,\n  \"vitamins\": object with all vitamins (a, c, d, e, k, b1, b2, b3, b5, b6, b7, b9, b12),\n  \"minerals\": object with all minerals (calcium, iron, magnesium, etc.),\n  \"health_score\": string\n}"
               },
               {
                 type: 'image_url',
@@ -161,6 +161,37 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
       // First try direct parsing
       const parsedData = JSON.parse(content);
       console.log('Successfully parsed JSON response');
+      
+      // Validate that we have all required fields
+      if (!parsedData.ingredient_nutrients || !Array.isArray(parsedData.ingredient_nutrients) || parsedData.ingredient_nutrients.length === 0) {
+        console.error('Missing or invalid ingredient_nutrients array');
+        return res.status(500).json({
+          success: false,
+          error: 'Invalid response: Missing ingredient nutrients'
+        });
+      }
+
+      // Validate each ingredient has all required nutrients
+      const requiredNutrients = ['calories', 'protein', 'fat', 'carbs', 'fiber', 'sugar', 
+        'vitamin_a', 'vitamin_c', 'vitamin_d', 'vitamin_e', 'vitamin_k',
+        'vitamin_b1', 'vitamin_b2', 'vitamin_b3', 'vitamin_b5', 'vitamin_b6',
+        'vitamin_b7', 'vitamin_b9', 'vitamin_b12',
+        'calcium', 'iron', 'magnesium', 'phosphorus', 'potassium', 'sodium',
+        'zinc', 'copper', 'manganese', 'selenium', 'iodine', 'chromium',
+        'molybdenum', 'fluoride', 'chloride'];
+
+      for (const ingredient of parsedData.ingredient_nutrients) {
+        const missingNutrients = requiredNutrients.filter(nutrient => 
+          typeof ingredient[nutrient] !== 'number' || isNaN(ingredient[nutrient])
+        );
+        if (missingNutrients.length > 0) {
+          console.error('Missing nutrients in ingredient:', missingNutrients);
+          return res.status(500).json({
+            success: false,
+            error: `Invalid response: Missing nutrients in ingredient: ${missingNutrients.join(', ')}`
+          });
+        }
+      }
       
       // Check if we have the expected meal_name format
       if (parsedData.meal_name) {
