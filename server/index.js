@@ -40,38 +40,13 @@ app.post('/api/fix-food', async (req, res) => {
       }
     }
     
-    prompt += `\nInstruction: ${instructions || query || 'Analyze and improve this food'}\n`;
+    prompt += `\nInstruction: ${instructions || 'Analyze and improve this food. For each ingredient, estimate and return its calories, protein, fat, and carbs as accurately as possible, even if not present in the original data.'}\n`;
     if (operation_type) {
       prompt += `Operation type: ${operation_type}\n`;
     }
     
     prompt += "\nPlease respond with a valid JSON object using this structure:";
-    prompt += `
-{
-  "name": "Updated Food Name",
-  "calories": 123,
-  "protein": 30,
-  "fat": 5,
-  "carbs": 20,
-  "ingredients": [
-    {
-      "name": "Ingredient 1",
-      "amount": "100g",
-      "calories": 100,
-      "protein": 10,
-      "fat": 2,
-      "carbs": 5
-    },
-    {
-      "name": "Ingredient 2",
-      "amount": "50g",
-      "calories": 50,
-      "protein": 5,
-      "fat": 1,
-      "carbs": 3
-    }
-  ]
-}`;
+    prompt += `\n{\n  "name": "Updated Food Name",\n  "calories": 123,\n  "protein": 30,\n  "fat": 5,\n  "carbs": 20,\n  "ingredients": [\n    {\n      "name": "Ingredient 1",\n      "amount": "100g",\n      "calories": 100,\n      "protein": 10,\n      "fat": 2,\n      "carbs": 5\n    },\n    {\n      "name": "Ingredient 2",\n      "amount": "50g",\n      "calories": 50,\n      "protein": 5,\n      "fat": 1,\n      "carbs": 3\n    }\n  ]\n}`;
     
     console.log('Sending prompt to DeepSeek API:', prompt);
     
