@@ -40,13 +40,13 @@ app.post('/api/fix-food', async (req, res) => {
       }
     }
     
-    prompt += `\nInstruction: ${instructions || 'Analyze and improve this food. For each ingredient, estimate and return its calories, protein, fat, and carbs as accurately as possible, even if not present in the original data.'}\n`;
+    prompt += `\nInstruction: ${instructions || `Analyze and improve this food. For each ingredient, estimate and return its calories, protein, fat, carbs, fiber, sugar, ALL vitamins (A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12), and ALL minerals (calcium, iron, magnesium, phosphorus, potassium, sodium, zinc, copper, manganese, selenium, iodine, chromium, molybdenum, fluoride, chloride) as accurately as possible, even if not present in the original data. Always include all these fields for every ingredient.`}\n`;
     if (operation_type) {
       prompt += `Operation type: ${operation_type}\n`;
     }
     
     prompt += "\nPlease respond with a valid JSON object using this structure:";
-    prompt += `\n{\n  "name": "Updated Food Name",\n  "calories": 123,\n  "protein": 30,\n  "fat": 5,\n  "carbs": 20,\n  "ingredients": [\n    {\n      "name": "Ingredient 1",\n      "amount": "100g",\n      "calories": 100,\n      "protein": 10,\n      "fat": 2,\n      "carbs": 5\n    },\n    {\n      "name": "Ingredient 2",\n      "amount": "50g",\n      "calories": 50,\n      "protein": 5,\n      "fat": 1,\n      "carbs": 3\n    }\n  ]\n}`;
+    prompt += `\n{\n  "name": "Updated Food Name",\n  "calories": 123,\n  "protein": 30,\n  "fat": 5,\n  "carbs": 20,\n  "ingredients": [\n    {\n      "name": "Ingredient 1",\n      "amount": "100g",\n      "calories": 100,\n      "protein": 10,\n      "fat": 2,\n      "carbs": 5,\n      "fiber": 2,\n      "sugar": 3,\n      "vitamin_a": 100,\n      "vitamin_c": 20,\n      "vitamin_d": 1,\n      "vitamin_e": 2,\n      "vitamin_k": 3,\n      "vitamin_b1": 0.1,\n      "vitamin_b2": 0.2,\n      "vitamin_b3": 1.5,\n      "vitamin_b5": 0.5,\n      "vitamin_b6": 0.3,\n      "vitamin_b7": 0.01,\n      "vitamin_b9": 0.04,\n      "vitamin_b12": 0.002,\n      "calcium": 50,\n      "iron": 1,\n      "magnesium": 10,\n      "phosphorus": 20,\n      "potassium": 100,\n      "sodium": 5,\n      "zinc": 0.5,\n      "copper": 0.1,\n      "manganese": 0.2,\n      "selenium": 0.01,\n      "iodine": 0.03,\n      "chromium": 0.002,\n      "molybdenum": 0.001,\n      "fluoride": 0.05,\n      "chloride": 10\n    }\n  ]\n}`;
     
     console.log('Sending prompt to DeepSeek API:', prompt);
     
