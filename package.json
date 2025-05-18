@@ -1,12 +1,19 @@
 {
-  "name": "deepseek-api-bridge-root",
+  "name": "snap-food-api",
   "version": "1.0.0",
-  "description": "Root package for DeepSeek API Bridge",
+  "description": "Food analysis API server",
   "scripts": {
-    "start": "cd server && npm start",
-    "build": "cd server && npm install"
+    "start": "node api-server/server.js",
+    "dev": "nodemon api-server/server.js"
   },
   "engines": {
     "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "node-fetch": "^2.6.12",
+    "express-rate-limit": "^6.9.0"
   }
 }
