@@ -37,18 +37,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 // Configure CORS
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Check if the origin is allowed
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  methods: ['POST'],
+  origin: '*',  // Allow all origins
+  methods: ['POST', 'GET', 'OPTIONS'],  // Allow necessary methods
   credentials: true
 }));
 
