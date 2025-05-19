@@ -1,4 +1,3 @@
-// Import required packages
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -14,6 +13,51 @@ console.log('Starting server...');
 console.log('Node environment:', process.env.NODE_ENV);
 console.log('Current directory:', process.cwd());
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
+
+// Helper function to robustly parse JSON content
+function robustJsonParse(content) {
+  try {
+    // Attempt 1: Direct parsing
+    const directParseResult = JSON.parse(content);
+    console.log('Successfully parsed JSON response directly.');
+    return directParseResult;
+  } catch (e1) {
+    console.log('Direct JSON parsing failed. Attempting to extract JSON from text. Error:', e1.message);
+    
+    let jsonString = "";
+    // Try to match ```json ... ```
+    const codeBlockMatch = content.match(/```json\n([\s\S]*?)\n```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      jsonString = codeBlockMatch[1].trim();
+      console.log('Extracted JSON from ```json block.');
+    } else {
+      // If no ```json block, try to find the first occurrence of { ... }
+      const objectMatch = content.match(/(\{[\s\S]*\})/);
+      if (objectMatch && objectMatch[1]) {
+        jsonString = objectMatch[1].trim();
+        console.log('Extracted JSON using general object match.');
+      }
+    }
+
+    if (jsonString) {
+      try {
+        // Attempt 2: Parse extracted/cleaned JSON
+        const extractedParseResult = JSON.parse(jsonString);
+        console.log('Successfully parsed extracted JSON.');
+        return extractedParseResult;
+      } catch (e2) {
+        console.error('Failed to parse extracted JSON content. Error:', e2.message);
+        const snippet = jsonString.length > 500 ? jsonString.substring(0, 500) + '...' : jsonString;
+        console.error('Problematic JSON string snippet after extraction attempt:', snippet);
+        throw new Error(`OpenAI response could not be parsed as JSON even after attempting extraction. Details: ${e2.message}. Original direct parse error: ${e1.message}`);
+      }
+    } else {
+      const contentSnippet = content.length > 200 ? content.substring(0, 200) + "..." : content;
+      console.warn('No JSON pattern found for extraction after direct parsing failed. Content snippet:', contentSnippet);
+      throw new Error(`OpenAI response is not valid JSON and no JSON pattern could be extracted. Direct parse error: ${e1.message}`);
+    }
+  }
+}
 
 // Set trust proxy to fix the X-Forwarded-For warning
 app.set('trust proxy', 1);
@@ -115,7 +159,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
             ]
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 4095,
         response_format: { type: 'json_object' }
       })
     });
@@ -141,25 +185,24 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     }
 
     const content = data.choices[0].message.content;
-    console.log('OpenAI API response content:', content.substring(0, 100) + '...');
+    console.log('OpenAI API response content (first 100 chars):', content.substring(0, 100) + '...');
     
     try {
-      const parsedData = JSON.parse(content);
-      console.log('Successfully parsed JSON response');
+      const parsedData = robustJsonParse(content);
       
-      // Validate that we have all required fields
-      if (!parsedData.ingredient_nutrients || !Array.isArray(parsedData.ingredient_nutrients) || parsedData.ingredient_nutrients.length === 0) {
-        console.error('Missing or invalid ingredient_nutrients array');
+      // Validate crucial structure AFTER successful parsing
+      if (!parsedData.meal_name || !parsedData.ingredients || !parsedData.ingredient_nutrients || 
+          !Array.isArray(parsedData.ingredients) || !Array.isArray(parsedData.ingredient_nutrients) || 
+          parsedData.ingredient_nutrients.length === 0) {
+        console.error('Missing or invalid crucial fields (meal_name, ingredients, ingredient_nutrients) in parsed data from OpenAI');
         return res.status(500).json({
           success: false,
-          error: 'Invalid response: Missing ingredient nutrients'
+          error: 'Invalid response from OpenAI: Missing or malformed crucial fields after parsing.'
         });
       }
 
-      // Transform the data
       const transformedData = transformToRequiredFormat(parsedData);
       
-      // Add detailed ingredient breakdown to the response
       const detailedResponse = {
         success: true,
         data: transformedData,
@@ -168,13 +211,9 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
           total_calories: transformedData.calories,
           ingredients: transformedData.ingredients,
           ingredient_breakdown: transformedData.ingredient_nutrients.map((ingredient, index) => ({
-            name: transformedData.ingredients[index],
+            name: transformedData.ingredients[index] || 'Unknown Ingredient',
             calories: ingredient.calories,
-            macros: {
-              protein: ingredient.protein,
-              fat: ingredient.fat,
-              carbs: ingredient.carbs
-            },
+            macros: { protein: ingredient.protein, fat: ingredient.fat, carbs: ingredient.carbs },
             vitamins: ingredient.vitamins,
             minerals: ingredient.minerals,
             other: ingredient.other
@@ -184,10 +223,11 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
 
       return res.json(detailedResponse);
     } catch (error) {
-      console.error('Error processing OpenAI response:', error);
+      console.error('Error processing OpenAI response, transforming data, or validating structure:', error);
       return res.status(500).json({
         success: false,
-        error: 'Error processing nutrition data'
+        error: 'Error processing nutrition data from OpenAI.',
+        details: error.message
       });
     }
   } catch (error) {
