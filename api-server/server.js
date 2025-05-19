@@ -132,10 +132,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     console.log('OpenAI API response received');
     const data = await response.json();
     
-    if (!data.choices || 
-        !data.choices[0] || 
-        !data.choices[0].message || 
-        !data.choices[0].message.content) {
+    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
       console.error('Invalid response format from OpenAI:', JSON.stringify(data));
       return res.status(500).json({
         success: false,
@@ -146,9 +143,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     const content = data.choices[0].message.content;
     console.log('OpenAI API response content:', content.substring(0, 100) + '...');
     
-    // Process and parse the response
     try {
-      // First try direct parsing
       const parsedData = JSON.parse(content);
       console.log('Successfully parsed JSON response');
       
@@ -161,89 +156,39 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         });
       }
 
-      // Validate each ingredient has all required nutrients
-      const requiredNutrients = ['calories', 'protein', 'fat', 'carbs', 'fiber', 'sugar', 
-        'cholesterol', 'saturated_fats', 'omega_3', 'omega_6',
-        'vitamin_a', 'vitamin_c', 'vitamin_d', 'vitamin_e', 'vitamin_k',
-        'vitamin_b1', 'vitamin_b2', 'vitamin_b3', 'vitamin_b5', 'vitamin_b6',
-        'vitamin_b7', 'vitamin_b9', 'vitamin_b12',
-        'calcium', 'iron', 'magnesium', 'phosphorus', 'potassium', 'sodium',
-        'zinc', 'copper', 'manganese', 'selenium', 'iodine', 'chromium',
-        'molybdenum', 'fluoride', 'chloride'];
+      // Transform the data
+      const transformedData = transformToRequiredFormat(parsedData);
+      
+      // Add detailed ingredient breakdown to the response
+      const detailedResponse = {
+        success: true,
+        data: transformedData,
+        meal_details: {
+          name: transformedData.meal_name,
+          total_calories: transformedData.calories,
+          ingredients: transformedData.ingredients,
+          ingredient_breakdown: transformedData.ingredient_nutrients.map((ingredient, index) => ({
+            name: transformedData.ingredients[index],
+            calories: ingredient.calories,
+            macros: {
+              protein: ingredient.protein,
+              fat: ingredient.fat,
+              carbs: ingredient.carbs
+            },
+            vitamins: ingredient.vitamins,
+            minerals: ingredient.minerals,
+            other: ingredient.other
+          }))
+        }
+      };
 
-      for (const ingredient of parsedData.ingredient_nutrients) {
-        const missingNutrients = requiredNutrients.filter(nutrient => 
-          typeof ingredient[nutrient] !== 'number' || isNaN(ingredient[nutrient])
-        );
-        if (missingNutrients.length > 0) {
-          console.error('Missing nutrients in ingredient:', missingNutrients);
-          return res.status(500).json({
-            success: false,
-            error: `Invalid response: Missing nutrients in ingredient: ${missingNutrients.join(', ')}`
-          });
-        }
-      }
-      
-      // Check if we have the expected meal_name format
-      if (parsedData.meal_name) {
-        return res.json({
-          success: true,
-          data: parsedData
-        });
-      } else {
-        // Transform the response to match our expected format
-        const transformedData = transformToRequiredFormat(parsedData);
-        console.log('Transformed data to required format');
-        return res.json({
-          success: true,
-          data: transformedData
-        });
-      }
+      return res.json(detailedResponse);
     } catch (error) {
-      console.log('Direct JSON parsing failed, attempting to extract JSON from text');
-      // Try to extract JSON from the text
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || 
-                      content.match(/\{[\s\S]*\}/);
-      
-      if (jsonMatch) {
-        const jsonContent = jsonMatch[0].replace(/```json\n|```/g, '').trim();
-        try {
-          const parsedData = JSON.parse(jsonContent);
-          console.log('Successfully extracted and parsed JSON from text');
-          
-          // Check if we have the expected meal_name format
-          if (parsedData.meal_name) {
-            return res.json({
-              success: true,
-              data: parsedData
-            });
-          } else {
-            // Transform the response to match our expected format
-            const transformedData = transformToRequiredFormat(parsedData);
-            console.log('Transformed extracted JSON to required format');
-            return res.json({
-              success: true,
-              data: transformedData
-            });
-          }
-        } catch (err) {
-          console.error('JSON extraction failed:', err);
-          // Transform the raw text
-          const transformedData = transformTextToRequiredFormat(content);
-          return res.json({
-            success: true,
-            data: transformedData
-          });
-        }
-      } else {
-        console.warn('No JSON pattern found in response');
-        // Transform the raw text
-        const transformedData = transformTextToRequiredFormat(content);
-        return res.json({
-          success: true,
-          data: transformedData
-        });
-      }
+      console.error('Error processing OpenAI response:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error processing nutrition data'
+      });
     }
   } catch (error) {
     console.error('Server error:', error);
@@ -256,289 +201,71 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
 
 // Helper function to transform data to our required format
 function transformToRequiredFormat(data) {
-  // If it's the old meal array format
-  if (data.meal && Array.isArray(data.meal) && data.meal.length > 0) {
-    const mealItem = data.meal[0];
-    
-    // Ingredient macros array to match the number of ingredients
-    const ingredientsList = mealItem.ingredients || [];
-    const ingredientMacros = [];
-
-    // Extract top-level micronutrients if available
-    const topLevelVitamins = {};
-    const topLevelMinerals = {};
-    const topLevelOtherNutrients = {};
-
-    // Helper function to copy nutrients to each ingredient
-    const copyNutrients = (source, target) => {
-      if (source && typeof source === 'object') {
-        Object.keys(source).forEach(key => {
-          if (typeof source[key] === 'number' || 
-              typeof source[key] === 'string' ||
-              (typeof source[key] === 'object' && source[key] !== null)) {
-            target[key] = source[key];
-          }
-        });
-      }
-    };
-
-    // Extract top-level micronutrients if available for later distribution
-    if (mealItem.vitamins && typeof mealItem.vitamins === 'object') {
-      copyNutrients(mealItem.vitamins, topLevelVitamins);
-    }
-
-    if (mealItem.minerals && typeof mealItem.minerals === 'object') {
-      copyNutrients(mealItem.minerals, topLevelMinerals);
-    }
-
-    if (mealItem.other_nutrients && typeof mealItem.other_nutrients === 'object') {
-      copyNutrients(mealItem.other_nutrients, topLevelOtherNutrients);
-    }
-    
-    // Create ingredient macros array
-    const transformedIngredients = ingredientsList.map((ingredient, index) => {
-      let ingredientName = typeof ingredient === 'string' ? ingredient : '';
-      let ingredientWeight = '30g';
-      let ingredientCalories = 75;
-      
-      // Estimate ingredient macros based on name
-      let protein = 0;
-      let fat = 0;
-      let carbs = 0;
-      
-      // Extract values if ingredient is in format "Name (Weight) Calories"
-      if (typeof ingredient === 'string') {
-        const weightMatch = ingredient.match(/\(([^)]+)\)/);
-        const caloriesMatch = ingredient.match(/(\d+)\s*kcal/i);
-
-        if (weightMatch) {
-          ingredientWeight = weightMatch[1];
-          ingredientName = ingredient.split('(')[0].trim();
-        }
-
-        if (caloriesMatch) {
-          ingredientCalories = parseInt(caloriesMatch[1]);
-        }
-
-        // Simple estimation based on common ingredients
-        const lowerName = ingredientName.toLowerCase();
-        
-        if (lowerName.includes('chicken') || lowerName.includes('beef') || lowerName.includes('fish') || lowerName.includes('meat')) {
-          protein = ingredientCalories * 0.6 / 4; // 60% of calories from protein
-          fat = ingredientCalories * 0.4 / 9; // 40% of calories from fat
-        } else if (lowerName.includes('cheese') || lowerName.includes('avocado') || lowerName.includes('nut') || lowerName.includes('oil')) {
-          protein = ingredientCalories * 0.1 / 4; // 10% of calories from protein
-          fat = ingredientCalories * 0.8 / 9; // 80% of calories from fat
-          carbs = ingredientCalories * 0.1 / 4; // 10% of calories from carbs
-        } else if (lowerName.includes('rice') || lowerName.includes('pasta') || lowerName.includes('bread') || lowerName.includes('potato')) {
-          protein = ingredientCalories * 0.1 / 4; // 10% of calories from protein
-          fat = ingredientCalories * 0.05 / 9; // 5% of calories from fat
-          carbs = ingredientCalories * 0.85 / 4; // 85% of calories from carbs
-        } else if (lowerName.includes('vegetable') || lowerName.includes('broccoli') || lowerName.includes('spinach')) {
-          protein = ingredientCalories * 0.3 / 4; // 30% of calories from protein
-          carbs = ingredientCalories * 0.7 / 4; // 70% of calories from carbs
-        } else if (lowerName.includes('fruit') || lowerName.includes('apple') || lowerName.includes('banana')) {
-          carbs = ingredientCalories * 0.9 / 4; // 90% of calories from carbs
-          protein = ingredientCalories * 0.05 / 4; // 5% of calories from protein
-          fat = ingredientCalories * 0.05 / 9; // 5% of calories from fat
-        } else {
-          // Default balanced macros for unknown ingredients
-          protein = ingredientCalories * 0.2 / 4; // 20% of calories from protein
-          fat = ingredientCalories * 0.3 / 9; // 30% of calories from fat
-          carbs = ingredientCalories * 0.5 / 4; // 50% of calories from carbs
-        }
-      }
-
-      // Create ingredient macro object
-      const macroObj = {
-        name: ingredientName,
-        amount: ingredientWeight,
-        calories: ingredientCalories,
-        protein: Math.round(protein * 10) / 10,
-        fat: Math.round(fat * 10) / 10,
-        carbs: Math.round(carbs * 10) / 10,
-        // Add directly accessible micronutrient data to each ingredient
-        vitamins: {},
-        minerals: {},
-        other: {}
-      };
-
-      // Copy top-level micronutrients to each ingredient
-      if (Object.keys(topLevelVitamins).length > 0) {
-        copyNutrients(topLevelVitamins, macroObj.vitamins);
-      }
-      
-      if (Object.keys(topLevelMinerals).length > 0) {
-        copyNutrients(topLevelMinerals, macroObj.minerals);
-      }
-      
-      if (Object.keys(topLevelOtherNutrients).length > 0) {
-        copyNutrients(topLevelOtherNutrients, macroObj.other);
-      }
-     
-      return macroObj;
-    });
-
-    // First calculate core values
-    const totalCalories = mealItem.calories || transformedIngredients.reduce((sum, item) => sum + item.calories, 0);
-    const totalProtein = mealItem.protein || Math.round(transformedIngredients.reduce((sum, item) => sum + item.protein, 0));
-    const totalFat = mealItem.fat || Math.round(transformedIngredients.reduce((sum, item) => sum + item.fat, 0));
-    const totalCarbs = mealItem.carbs || Math.round(transformedIngredients.reduce((sum, item) => sum + item.carbs, 0));
-
-    // Prepare our transformed data response
-    const transformedData = {
-      meal_name: mealItem.dish || 'Analyzed Meal',
-      ingredients: ingredientsList.map(ingredient => {
-        if (typeof ingredient === 'string') {
-          return ingredient;
-        } else if (typeof ingredient === 'object' && ingredient !== null) {
-          return ingredient.name || 'Unknown Ingredient';
-        }
-        return 'Unknown Ingredient';
-      }),
-      ingredient_nutrients: transformedIngredients,
-      calories: totalCalories,
-      protein: totalProtein,
-      fat: totalFat,
-      carbs: totalCarbs,
-      health_score: mealItem.health_score || '7/10',
-      // Ensure vitamin object with all expected vitamins - fill in with estimates if missing
-      vitamins: {
-        vitamin_a: (topLevelVitamins.vitamin_a !== undefined) ? topLevelVitamins.vitamin_a : Math.round(totalCalories * 0.1),
-        vitamin_c: (topLevelVitamins.vitamin_c !== undefined) ? topLevelVitamins.vitamin_c : Math.round(totalCalories * 0.06),
-        vitamin_d: (topLevelVitamins.vitamin_d !== undefined) ? topLevelVitamins.vitamin_d : Math.round(totalCalories * 0.02),
-        vitamin_e: (topLevelVitamins.vitamin_e !== undefined) ? topLevelVitamins.vitamin_e : Math.round(totalCalories * 0.05),
-        vitamin_k: (topLevelVitamins.vitamin_k !== undefined) ? topLevelVitamins.vitamin_k : Math.round(totalCalories * 0.04),
-        vitamin_b1: (topLevelVitamins.vitamin_b1 !== undefined) ? topLevelVitamins.vitamin_b1 : Math.round(totalCalories * 0.03),
-        vitamin_b2: (topLevelVitamins.vitamin_b2 !== undefined) ? topLevelVitamins.vitamin_b2 : Math.round(totalCalories * 0.03),
-        vitamin_b3: (topLevelVitamins.vitamin_b3 !== undefined) ? topLevelVitamins.vitamin_b3 : Math.round(totalCalories * 0.05),
-        vitamin_b5: (topLevelVitamins.vitamin_b5 !== undefined) ? topLevelVitamins.vitamin_b5 : Math.round(totalCalories * 0.02),
-        vitamin_b6: (topLevelVitamins.vitamin_b6 !== undefined) ? topLevelVitamins.vitamin_b6 : Math.round(totalCalories * 0.03),
-        vitamin_b7: (topLevelVitamins.vitamin_b7 !== undefined) ? topLevelVitamins.vitamin_b7 : Math.round(totalCalories * 0.01),
-        vitamin_b9: (topLevelVitamins.vitamin_b9 !== undefined) ? topLevelVitamins.vitamin_b9 : Math.round(totalCalories * 0.04),
-        vitamin_b12: (topLevelVitamins.vitamin_b12 !== undefined) ? topLevelVitamins.vitamin_b12 : Math.round(totalCalories * 0.02),
-        ...topLevelVitamins
-      },
-      // Ensure minerals object with all expected minerals - fill in with estimates if missing
-      minerals: {
-        calcium: (topLevelMinerals.calcium !== undefined) ? topLevelMinerals.calcium : Math.round(totalCalories * 0.2),
-        chloride: (topLevelMinerals.chloride !== undefined) ? topLevelMinerals.chloride : Math.round(totalCalories * 0.1),
-        chromium: (topLevelMinerals.chromium !== undefined) ? topLevelMinerals.chromium : Math.round(totalCalories * 0.01),
-        copper: (topLevelMinerals.copper !== undefined) ? topLevelMinerals.copper : Math.round(totalCalories * 0.03),
-        fluoride: (topLevelMinerals.fluoride !== undefined) ? topLevelMinerals.fluoride : Math.round(totalCalories * 0.02),
-        iodine: (topLevelMinerals.iodine !== undefined) ? topLevelMinerals.iodine : Math.round(totalCalories * 0.01),
-        iron: (topLevelMinerals.iron !== undefined) ? topLevelMinerals.iron : Math.round(totalCalories * 0.08),
-        magnesium: (topLevelMinerals.magnesium !== undefined) ? topLevelMinerals.magnesium : Math.round(totalCalories * 0.15),
-        manganese: (topLevelMinerals.manganese !== undefined) ? topLevelMinerals.manganese : Math.round(totalCalories * 0.05),
-        molybdenum: (topLevelMinerals.molybdenum !== undefined) ? topLevelMinerals.molybdenum : Math.round(totalCalories * 0.01),
-        phosphorus: (topLevelMinerals.phosphorus !== undefined) ? topLevelMinerals.phosphorus : Math.round(totalCalories * 0.15),
-        potassium: (topLevelMinerals.potassium !== undefined) ? topLevelMinerals.potassium : Math.round(totalCalories * 0.3),
-        selenium: (topLevelMinerals.selenium !== undefined) ? topLevelMinerals.selenium : Math.round(totalCalories * 0.02),
-        sodium: (topLevelMinerals.sodium !== undefined) ? topLevelMinerals.sodium : Math.round(totalCalories * 0.2),
-        zinc: (topLevelMinerals.zinc !== undefined) ? topLevelMinerals.zinc : Math.round(totalCalories * 0.05),
-        ...topLevelMinerals
-      },
-      // Ensure other nutrients object with all expected nutrients - fill in with estimates if missing
-      other: {
-        fiber: (topLevelOtherNutrients.fiber !== undefined) ? topLevelOtherNutrients.fiber : Math.round(totalCarbs * 0.15),
-        cholesterol: (topLevelOtherNutrients.cholesterol !== undefined) ? topLevelOtherNutrients.cholesterol : Math.round(totalFat * 10),
-        sugar: (topLevelOtherNutrients.sugar !== undefined) ? topLevelOtherNutrients.sugar : Math.round(totalCarbs * 0.4),
-        saturated_fats: (topLevelOtherNutrients.saturated_fats !== undefined) ? topLevelOtherNutrients.saturated_fats : Math.round(totalFat * 0.35),
-        omega_3: (topLevelOtherNutrients.omega_3 !== undefined) ? topLevelOtherNutrients.omega_3 : Math.round(totalFat * 100), // in mg
-        omega_6: (topLevelOtherNutrients.omega_6 !== undefined) ? topLevelOtherNutrients.omega_6 : Math.round(totalFat * 2), // in g
-        ...topLevelOtherNutrients
-      }
-    };
-    
-    return transformedData;
+  // If we don't have proper data, return error instead of defaults
+  if (!data.meal_name || !data.ingredients || !data.ingredient_nutrients || data.ingredients.length === 0) {
+    throw new Error('Invalid or missing data: Required fields meal_name, ingredients, and ingredient_nutrients must be provided');
   }
-  
-  // If we have top-level vitamins or minerals in the input data, use them
-  const topLevelVitamins = data.vitamins || {};
-  const topLevelMinerals = data.minerals || {};
-  const topLevelOtherNutrients = data.other || {};
-  
-  // Calculate calorie values for estimates
-  const calories = data.calories || 500;
-  const protein = data.protein || 20;
-  const fat = data.fat || 15;
-  const carbs = data.carbs || 60;
-  
-  // Calculate a health score (simple algorithm based on macros)
-  const healthScore = Math.max(1, Math.min(10, Math.round((protein * 0.5 + vitaminC * 0.3) / (fat * 0.3 + calories / 100))));
-  
-  // Get values with fallbacks
-  const totalCalories = calories || 500;
-  const totalProtein = protein || 15;
-  const totalFat = fat || 10;
-  const totalCarbs = carbs || 20;
-  
-  // Return the properly formatted JSON with complete nutrient data
-  return {
-    meal_name: data.meal_name || "Mixed Meal",
-    ingredients: data.ingredients || ["Mixed ingredients (100g) 200kcal"],
-    ingredient_nutrients: data.ingredient_nutrients || [
-      {
-        protein: protein/2,
-        fat: fat/2,
-        carbs: carbs/2,
-        vitamins: {},
-        minerals: {},
-        other: {}
-      }
-    ],
-    calories: totalCalories,
-    protein: totalProtein,
-    fat: totalFat,
-    carbs: totalCarbs,
-    health_score: `${healthScore}/10`,
-    // Complete vitamins object with estimates for missing values
+
+  // Transform ingredient data while preserving all specific nutrients
+  const transformedData = {
+    meal_name: data.meal_name,
+    ingredients: data.ingredients,
+    ingredient_nutrients: data.ingredient_nutrients.map(ingredient => ({
+      ...ingredient,
+      // Ensure each ingredient has its specific nutrients
+      vitamins: ingredient.vitamins || {},
+      minerals: ingredient.minerals || {},
+      other: ingredient.other || {}
+    })),
+    // Calculate total values by summing up from ingredients
+    calories: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
+    protein: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.protein || 0), 0),
+    fat: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.fat || 0), 0),
+    carbs: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.carbs || 0), 0),
     vitamins: {
-      vitamin_a: (topLevelVitamins.vitamin_a !== undefined) ? topLevelVitamins.vitamin_a : Math.round(totalCalories * 0.1),
-      vitamin_c: (topLevelVitamins.vitamin_c !== undefined) ? topLevelVitamins.vitamin_c : Math.round(totalCalories * 0.06),
-      vitamin_d: (topLevelVitamins.vitamin_d !== undefined) ? topLevelVitamins.vitamin_d : Math.round(totalCalories * 0.02),
-      vitamin_e: (topLevelVitamins.vitamin_e !== undefined) ? topLevelVitamins.vitamin_e : Math.round(totalCalories * 0.05),
-      vitamin_k: (topLevelVitamins.vitamin_k !== undefined) ? topLevelVitamins.vitamin_k : Math.round(totalCalories * 0.04),
-      vitamin_b1: (topLevelVitamins.vitamin_b1 !== undefined) ? topLevelVitamins.vitamin_b1 : Math.round(totalCalories * 0.03),
-      vitamin_b2: (topLevelVitamins.vitamin_b2 !== undefined) ? topLevelVitamins.vitamin_b2 : Math.round(totalCalories * 0.03),
-      vitamin_b3: (topLevelVitamins.vitamin_b3 !== undefined) ? topLevelVitamins.vitamin_b3 : Math.round(totalCalories * 0.05),
-      vitamin_b5: (topLevelVitamins.vitamin_b5 !== undefined) ? topLevelVitamins.vitamin_b5 : Math.round(totalCalories * 0.02),
-      vitamin_b6: (topLevelVitamins.vitamin_b6 !== undefined) ? topLevelVitamins.vitamin_b6 : Math.round(totalCalories * 0.03),
-      vitamin_b7: (topLevelVitamins.vitamin_b7 !== undefined) ? topLevelVitamins.vitamin_b7 : Math.round(totalCalories * 0.01),
-      vitamin_b9: (topLevelVitamins.vitamin_b9 !== undefined) ? topLevelVitamins.vitamin_b9 : Math.round(totalCalories * 0.04),
-      vitamin_b12: (topLevelVitamins.vitamin_b12 !== undefined) ? topLevelVitamins.vitamin_b12 : Math.round(totalCalories * 0.02),
-      ...topLevelVitamins
+      vitamin_a: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_a || 0)), 0),
+      vitamin_c: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_c || 0)), 0),
+      vitamin_d: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_d || 0)), 0),
+      vitamin_e: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_e || 0)), 0),
+      vitamin_k: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_k || 0)), 0),
+      vitamin_b1: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b1 || 0)), 0),
+      vitamin_b2: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b2 || 0)), 0),
+      vitamin_b3: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b3 || 0)), 0),
+      vitamin_b5: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b5 || 0)), 0),
+      vitamin_b6: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b6 || 0)), 0),
+      vitamin_b7: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b7 || 0)), 0),
+      vitamin_b9: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b9 || 0)), 0),
+      vitamin_b12: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b12 || 0)), 0)
     },
-    // Complete minerals object with estimates for missing values
     minerals: {
-      calcium: (topLevelMinerals.calcium !== undefined) ? topLevelMinerals.calcium : Math.round(totalCalories * 0.2),
-      chloride: (topLevelMinerals.chloride !== undefined) ? topLevelMinerals.chloride : Math.round(totalCalories * 0.1),
-      chromium: (topLevelMinerals.chromium !== undefined) ? topLevelMinerals.chromium : Math.round(totalCalories * 0.01),
-      copper: (topLevelMinerals.copper !== undefined) ? topLevelMinerals.copper : Math.round(totalCalories * 0.03),
-      fluoride: (topLevelMinerals.fluoride !== undefined) ? topLevelMinerals.fluoride : Math.round(totalCalories * 0.02),
-      iodine: (topLevelMinerals.iodine !== undefined) ? topLevelMinerals.iodine : Math.round(totalCalories * 0.01),
-      iron: (topLevelMinerals.iron !== undefined) ? topLevelMinerals.iron : Math.round(totalCalories * 0.08),
-      magnesium: (topLevelMinerals.magnesium !== undefined) ? topLevelMinerals.magnesium : Math.round(totalCalories * 0.15),
-      manganese: (topLevelMinerals.manganese !== undefined) ? topLevelMinerals.manganese : Math.round(totalCalories * 0.05),
-      molybdenum: (topLevelMinerals.molybdenum !== undefined) ? topLevelMinerals.molybdenum : Math.round(totalCalories * 0.01),
-      phosphorus: (topLevelMinerals.phosphorus !== undefined) ? topLevelMinerals.phosphorus : Math.round(totalCalories * 0.15),
-      potassium: (topLevelMinerals.potassium !== undefined) ? topLevelMinerals.potassium : Math.round(totalCalories * 0.3),
-      selenium: (topLevelMinerals.selenium !== undefined) ? topLevelMinerals.selenium : Math.round(totalCalories * 0.02),
-      sodium: (topLevelMinerals.sodium !== undefined) ? topLevelMinerals.sodium : Math.round(totalCalories * 0.2),
-      zinc: (topLevelMinerals.zinc !== undefined) ? topLevelMinerals.zinc : Math.round(totalCalories * 0.05),
-      ...topLevelMinerals
+      calcium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.calcium || 0)), 0),
+      chloride: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.chloride || 0)), 0),
+      chromium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.chromium || 0)), 0),
+      copper: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.copper || 0)), 0),
+      fluoride: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.fluoride || 0)), 0),
+      iodine: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.iodine || 0)), 0),
+      iron: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.iron || 0)), 0),
+      magnesium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.magnesium || 0)), 0),
+      manganese: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.manganese || 0)), 0),
+      molybdenum: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.molybdenum || 0)), 0),
+      phosphorus: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.phosphorus || 0)), 0),
+      potassium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.potassium || 0)), 0),
+      selenium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.selenium || 0)), 0),
+      sodium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.sodium || 0)), 0),
+      zinc: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.zinc || 0)), 0)
     },
-    // Ensure other nutrients object with all expected nutrients - fill in with estimates if missing
     other: {
-      fiber: (topLevelOtherNutrients.fiber !== undefined) ? topLevelOtherNutrients.fiber : Math.round(carbs * 0.15),
-      cholesterol: (topLevelOtherNutrients.cholesterol !== undefined) ? topLevelOtherNutrients.cholesterol : Math.round(fat * 10),
-      sugar: (topLevelOtherNutrients.sugar !== undefined) ? topLevelOtherNutrients.sugar : Math.round(carbs * 0.4),
-      saturated_fats: (topLevelOtherNutrients.saturated_fats !== undefined) ? topLevelOtherNutrients.saturated_fats : Math.round(fat * 0.35),
-      omega_3: (topLevelOtherNutrients.omega_3 !== undefined) ? topLevelOtherNutrients.omega_3 : Math.round(fat * 100), // in mg
-      omega_6: (topLevelOtherNutrients.omega_6 !== undefined) ? topLevelOtherNutrients.omega_6 : Math.round(fat * 2), // in g
-      ...topLevelOtherNutrients
-    }
+      fiber: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.fiber || 0)), 0),
+      cholesterol: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.cholesterol || 0)), 0),
+      sugar: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.sugar || 0)), 0),
+      saturated_fats: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.saturated_fats || 0)), 0),
+      omega_3: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.omega_3 || 0)), 0),
+      omega_6: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.omega_6 || 0)), 0)
+    },
+    health_score: data.health_score || "0/10"
   };
+
+  return transformedData;
 }
 
 // Helper function to transform raw text to our required format
