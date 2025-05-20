@@ -197,7 +197,7 @@ CRITICAL EXAMPLE for one item in ingredient_nutrients (You MUST provide this lev
       console.error('OpenAI API error response data:', errorData);
       return res.status(response.status).json({
         success: false,
-        error: `OpenAI API error: ${response.status}`,
+        error: 'OpenAI API error: ' + response.status,
         details: errorData
       });
     }
