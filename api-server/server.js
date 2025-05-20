@@ -143,7 +143,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: `[STRICTLY JSON ONLY - NO PROSE - OUTPUT VALID JSON AND NOTHING ELSE]\\n\\nYOUR PRIMARY TASK: Analyze the provided food image and return a detailed per-ingredient nutritional breakdown. This is non-negotiable.\\n\\nRESPONSE MUST FOLLOW THESE RULES:\\n1.  \\\`meal_name\\\`: Specific, descriptive name for the entire meal (e.g., \"Grilled Salmon with Asparagus\"). NO generic names.\\n2.  \\\`ingredients\\\`: Array of strings. Each string details one ingredient: \"Ingredient Name (estimated weight) estimated_calories_for_ingredient_kcal\" (e.g., \"Salmon Fillet (150g) 300kcal\"). List EVERY visible ingredient.\\n3.  \\\`ingredient_nutrients\\\`: Array of objects. THIS IS THE MOST CRITICAL PART. Each object corresponds to an item in the \\\'ingredients\\\' array.\\n    EACH OBJECT IN \\\`ingredient_nutrients\\\` MUST CONTAIN (with realistic, non-zero estimates unless truly absent for that ingredient - DO NOT default to zero for likely present nutrients like protein in meat or carbs in fruit):\n        - \\\`ingredient_name_ref\\\`: String, verbatim copy of the ingredient string from the \\\`ingredients\\\` array for reference.\n        - \\\`calories\\\`: Number (kcal)\n        - \\\`protein\\\`: Number (g)\n        - \\\`fat\\\`: Number (g)\n        - \\\`carbs\\\`: Number (g)\n        - \\\`fiber\\\`: Number (g)\n        - \\\`sugar\\\`: Number (g)\n        - \\\`cholesterol\\\`: Number (mg)\n        - \\\`saturated_fats\\\`: Number (g)\n        - \\\`omega_3\\\`: Number (mg)\n        - \\\`omega_6\\\`: Number (g)\n        - \\\`vitamins\\\`: Object containing ALL vitamins listed below with their non-zero (unless absent) values and units for THIS INGREDIENT.\n            (A (IU), C (mg), D (IU), E (mg), K (mcg), B1 (mg), B2 (mg), B3 (mg), B5 (mg), B6 (mg), B7 (mcg), B9 (mcg), B12 (mcg))\n        - \\\`minerals\\\`: Object containing ALL minerals listed below with their non-zero (unless absent) values and units for THIS INGREDIENT.\n            (calcium (mg), iron (mg), magnesium (mg), phosphorus (mg), potassium (mg), sodium (mg), zinc (mg), copper (mg), manganese (mg), selenium (mcg), iodine (mcg), chromium (mcg), molybdenum (mcg), fluoride (mg), chloride (mg))\n4.  \\\`total_calories\\\`, \\\`total_protein\\\`, \\\`total_fat\\\`, \\\`total_carbs\\\`, \\\`total_fiber\\\`, \\\`total_sugar\\\`, \\\`total_cholesterol\\\`, \\\`total_saturated_fats\\\`, \\\`total_omega_3\\\`, \\\`total_omega_6\\\`: Numbers, representing the sum for the entire meal, derived by you from the per-ingredient data you provide.\n5.  \\\`total_vitamins\\\`, \\\`total_minerals\\\`: Objects, containing the sum of each vitamin/mineral for the entire meal, derived from your per-ingredient data.\n6.  \\\`health_score\\\`: String (e.g., \"7/10\").\n\nCRITICAL EXAMPLE for one item in \\\`ingredient_nutrients\\\` (You MUST provide this level of detail for ALL ingredients):\n{\n  \"ingredient_name_ref\": \"Chicken Breast (150g) 240kcal\",\n  \"calories\": 240,\n  \"protein\": 45.0,\n  \"fat\": 6.0,\n  \"carbs\": 0.0,\n  \"fiber\": 0.0,\n  \"sugar\": 0.0,\n  \"cholesterol\": 120,\n  \"saturated_fats\": 1.5,\n  \"omega_3\": 50,\n  \"omega_6\": 0.5,\n  \"vitamins\": { \"vitamin_a\": 10, \"vitamin_c\": 0, \"vitamin_d\": 5, \"vitamin_e\": 0.5, \"vitamin_k\": 2, \"vitamin_b1\": 0.1, \"vitamin_b2\": 0.3, \"vitamin_b3\": 12.0, \"vitamin_b5\": 1.0, \"vitamin_b6\": 0.9, \"vitamin_b7\": 3, \"vitamin_b9\": 10, \"vitamin_b12\": 1.0 },\n  \"minerals\": { \"calcium\": 15, \"iron\": 1.0, \"magnesium\": 30, \"phosphorus\": 300, \"potassium\": 400, \"sodium\": 70, \"zinc\": 1.0, \"copper\": 0.1, \"manganese\": 0.05, \"selenium\": 40, \"iodine\": 2, \"chromium\": 5, \"molybdenum\": 10, \"fluoride\": 0.1, \"chloride\": 80 }\n}\n\nFAILURE to provide detailed, non-zero (where appropriate) per-ingredient breakdowns in \\\`ingredient_nutrients\\\` as specified means you have FAILED the task. JSON ONLY.\`
+            content: "You are a JSON-returning nutrition expert. Provide a simple JSON object."
           },
           {
             role: 'user',
@@ -165,7 +165,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.text();
+      const errorData = await response.text(); // Get text for more detailed error
       console.error('OpenAI API request failed with status:', response.status);
       console.error('OpenAI API error response data:', errorData);
       return res.status(response.status).json({
@@ -176,7 +176,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     }
 
     console.log('OpenAI API request successful. Processing response...');
-    const data = await response.json();
+    const data = await response.json(); // This can also throw if response is not valid JSON despite response.ok
     
     // Log the entire raw data object from OpenAI for debugging
     console.log('Full OpenAI API data object received:', JSON.stringify(data, null, 2));
