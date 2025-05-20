@@ -143,14 +143,81 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. You must be EXTREMELY SPECIFIC and DETAILED. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\nFORMAT RULES:\n1. MEAL NAMING RULES:\n   - NEVER use generic terms like "Mixed Meal" or "Plate"\n   - BE SPECIFIC: e.g. "Pepperoni and Mushroom Pizza" instead of just "Pizza"\n   - Include main ingredients in the name: e.g. "Grilled Chicken Caesar Salad" instead of just "Salad"\n   - If multiple items, name it after the primary dish: e.g. "Cheeseburger with Sweet Potato Fries"\n\n2. INGREDIENT LISTING RULES:\n   - List EVERY visible ingredient separately\n   - Include estimated weights based on visual analysis\n   - Format: "Ingredient (weight) calories" e.g.:\n     * "Pepperoni (30g) 120kcal"\n     * "Mozzarella Cheese (45g) 135kcal"\n     * "Pizza Dough (120g) 240kcal"\n   - DO NOT use generic terms like "Mixed ingredients"\n   - If an ingredient is visible, it MUST be listed\n\n3. Return total values for:\n   - calories (kcal)\n   - protein (g)\n   - fat (g)\n   - carbs (g)\n   - fiber (g)\n   - sugar (g)\n   - cholesterol (mg)\n   - saturated fats (g)\n   - omega-3 (mg)\n   - omega-6 (g)\n   - ALL vitamins:\n     * A (IU)\n     * C (mg)\n     * D (IU)\n     * E (mg)\n     * K (mcg)\n     * B1/Thiamin (mg)\n     * B2/Riboflavin (mg)\n     * B3/Niacin (mg)\n     * B5/Pantothenic acid (mg)\n     * B6/Pyridoxine (mg)\n     * B7/Biotin (mcg)\n     * B9/Folate (mcg)\n     * B12/Cobalamin (mcg)\n   - ALL minerals:\n     * calcium (mg)\n     * iron (mg)\n     * magnesium (mg)\n     * phosphorus (mg)\n     * potassium (mg)\n     * sodium (mg)\n     * zinc (mg)\n     * copper (mg)\n     * manganese (mg)\n     * selenium (mcg)\n     * iodine (mcg)\n     * chromium (mcg)\n     * molybdenum (mcg)\n     * fluoride (mg)\n     * chloride (mg)\n\n4. Add a health score (1-10)\n5. CRITICAL: provide EXACT macronutrient and micronutrient breakdown with specified units for EACH ingredient\n6. Use decimal places and realistic estimates\n7. DO NOT respond with markdown code blocks or text explanations\n8. DO NOT prefix your response with "json" or ```\n9. ONLY RETURN A RAW JSON OBJECT\n10. FAILURE TO FOLLOW THESE INSTRUCTIONS WILL RESULT IN REJECTION\n\nEXACT FORMAT REQUIRED:\n{\n  "meal_name": "Specific Detailed Name",\n  "ingredients": ["Specific Ingredient 1 (weight) calories", "Specific Ingredient 2 (weight) calories"],\n  "ingredient_nutrients": [{\n    // ... same detailed nutrient structure as before ...\n  }]\n  // ... rest of the format remains the same ...\n}\n'
+            content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. You must be EXTREMELY SPECIFIC and DETAILED. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\nFORMAT RULES:\n1. MEAL NAMING RULES:\n   - NEVER use generic terms like "Mixed Meal" or "Plate"\n   - BE SPECIFIC: e.g. "Pepperoni and Mushroom Pizza" instead of just "Pizza"\n   - Include main ingredients in the name: e.g. "Grilled Chicken Caesar Salad" instead of just "Salad"\n   - If multiple items, name it after the primary dish: e.g. "Cheeseburger with Sweet Potato Fries"\n\n2. INGREDIENT LISTING RULES:\n   - List EVERY visible ingredient separately in the 'ingredients' array as strings: "Ingredient Name (estimated weight) estimated_calories_for_ingredient_kcal" (e.g., "Chicken Breast (150g) 240kcal").\n   - Include estimated weights (e.g., 100g, 50ml) and estimated calories for EACH ingredient in this string format.\n   - DO NOT use generic terms like "Mixed ingredients". If an ingredient is visible, it MUST be listed.\n\n3. NUTRIENT BREAKDOWN FOR EACH INGREDIENT (in 'ingredient_nutrients' array):\n   - For EACH item in the 'ingredients' array, provide a corresponding object in the 'ingredient_nutrients' array.\n   - EACH such object MUST contain: calories (kcal), protein (g), fat (g), carbs (g), fiber (g), sugar (g), cholesterol (mg), saturated_fats (g), omega_3 (mg), omega_6 (g).\n   - EACH such object MUST ALSO contain a nested 'vitamins' object and a nested 'minerals' object, listing ALL specified vitamins and minerals with their amounts and units for THAT INGREDIENT.\n     * Vitamins: A (IU), C (mg), D (IU), E (mg), K (mcg), B1/Thiamin (mg), B2/Riboflavin (mg), B3/Niacin (mg), B5/Pantothenic acid (mg), B6/Pyridoxine (mg), B7/Biotin (mcg), B9/Folate (mcg), B12/Cobalamin (mcg).\n     * Minerals: calcium (mg), iron (mg), magnesium (mg), phosphorus (mg), potassium (mg), sodium (mg), zinc (mg), copper (mg), manganese (mg), selenium (mcg), iodine (mcg), chromium (mcg), molybdenum (mcg), fluoride (mg), chloride (mg).\n
+4. TOTALS FOR THE ENTIRE MEAL:\n   - Provide overall total values for the entire meal: total_calories (kcal), total_protein (g), total_fat (g), total_carbs (g), total_fiber (g), total_sugar (g), total_cholesterol (mg), total_saturated_fats (g), total_omega_3 (mg), total_omega_6 (g).\n   - Provide a 'total_vitamins' object and a 'total_minerals' object with the sum of ALL specified vitamins and minerals for the entire meal.\n
+5. Add a health score (1-10) for the entire meal.\n6. Use realistic decimal places for nutrient values.\n7. DO NOT respond with markdown code blocks or any text explanations outside the JSON.\n8. ONLY RETURN A RAW JSON OBJECT. NO PREFIXES, NO MARKDOWN.\n9. FAILURE TO FOLLOW THESE INSTRUCTIONS, ESPECIALLY THE PER-INGREDIENT BREAKDOWN, WILL RESULT IN REJECTION.\n
+EXACT FORMAT REQUIRED (Illustrative Example - provide real data based on image):
+{
+  "meal_name": "Grilled Chicken Salad with Avocado",
+  "ingredients": [
+    "Chicken Breast (150g) 240kcal", 
+    "Avocado (70g) 120kcal", 
+    "Romaine Lettuce (100g) 15kcal", 
+    "Olive Oil Dressing (15ml) 120kcal"
+  ],
+  "ingredient_nutrients": [
+    {
+      "ingredient_name_ref": "Chicken Breast (150g) 240kcal", // Reference to 'ingredients' list
+      "calories": 240,
+      "protein": 45.0,
+      "fat": 6.0,
+      "carbs": 0.0,
+      "fiber": 0.0,
+      "sugar": 0.0,
+      "cholesterol": 120,
+      "saturated_fats": 1.5,
+      "omega_3": 50,
+      "omega_6": 0.5,
+      "vitamins": {
+        "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 5, "vitamin_e": 0.5, "vitamin_k": 0,
+        "vitamin_b1": 0.1, "vitamin_b2": 0.3, "vitamin_b3": 12.0, "vitamin_b5": 1.0,
+        "vitamin_b6": 0.9, "vitamin_b7": 3, "vitamin_b9": 10, "vitamin_b12": 1.0
+      },
+      "minerals": {
+        "calcium": 15, "iron": 1.0, "magnesium": 30, "phosphorus": 300, "potassium": 400,
+        "sodium": 70, "zinc": 1.0, "copper": 0.1, "manganese": 0.05, "selenium": 40,
+        "iodine": 2, "chromium": 5, "molybdenum": 10, "fluoride": 0, "chloride": 80
+      }
+    },
+    {
+      "ingredient_name_ref": "Avocado (70g) 120kcal",
+      "calories": 120,
+      "protein": 1.5,
+      "fat": 11.0,
+      "carbs": 6.0,
+      "fiber": 5.0,
+      "sugar": 0.5,
+      "cholesterol": 0,
+      "saturated_fats": 1.5,
+      "omega_3": 80,
+      "omega_6": 1.2,
+      "vitamins": { /* ... detailed vitamins for Avocado ... */ },
+      "minerals": { /* ... detailed minerals for Avocado ... */ }
+    }
+    // ... (objects for Romaine Lettuce and Olive Oil Dressing with their full nutrient breakdowns)
+  ],
+  "total_calories": 500, // Example sum
+  "total_protein": 48.0,
+  "total_fat": 25.0,
+  "total_carbs": 10.0,
+  "total_fiber": 7.0,
+  "total_sugar": 1.0,
+  "total_cholesterol": 120,
+  "total_saturated_fats": 4.0,
+  "total_omega_3": 150,
+  "total_omega_6": 2.0,
+  "total_vitamins": { /* ... summed vitamins for the whole meal ... */ },
+  "total_minerals": { /* ... summed minerals for the whole meal ... */ },
+  "health_score": "8/10"
+}
+'
           },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: "RETURN ONLY RAW JSON - NO TEXT, NO CODE BLOCKS, NO EXPLANATIONS. Analyze this food image and return complete nutrition data in this EXACT format with no deviations. YOU MUST PROVIDE ACCURATE CALORIES, PROTEIN, FAT, CARBS, FIBER, SUGAR, ALL VITAMINS, AND ALL MINERALS FOR EACH INGREDIENT. EVERY INGREDIENT MUST HAVE ALL THESE FIELDS:\n\n{\n  \"meal_name\": string (single name for entire meal),\n  \"ingredients\": array of strings with weights and calories,\n  \"ingredient_nutrients\": array of objects with calories, protein, fat, carbs, fiber, sugar, all vitamins, all minerals for each ingredient,\n  \"calories\": number,\n  \"protein\": number,\n  \"fat\": number,\n  \"carbs\": number,\n  \"fiber\": number,\n  \"sugar\": number,\n  \"vitamins\": object with all vitamins (a, c, d, e, k, b1, b2, b3, b5, b6, b7, b9, b12),\n  \"minerals\": object with all minerals (calcium, iron, magnesium, etc.),\n  \"health_score\": string\n}"
+                text: "RETURN ONLY RAW JSON - NO TEXT, NO MARKDOWN, NO EXPLANATIONS. Analyze this food image. YOU MUST PROVIDE A COMPLETE AND ACCURATE NUTRITIONAL BREAKDOWN FOR EACH INDIVIDUAL INGREDIENT, including its calories, protein (g), fat (g), carbs (g), fiber (g), sugar (g), cholesterol (mg), saturated_fats (g), omega_3 (mg), omega_6 (g), and FULLY POPULATED nested 'vitamins' and 'minerals' objects with all specified micro-nutrients for THAT SPECIFIC INGREDIENT. Also provide overall totals for the meal. Adhere strictly to the JSON format specified in the system prompt, especially for the 'ingredient_nutrients' array."
               },
               {
                 type: 'image_url',
@@ -159,7 +226,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
             ]
           }
         ],
-        max_tokens: 4095,
+        max_tokens: 4095, 
         response_format: { type: 'json_object' }
       })
     });
