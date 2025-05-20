@@ -203,26 +203,36 @@ FAILURE to provide detailed, non-zero (where appropriate) per-ingredient breakdo
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('OpenAI API error:', response.status, errorData);
+      console.error('OpenAI API request failed with status:', response.status);
+      console.error('OpenAI API error response data:', errorData);
       return res.status(response.status).json({
         success: false,
-        error: `OpenAI API error: ${response.status}`
+        error: `OpenAI API error: ${response.status}`,
+        details: errorData
       });
     }
 
-    console.log('OpenAI API response received');
+    console.log('OpenAI API request successful. Processing response...');
     const data = await response.json();
     
-    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
-      console.error('Invalid response format from OpenAI:', JSON.stringify(data));
+    // Log the entire raw data object from OpenAI for debugging
+    console.log('Full OpenAI API data object received:', JSON.stringify(data, null, 2));
+
+    // Enhanced validation of the OpenAI response structure
+    if (!data || !data.choices || !Array.isArray(data.choices) || data.choices.length === 0 || 
+        !data.choices[0].message || typeof data.choices[0].message.content !== 'string') {
+      console.error('Invalid or unexpected response structure from OpenAI. Full data logged above.');
+      if (data && data.choices && data.choices[0] && data.choices[0].message) {
+        console.error('Problematic message object from OpenAI:', JSON.stringify(data.choices[0].message, null, 2));
+      }
       return res.status(500).json({
         success: false,
-        error: 'Invalid response from OpenAI'
+        error: 'Invalid or unexpected response structure from OpenAI after successful API call.'
       });
     }
 
     const content = data.choices[0].message.content;
-    console.log('OpenAI API response content (first 100 chars):', content.substring(0, 100) + '...');
+    console.log('Extracted content for parsing (first 300 chars):', content.substring(0, 300) + (content.length > 300 ? '...' : ''));
     
     try {
       const parsedData = robustJsonParse(content);
