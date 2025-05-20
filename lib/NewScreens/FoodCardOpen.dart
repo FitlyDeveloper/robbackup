@@ -4685,7 +4685,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
     });
 
-    print(
+              print(
         'NUTRITION TOTALS: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
   }
 
