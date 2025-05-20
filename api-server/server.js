@@ -143,89 +143,51 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. You must be EXTREMELY SPECIFIC and DETAILED. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\nFORMAT RULES:\n1. MEAL NAMING RULES: (As before - be specific, no generic terms)\n\n2. INGREDIENT LISTING RULES: (As before - separate strings in 'ingredients' array: "Name (weight) calories_kcal")\n\n3. NUTRIENT BREAKDOWN FOR EACH INGREDIENT (in 'ingredient_nutrients' array):\n   - For EACH item in the 'ingredients' array, provide a corresponding DETAILED object in the 'ingredient_nutrients' array.\n   - EACH such object MUST contain: calories (kcal), protein (g), fat (g), carbs (g), fiber (g), sugar (g), cholesterol (mg), saturated_fats (g), omega_3 (mg), omega_6 (g).\n   - Provide realistic, non-zero estimates for these common nutrients for each ingredient, unless a nutrient is genuinely absent (e.g., 0g fat in pure sugar, or near-zero Vitamin C in cooked meat). DO NOT default to zero for likely present nutrients.\n   - EACH such object MUST ALSO contain a nested 'vitamins' object and a nested 'minerals' object, listing ALL specified vitamins and minerals with their estimated non-zero amounts (unless truly zero) and correct units for THAT SPECIFIC INGREDIENT.\n     * Vitamins: A (IU), C (mg), D (IU), E (mg), K (mcg), B1/Thiamin (mg), B2/Riboflavin (mg), B3/Niacin (mg), B5/Pantothenic acid (mg), B6/Pyridoxine (mg), B7/Biotin (mcg), B9/Folate (mcg), B12/Cobalamin (mcg).\n     * Minerals: calcium (mg), iron (mg), magnesium (mg), phosphorus (mg), potassium (mg), sodium (mg), zinc (mg), copper (mg), manganese (mg), selenium (mcg), iodine (mcg), chromium (mcg), molybdenum (mcg), fluoride (mg), chloride (mg).\n
-4. TOTALS FOR THE ENTIRE MEAL (derived from summing your per-ingredient data):\n   - Provide overall total values for the entire meal: total_calories (kcal), total_protein (g), total_fat (g), total_carbs (g), total_fiber (g), total_sugar (g), total_cholesterol (mg), total_saturated_fats (g), total_omega_3 (mg), total_omega_6 (g).\n   - Provide a 'total_vitamins' object and a 'total_minerals' object with the sum of ALL specified vitamins and minerals for the entire meal, based on the per-ingredient values you listed.\n
-5. Add a health score (1-10) for the entire meal.\n6. Use realistic decimal places for nutrient values.\n7. DO NOT respond with markdown code blocks or any text explanations outside the JSON.\n8. ONLY RETURN A RAW JSON OBJECT. NO PREFIXES, NO MARKDOWN.\n9. CRITICAL FAILURE POINT: Incomplete or zeroed-out per-ingredient nutrient breakdowns (macros, vitamins, minerals) when nutrients are expected to be present WILL result in rejection. Be thorough for each ingredient.\n
-EXACT FORMAT REQUIRED (Illustrative Example - provide real data based on image):
+            content: '[STRICTLY JSON ONLY - NO PROSE - OUTPUT VALID JSON AND NOTHING ELSE]\n\nYOUR PRIMARY TASK: Analyze the provided food image and return a detailed per-ingredient nutritional breakdown. This is non-negotiable.\n\nRESPONSE MUST FOLLOW THESE RULES:\n1.  `meal_name`: Specific, descriptive name for the entire meal (e.g., "Grilled Salmon with Asparagus"). NO generic names.\n2.  `ingredients`: Array of strings. Each string details one ingredient: "Ingredient Name (estimated weight) estimated_calories_for_ingredient_kcal" (e.g., "Salmon Fillet (150g) 300kcal"). List EVERY visible ingredient.\n3.  `ingredient_nutrients`: Array of objects. THIS IS THE MOST CRITICAL PART. Each object corresponds to an item in the 'ingredients' array.\n    EACH OBJECT IN `ingredient_nutrients` MUST CONTAIN (with realistic, non-zero estimates unless truly absent for that ingredient - DO NOT default to zero for likely present nutrients like protein in meat or carbs in fruit):
+        - `ingredient_name_ref`: String, verbatim copy of the ingredient string from the `ingredients` array for reference.
+        - `calories`: Number (kcal)
+        - `protein`: Number (g)
+        - `fat`: Number (g)
+        - `carbs`: Number (g)
+        - `fiber`: Number (g)
+        - `sugar`: Number (g)
+        - `cholesterol`: Number (mg)
+        - `saturated_fats`: Number (g)
+        - `omega_3`: Number (mg)
+        - `omega_6`: Number (g)
+        - `vitamins`: Object containing ALL vitamins listed below with their non-zero (unless absent) values and units for THIS INGREDIENT.
+            (A (IU), C (mg), D (IU), E (mg), K (mcg), B1 (mg), B2 (mg), B3 (mg), B5 (mg), B6 (mg), B7 (mcg), B9 (mcg), B12 (mcg))
+        - `minerals`: Object containing ALL minerals listed below with their non-zero (unless absent) values and units for THIS INGREDIENT.
+            (calcium (mg), iron (mg), magnesium (mg), phosphorus (mg), potassium (mg), sodium (mg), zinc (mg), copper (mg), manganese (mg), selenium (mcg), iodine (mcg), chromium (mcg), molybdenum (mcg), fluoride (mg), chloride (mg))
+4.  `total_calories`, `total_protein`, `total_fat`, `total_carbs`, `total_fiber`, `total_sugar`, `total_cholesterol`, `total_saturated_fats`, `total_omega_3`, `total_omega_6`: Numbers, representing the sum for the entire meal, derived by you from the per-ingredient data you provide.
+5.  `total_vitamins`, `total_minerals`: Objects, containing the sum of each vitamin/mineral for the entire meal, derived from your per-ingredient data.
+6.  `health_score`: String (e.g., "7/10").
+
+CRITICAL EXAMPLE for one item in `ingredient_nutrients` (You MUST provide this level of detail for ALL ingredients):
 {
-  "meal_name": "Grilled Chicken Salad with Avocado & Dressing",
-  "ingredients": [
-    "Chicken Breast (150g) 240kcal", 
-    "Avocado (70g) 120kcal", 
-    "Romaine Lettuce (100g) 15kcal", 
-    "Olive Oil Dressing (15ml) 120kcal"
-  ],
-  "ingredient_nutrients": [
-    {
-      "ingredient_name_ref": "Chicken Breast (150g) 240kcal",
-      "calories": 240,
-      "protein": 45.0,
-      "fat": 6.0,
-      "carbs": 0.0,
-      "fiber": 0.0,
-      "sugar": 0.0,
-      "cholesterol": 120,
-      "saturated_fats": 1.5,
-      "omega_3": 50,
-      "omega_6": 0.5,
-      "vitamins": {
-        "vitamin_a": 10, "vitamin_c": 0.5, "vitamin_d": 5, "vitamin_e": 0.5, "vitamin_k": 2,
-        "vitamin_b1": 0.1, "vitamin_b2": 0.3, "vitamin_b3": 12.0, "vitamin_b5": 1.0,
-        "vitamin_b6": 0.9, "vitamin_b7": 3, "vitamin_b9": 10, "vitamin_b12": 1.0
-      },
-      "minerals": {
-        "calcium": 15, "iron": 1.0, "magnesium": 30, "phosphorus": 300, "potassium": 400,
-        "sodium": 70, "zinc": 1.0, "copper": 0.1, "manganese": 0.05, "selenium": 40,
-        "iodine": 2, "chromium": 5, "molybdenum": 10, "fluoride": 0.1, "chloride": 80
-      }
-    },
-    {
-      "ingredient_name_ref": "Avocado (70g) 120kcal",
-      "calories": 120,
-      "protein": 1.5,
-      "fat": 11.0,
-      "carbs": 6.0,
-      "fiber": 5.0,
-      "sugar": 0.5,
-      "cholesterol": 0,
-      "saturated_fats": 1.5,
-      "omega_3": 80,
-      "omega_6": 1.2,
-      "vitamins": {
-        "vitamin_a": 100, "vitamin_c": 7, "vitamin_d": 0, "vitamin_e": 1.5, "vitamin_k": 15,
-        "vitamin_b1": 0.05, "vitamin_b2": 0.1, "vitamin_b3": 1.2, "vitamin_b5": 1.0,
-        "vitamin_b6": 0.2, "vitamin_b7": 2, "vitamin_b9": 60, "vitamin_b12": 0
-      },
-      "minerals": {
-        "calcium": 10, "iron": 0.4, "magnesium": 20, "phosphorus": 35, "potassium": 340,
-        "sodium": 5, "zinc": 0.5, "copper": 0.15, "manganese": 0.1, "selenium": 0.5,
-        "iodine": 1, "chromium": 2, "molybdenum": 3, "fluoride": 0.05, "chloride": 10
-      }
-    },
-    // ... (Full, detailed objects for Romaine Lettuce and Olive Oil Dressing following the same complete structure)
-  ],
-  "total_calories": 495, // Example sum from the detailed ingredients above
-  "total_protein": 47.0, // Sum from ingredients
-  "total_fat": 20.0,    // Sum from ingredients
-  "total_carbs": 10.0,   // Sum from ingredients
-  "total_fiber": 6.0,    // Sum from ingredients
-  "total_sugar": 0.8,    // Sum from ingredients
-  "total_cholesterol": 120, // Sum from ingredients
-  "total_saturated_fats": 3.5, // Sum from ingredients
-  "total_omega_3": 130,   // Sum from ingredients
-  "total_omega_6": 1.8,    // Sum from ingredients
-  "total_vitamins": { /* ... object with ALL vitamins summed from ingredients ... */ },
-  "total_minerals": { /* ... object with ALL minerals summed from ingredients ... */ },
-  "health_score": "8/10"
+  "ingredient_name_ref": "Chicken Breast (150g) 240kcal",
+  "calories": 240,
+  "protein": 45.0,
+  "fat": 6.0,
+  "carbs": 0.0,
+  "fiber": 0.0,
+  "sugar": 0.0,
+  "cholesterol": 120,
+  "saturated_fats": 1.5,
+  "omega_3": 50,
+  "omega_6": 0.5,
+  "vitamins": { "vitamin_a": 10, "vitamin_c": 0, "vitamin_d": 5, "vitamin_e": 0.5, "vitamin_k": 2, "vitamin_b1": 0.1, "vitamin_b2": 0.3, "vitamin_b3": 12.0, "vitamin_b5": 1.0, "vitamin_b6": 0.9, "vitamin_b7": 3, "vitamin_b9": 10, "vitamin_b12": 1.0 },
+  "minerals": { "calcium": 15, "iron": 1.0, "magnesium": 30, "phosphorus": 300, "potassium": 400, "sodium": 70, "zinc": 1.0, "copper": 0.1, "manganese": 0.05, "selenium": 40, "iodine": 2, "chromium": 5, "molybdenum": 10, "fluoride": 0.1, "chloride": 80 }
 }
-'
+
+FAILURE to provide detailed, non-zero (where appropriate) per-ingredient breakdowns in `ingredient_nutrients` as specified means you have FAILED the task. JSON ONLY.'
           },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: "RETURN ONLY RAW JSON. Analyze the food image. Provide a COMPLETE, ACCURATE, and DETAILED nutritional breakdown for EACH INDIVIDUAL INGREDIENT within the 'ingredient_nutrients' array. Each ingredient object MUST include: calories, protein (g), fat (g), carbs (g), fiber (g), sugar (g), cholesterol (mg), saturated_fats (g), omega_3 (mg), omega_6 (g), and FULLY POPULATED nested 'vitamins' and 'minerals' objects with realistic, non-zero (unless truly absent) values for all specified micronutrients for THAT INGREDIENT. Also, provide overall meal totals by summing these per-ingredient details. Adhere STRICTLY to the JSON format and rules specified in the system prompt, especially for the detailed 'ingredient_nutrients' array. Incomplete per-ingredient data is a failure."
+                text: "RAW JSON ONLY. Analyze image. Critical: Provide FULL, DETAILED, NON-ZERO (unless truly absent) per-ingredient nutrients for macros, vitamins, and minerals in the 'ingredient_nutrients' array as per system prompt example. Sum these for totals. Incomplete per-ingredient data is a failure."
               },
               {
                 type: 'image_url',
