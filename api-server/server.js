@@ -348,8 +348,8 @@ function transformToRequiredFormat(data) {
 // Start the server
 app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
-  console.log(`API Key configured: ${process.env.OPENAI_API_KEY ? 'Yes' : 'No'}`);
-  console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log('API Key configured: ' + (process.env.OPENAI_API_KEY ? 'Yes' : 'No'));
+  console.log('Allowed origins: ' + allowedOrigins.join(', '));
 });
 
 // Error handling for unhandled promises
