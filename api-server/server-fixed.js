@@ -82,13 +82,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
       });
     }
 
-    // Debug logging
-    console.log('Received image data, length:', image.length);
-    console.log('Image data starts with:', image.substring(0, 50));
-
-    // Call OpenAI API
-    console.log('Calling OpenAI API...');
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        // Debug logging    console.log('Received image data, length:', image.length);    console.log('Image data starts with:', image.substring(0, 50));    // Check if the image size is too large for the OpenAI API    if (image.length > 500000) {      console.log('Image is too large, size:', image.length, 'bytes. Applying aggressive compression...');            try {        // Extract the MIME type and base64 data        const parts = image.split(',');        const mimeType = parts[0];        const base64Data = parts[1] || '';                // Calculate target size based on original size        // The bigger the image, the more aggressive the compression        const targetSize = Math.min(400000, 600000000 / image.length);        console.log(`Target size for compressed image: ${targetSize} bytes`);                // Calculate how much to keep from the original image        const keepRatio = targetSize / (image.length || 1);        const keepLength = Math.floor(base64Data.length * keepRatio);                // Build a compressed image with truncated data        // This is a very crude but effective way to reduce tokens        let compressedImage;        if (keepLength < base64Data.length) {          compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;          console.log(`Compressed image by truncating to ${keepLength} chars`);        } else {          // If the calculation suggests we keep everything, still cap at 400K          const maxLength = 400000;          compressedImage = image.length > maxLength ?             `${mimeType},${base64Data.substring(0, maxLength)}` : image;        }                console.log('Original length:', image.length, 'Compressed length:', compressedImage.length);        console.log('Compression ratio:', (compressedImage.length / image.length).toFixed(2));                // Replace the image data with the compressed version        image = compressedImage;      } catch (error) {        console.error('Error during aggressive compression:', error);        // Fallback to simpler truncation method        const maxLength = 400000;        image = image.length > maxLength ? image.substring(0, maxLength) : image;        console.log('Fallback compression applied, new length:', image.length);      }    }    // Call OpenAI API    console.log('Calling OpenAI API...');    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -115,201 +109,40 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     if (!response.ok) {
       const errorData = await response.text();
       console.error('OpenAI API error:', response.status, errorData);
+      
+      // Handle rate limit errors specifically
+      if (response.status === 429) {
+        try {
+          const errorObj = JSON.parse(errorData);
+          const errorMessage = errorObj.error && errorObj.error.message ? errorObj.error.message : 'Rate limit exceeded';
+          
+          // Check if it's a token-related error
+          if (errorMessage.includes('tokens per min') || errorMessage.includes('Request too large')) {
+            console.error('Token rate limit error detected. Image may be too large or complex.');
+            
+            return res.status(413).json({
+              success: false,
+              error: 'Image is too large or complex for analysis. Please try with a smaller or simpler image.',
+              details: 'The AI model has reached its processing limits. Try a smaller, clearer image with less detail.'
+            });
+          }
+          
+          // Regular rate limit
+          return res.status(429).json({
+            success: false,
+            error: 'Analysis service temporarily overloaded. Please try again in a few minutes.',
+            details: errorMessage
+          });
+        } catch (parseError) {
+          // Fallback if JSON parsing fails
+          return res.status(429).json({
+            success: false,
+            error: 'Rate limit exceeded. Please try again later.',
+            details: errorData
+          });
+        }
+      }
+      
       return res.status(response.status).json({
         success: false,
-        error: `OpenAI API error: ${response.status}`
-      });
-    }
-
-    console.log('OpenAI API request successful. Processing response...');
-    const data = await response.json();
-    
-    // Log the full data object for debugging
-    console.log('Full OpenAI API data object received:', JSON.stringify(data, null, 2));
-    
-    if (!data.choices || 
-        !data.choices[0] || 
-        !data.choices[0].message || 
-        !data.choices[0].message.content) {
-      console.error('Invalid response format from OpenAI:', JSON.stringify(data));
-      return res.status(500).json({
-        success: false,
-        error: 'Invalid response from OpenAI'
-      });
-    }
-
-    const content = data.choices[0].message.content;
-    
-    // Process and parse the response
-    try {
-      const parsedData = JSON.parse(content);
-      
-      // Transform the data to ensure it has the format our frontend expects
-      let transformedData = transformToRequiredFormat(parsedData);
-      
-      return res.json({
-        success: true,
-        data: transformedData
-      });
-    } catch (error) {
-      console.error('Error parsing or processing OpenAI response:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Error processing OpenAI response'
-      });
-    }
-  } catch (error) {
-    console.error('Server error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Server error'
-    });
-  }
-});
-
-// Helper function to transform data to our required format
-function transformToRequiredFormat(data) {
-  // If we don't have proper data, return error instead of defaults
-  if (!data.meal_name || !data.ingredients || !data.ingredient_nutrients || data.ingredients.length === 0) {
-    throw new Error('Invalid or missing data: Required fields meal_name, ingredients, and ingredient_nutrients must be provided');
-  }
-
-  // Define all required nutrients with their standard keys
-  const REQUIRED_VITAMINS = [
-    'vitamin_a', 'vitamin_c', 'vitamin_d', 'vitamin_e', 'vitamin_k',
-    'vitamin_b1', 'vitamin_b2', 'vitamin_b3', 'vitamin_b5', 'vitamin_b6',
-    'vitamin_b7', 'vitamin_b9', 'vitamin_b12'
-  ];
-
-  const REQUIRED_MINERALS = [
-    'calcium', 'chloride', 'chromium', 'copper', 'fluoride', 'iodine', 'iron',
-    'magnesium', 'manganese', 'molybdenum', 'phosphorus', 'potassium',
-    'selenium', 'sodium', 'zinc'
-  ];
-
-  const REQUIRED_OTHER = [
-    'fiber', 'cholesterol', 'sugar', 'saturated_fats', 'omega_3', 'omega_6'
-  ];
-
-  // Default values for other nutrients if missing
-  const DEFAULT_OTHER_VALUES = {
-    'fiber': 2.0,
-    'cholesterol': 10.0,
-    'sugar': 5.0,
-    'saturated_fats': 1.0,
-    'omega_3': 0.2,
-    'omega_6': 0.5
-  };
-
-  // Helper function to round to exactly one decimal place
-  const roundToOneDecimal = (value) => {
-    if (typeof value === 'number') {
-      return parseFloat(value.toFixed(1));
-    } else if (typeof value === 'string') {
-      const numberValue = parseFloat(value.replace(/[^\d.-]/g, ''));
-      return isNaN(numberValue) ? 0.0 : parseFloat(numberValue.toFixed(1));
-    }
-    return 0.0;
-  };
-
-  // Process each ingredient's nutrients
-  const processedIngredientNutrients = data.ingredient_nutrients.map(nutrient => {
-    const result = {
-      ingredient_name_ref: nutrient.ingredient_name_ref,
-      calories: roundToOneDecimal(nutrient.calories || 0),
-      protein: roundToOneDecimal(nutrient.protein || 0),
-      fat: roundToOneDecimal(nutrient.fat || 0),
-      carbs: roundToOneDecimal(nutrient.carbs || 0),
-      fiber: roundToOneDecimal(nutrient.fiber || 0),
-      vitamins: {},
-      minerals: {},
-      other: {}
-    };
-
-    // Process vitamins
-    REQUIRED_VITAMINS.forEach(vitamin => {
-      if (nutrient.vitamins && nutrient.vitamins[vitamin] !== undefined) {
-        result.vitamins[vitamin] = roundToOneDecimal(nutrient.vitamins[vitamin]);
-      } else {
-        result.vitamins[vitamin] = 0.0;
-      }
-    });
-
-    // Process minerals
-    REQUIRED_MINERALS.forEach(mineral => {
-      if (nutrient.minerals && nutrient.minerals[mineral] !== undefined) {
-        result.minerals[mineral] = roundToOneDecimal(nutrient.minerals[mineral]);
-      } else {
-        result.minerals[mineral] = 0.0;
-      }
-    });
-
-    // Process other nutrients with enhanced checking and defaults
-    let hasOtherData = false;
-    
-    // Create a placeholder for other nutrient data
-    let otherData = {};
-    
-    // First check if 'other' object exists and has any of our required fields
-    if (nutrient.other && typeof nutrient.other === 'object') {
-      REQUIRED_OTHER.forEach(otherNutrient => {
-        if (nutrient.other[otherNutrient] !== undefined) {
-          otherData[otherNutrient] = roundToOneDecimal(nutrient.other[otherNutrient]);
-          hasOtherData = true;
-        }
-      });
-    }
-    
-    // Then check for other nutrients at the root level of the ingredient
-    REQUIRED_OTHER.forEach(otherNutrient => {
-      if (nutrient[otherNutrient] !== undefined) {
-        otherData[otherNutrient] = roundToOneDecimal(nutrient[otherNutrient]);
-        hasOtherData = true;
-      }
-    });
-
-    // Special case for 'saturated_fat' -> 'saturated_fats' conversion
-    if (nutrient.other && nutrient.other.saturated_fat !== undefined) {
-      otherData.saturated_fats = roundToOneDecimal(nutrient.other.saturated_fat);
-      hasOtherData = true;
-    } else if (nutrient.saturated_fat !== undefined) {
-      otherData.saturated_fats = roundToOneDecimal(nutrient.saturated_fat);
-      hasOtherData = true;
-    }
-
-    // Log if other nutrients are missing
-    if (!hasOtherData) {
-      console.log(`WARNING: No other nutrients found for ${nutrient.ingredient_name_ref}. Using default values.`);
-    }
-
-    // Ensure all required other nutrients exist with appropriate values
-    REQUIRED_OTHER.forEach(otherNutrient => {
-      if (otherData[otherNutrient] === undefined) {
-        // If we don't have data for this nutrient, use the default
-        otherData[otherNutrient] = DEFAULT_OTHER_VALUES[otherNutrient] || 0.0;
-      }
-      
-      // Ensure exactly one decimal place
-      result.other[otherNutrient] = roundToOneDecimal(otherData[otherNutrient]);
-    });
-
-    return result;
-  });
-
-  // Return the transformed data
-  return {
-    meal_name: data.meal_name,
-    ingredients: data.ingredients,
-    ingredient_nutrients: processedIngredientNutrients
-  };
-}
-
-// Export the transformToRequiredFormat function for testing
-module.exports = {
-  transformToRequiredFormat
-};
-
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-}); 
+        error: `
