@@ -1,3 +1,4 @@
+// Import required packages
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -6,58 +7,13 @@ const fetch = require('node-fetch');
 
 // Create Express app
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // Debug startup
 console.log('Starting server...');
 console.log('Node environment:', process.env.NODE_ENV);
 console.log('Current directory:', process.cwd());
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
-
-// Helper function to robustly parse JSON content
-function robustJsonParse(content) {
-  try {
-    // Attempt 1: Direct parsing
-    const directParseResult = JSON.parse(content);
-    console.log('Successfully parsed JSON response directly.');
-    return directParseResult;
-  } catch (e1) {
-    console.log('Direct JSON parsing failed. Attempting to extract JSON from text. Error:', e1.message);
-    
-    let jsonString = "";
-    // Try to match ```json ... ```
-    const codeBlockMatch = content.match(/```json\n([\s\S]*?)\n```/);
-    if (codeBlockMatch && codeBlockMatch[1]) {
-      jsonString = codeBlockMatch[1].trim();
-      console.log('Extracted JSON from ```json block.');
-    } else {
-      // If no ```json block, try to find the first occurrence of { ... }
-      const objectMatch = content.match(/(\{[\s\S]*\})/);
-      if (objectMatch && objectMatch[1]) {
-        jsonString = objectMatch[1].trim();
-        console.log('Extracted JSON using general object match.');
-      }
-    }
-
-    if (jsonString) {
-      try {
-        // Attempt 2: Parse extracted/cleaned JSON
-        const extractedParseResult = JSON.parse(jsonString);
-        console.log('Successfully parsed extracted JSON.');
-        return extractedParseResult;
-      } catch (e2) {
-        console.error('Failed to parse extracted JSON content. Error:', e2.message);
-        const snippet = jsonString.length > 500 ? jsonString.substring(0, 500) + '...' : jsonString;
-        console.error('Problematic JSON string snippet after extraction attempt:', snippet);
-        throw new Error(`OpenAI response could not be parsed as JSON even after attempting extraction. Details: ${e2.message}. Original direct parse error: ${e1.message}`);
-      }
-    } else {
-      const contentSnippet = content.length > 200 ? content.substring(0, 200) + "..." : content;
-      console.warn('No JSON pattern found for extraction after direct parsing failed. Content snippet:', contentSnippet);
-      throw new Error(`OpenAI response is not valid JSON and no JSON pattern could be extracted. Direct parse error: ${e1.message}`);
-    }
-  }
-}
 
 // Set trust proxy to fix the X-Forwarded-For warning
 app.set('trust proxy', 1);
@@ -81,8 +37,18 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 // Configure CORS
 app.use(cors({
-  origin: '*',  // Allow all origins
-  methods: ['POST', 'GET', 'OPTIONS'],  // Allow necessary methods
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if the origin is allowed
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  methods: ['POST'],
   credentials: true
 }));
 
@@ -98,7 +64,8 @@ const checkApiKey = (req, res, next) => {
       error: 'Server configuration error: OpenAI API key not set'
     });
   }
-  console.log('OpenAI API key verified');
+  console.log('API Key configured: Yes');
+  console.log('Allowed origins:', allowedOrigins.join(', '));
   next();
 };
 
@@ -143,135 +110,69 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: `YOUR PRIMARY TASK: Analyze the provided food image and return a detailed per-ingredient nutritional breakdown in JSON format.
-
-RESPONSE MUST FOLLOW THESE RULES:
-1.  meal_name: Specific, descriptive name for the entire meal (e.g., "Grilled Salmon with Asparagus"). NO generic names.
-2.  ingredients: Array of strings. Each string details one ingredient: "Ingredient Name (estimated weight) estimated_calories_for_ingredient_kcal" (e.g., "Salmon Fillet (150g) 300kcal"). List EVERY visible ingredient.
-3.  ingredient_nutrients: Array of objects. THIS IS THE MOST CRITICAL PART. Each object corresponds to an item in the 'ingredients' array.
-    EACH OBJECT IN ingredient_nutrients MUST CONTAIN (with realistic, non-zero estimates unless truly absent for that ingredient - DO NOT default to zero for likely present nutrients like protein in meat or carbs in fruit):
-        - ingredient_name_ref: String, verbatim copy of the ingredient string from the "ingredients" array for reference.
-        - calories: Number (kcal)
-        - protein: Number (g)
-        - fat: Number (g)
-        - carbs: Number (g)
-        - fiber: Number (g)
-        - sugar: Number (g)
-        - cholesterol: Number (mg)
-        - saturated_fats: Number (g)
-        - omega_3: Number (mg)
-        - omega_6: Number (g)
-        - vitamins: Object containing ALL vitamins listed below with their non-zero (unless absent) values and units for THIS INGREDIENT.
-            (A (IU), C (mg), D (IU), E (mg), K (mcg), B1 (mg), B2 (mg), B3 (mg), B5 (mg), B6 (mg), B7 (mcg), B9 (mcg), B12 (mcg))
-        - minerals: Object containing ALL minerals listed below with their non-zero (unless absent) values and units for THIS INGREDIENT.
-            (calcium (mg), iron (mg), magnesium (mg), phosphorus (mg), potassium (mg), sodium (mg), zinc (mg), copper (mg), manganese (mg), selenium (mcg), iodine (mcg), chromium (mcg), molybdenum (mcg), fluoride (mg), chloride (mg))
-4.  total_calories, total_protein, total_fat, total_carbs, total_fiber, total_sugar, total_cholesterol, total_saturated_fats, total_omega_3, total_omega_6: Numbers, representing the sum for the entire meal, derived by you from the per-ingredient data you provide.
-5.  total_vitamins, total_minerals: Objects, containing the sum of each vitamin/mineral for the entire meal, derived from your per-ingredient data.
-6.  health_score: String (e.g., "7/10").
-
-CRITICAL EXAMPLE for one item in ingredient_nutrients (You MUST provide this level of detail for ALL ingredients):
-{\n  "ingredient_name_ref": "Chicken Breast (150g) 240kcal",\n  "calories": 240,\n  "protein": 45.0,\n  "fat": 6.0,\n  "carbs": 0.0,\n  "fiber": 0.0,\n  "sugar": 0.0,\n  "cholesterol": 120,\n  "saturated_fats": 1.5,\n  "omega_3": 50,\n  "omega_6": 0.5,\n  "vitamins": { "vitamin_a": 10, "vitamin_c": 0, "vitamin_d": 5, "vitamin_e": 0.5, "vitamin_k": 2, "vitamin_b1": 0.1, "vitamin_b2": 0.3, "vitamin_b3": 12.0, "vitamin_b5": 1.0, "vitamin_b6": 0.9, "vitamin_b7": 3, "vitamin_b9": 10, "vitamin_b12": 1.0 },\n  "minerals": { "calcium": 15, "iron": 1.0, "magnesium": 30, "phosphorus": 300, "potassium": 400, "sodium": 70, "zinc": 1.0, "copper": 0.1, "manganese": 0.05, "selenium": 40, "iodine": 2, "chromium": 5, "molybdenum": 10, "fluoride": 0.1, "chloride": 80 }\n}\n\nIt is crucial to provide detailed, non-zero (where appropriate) per-ingredient breakdowns in ingredient_nutrients as specified. Accurate JSON output is essential.`
+            content: '[STRICTLY JSON ONLY] SNAPFOOD PROMPT VERSION 12 - You are a nutrition expert providing detailed nutritional analysis of food in photos. Analyze the image and provide a comprehensive nutritional breakdown in JSON format. Include ONLY JSON with NO additional text. Return values with EXACTLY 1 decimal point precision.\n\nYOUR RESPONSE MUST INCLUDE:\n\n1. meal_name: A descriptive name of the overall meal\n2. ingredients: Array of ingredients with estimated weights and calories (e.g., "Grilled Chicken (100g) 165kcal")\n3. ingredient_nutrients: Array of detailed nutritional info for EACH ingredient including:\n   - ingredient_name_ref: Must exactly match an entry in the ingredients array\n   - calories: Total calories\n   - macronutrients: protein, fat, carbs (in grams)\n   - ALL vitamins in a nested "vitamins" object with EXACT KEYS: vitamin_a, vitamin_c, vitamin_d, vitamin_e, vitamin_k, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6, vitamin_b7, vitamin_b9, vitamin_b12 (all in mg)\n   - ALL minerals in a nested "minerals" object with EXACT KEYS: calcium, iron, magnesium, phosphorus, potassium, sodium, zinc, copper, manganese, selenium, iodine, chromium, molybdenum, fluoride, chloride (all in mg)\n   - ALL other nutrients in a nested "other" object with EXACT KEYS: fiber (g), cholesterol (mg), sugar (g), saturated_fats (g), omega_3 (mg), omega_6 (g)\n\nEnsure ALL ingredients have ALL vitamins, minerals and other nutrients - provide the value 0.0 if a nutrient is not present. All nutrient values MUST be formatted with exactly ONE decimal point (e.g., 12.3, not 12 or 12.34). The "other" nutrients section is CRITICAL and must always be included with all values.'
           },
           {
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: "RAW JSON ONLY. Analyze image. Critical: Provide FULL, DETAILED, NON-ZERO (unless truly absent) per-ingredient nutrients for macros, vitamins, and minerals in the 'ingredient_nutrients' array as per system prompt example. Sum these for totals. Incomplete per-ingredient data is a failure."
-              },
-              {
-                type: 'image_url',
-                image_url: { url: image }
-              }
-            ]
+            content: `Analyze the nutritional content of this food image. Provide a comprehensive breakdown with all macronutrients and micronutrients. The image data is: ${image}`
           }
         ],
-        max_tokens: 4095, 
+        max_tokens: 4000,
         response_format: { type: 'json_object' }
       })
     });
 
     if (!response.ok) {
-      const errorData = await response.text(); // Get text for more detailed error
-      console.error('OpenAI API request failed with status:', response.status);
-      console.error('OpenAI API error response data:', errorData);
+      const errorData = await response.text();
+      console.error('OpenAI API error:', response.status, errorData);
       return res.status(response.status).json({
         success: false,
-        error: 'OpenAI API error: ' + response.status,
-        details: errorData
+        error: `OpenAI API error: ${response.status}`
       });
     }
 
     console.log('OpenAI API request successful. Processing response...');
-    const data = await response.json(); // This can also throw if response is not valid JSON despite response.ok
+    const data = await response.json();
     
-    // Log the entire raw data object from OpenAI for debugging
+    // Log the full data object for debugging
     console.log('Full OpenAI API data object received:', JSON.stringify(data, null, 2));
-
-    // Enhanced validation of the OpenAI response structure
-    if (!data || !data.choices || !Array.isArray(data.choices) || data.choices.length === 0 || 
-        !data.choices[0].message || typeof data.choices[0].message.content !== 'string') {
-      console.error('Invalid or unexpected response structure from OpenAI. Full data logged above.');
-      if (data && data.choices && data.choices[0] && data.choices[0].message) {
-        console.error('Problematic message object from OpenAI:', JSON.stringify(data.choices[0].message, null, 2));
-      }
+    
+    if (!data.choices || 
+        !data.choices[0] || 
+        !data.choices[0].message || 
+        !data.choices[0].message.content) {
+      console.error('Invalid response format from OpenAI:', JSON.stringify(data));
       return res.status(500).json({
         success: false,
-        error: 'Invalid or unexpected response structure from OpenAI after successful API call.'
+        error: 'Invalid response from OpenAI'
       });
     }
 
     const content = data.choices[0].message.content;
-    console.log('Extracted content for parsing (first 300 chars):', content.substring(0, 300) + (content.length > 300 ? '...' : ''));
     
+    // Process and parse the response
     try {
-      const parsedData = robustJsonParse(content);
+      const parsedData = JSON.parse(content);
       
-      // Validate crucial structure AFTER successful parsing
-      if (!parsedData.meal_name || !parsedData.ingredients || !parsedData.ingredient_nutrients || 
-          !Array.isArray(parsedData.ingredients) || !Array.isArray(parsedData.ingredient_nutrients) || 
-          parsedData.ingredient_nutrients.length === 0) {
-        console.error('Missing or invalid crucial fields (meal_name, ingredients, ingredient_nutrients) in parsed data from OpenAI');
-        return res.status(500).json({
-          success: false,
-          error: 'Invalid response from OpenAI: Missing or malformed crucial fields after parsing.'
-        });
-      }
-
-      const transformedData = transformToRequiredFormat(parsedData);
+      // Transform the data to ensure it has the format our frontend expects
+      let transformedData = transformToRequiredFormat(parsedData);
       
-      const detailedResponse = {
+      return res.json({
         success: true,
-        data: transformedData,
-        meal_details: {
-          name: transformedData.meal_name,
-          total_calories: transformedData.calories,
-          ingredients: transformedData.ingredients,
-          ingredient_breakdown: transformedData.ingredient_nutrients.map((ingredient, index) => ({
-            name: transformedData.ingredients[index] || 'Unknown Ingredient',
-            calories: ingredient.calories,
-            macros: { protein: ingredient.protein, fat: ingredient.fat, carbs: ingredient.carbs },
-            vitamins: ingredient.vitamins,
-            minerals: ingredient.minerals,
-            other: ingredient.other
-          }))
-        }
-      };
-
-      return res.json(detailedResponse);
+        data: transformedData
+      });
     } catch (error) {
-      console.error('Error processing OpenAI response, transforming data, or validating structure:', error);
+      console.error('Error parsing or processing OpenAI response:', error);
       return res.status(500).json({
         success: false,
-        error: 'Error processing nutrition data from OpenAI.',
-        details: error.message
+        error: 'Error processing OpenAI response'
       });
     }
   } catch (error) {
     console.error('Server error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Server error processing request'
+      error: 'Server error'
     });
   }
 });
@@ -283,76 +184,142 @@ function transformToRequiredFormat(data) {
     throw new Error('Invalid or missing data: Required fields meal_name, ingredients, and ingredient_nutrients must be provided');
   }
 
-  // Transform ingredient data while preserving all specific nutrients
-  const transformedData = {
+  // Define all required nutrients with their standard keys
+  const REQUIRED_VITAMINS = [
+    'vitamin_a', 'vitamin_c', 'vitamin_d', 'vitamin_e', 'vitamin_k',
+    'vitamin_b1', 'vitamin_b2', 'vitamin_b3', 'vitamin_b5', 'vitamin_b6',
+    'vitamin_b7', 'vitamin_b9', 'vitamin_b12'
+  ];
+
+  const REQUIRED_MINERALS = [
+    'calcium', 'chloride', 'chromium', 'copper', 'fluoride', 'iodine', 'iron',
+    'magnesium', 'manganese', 'molybdenum', 'phosphorus', 'potassium',
+    'selenium', 'sodium', 'zinc'
+  ];
+
+  const REQUIRED_OTHER = [
+    'fiber', 'cholesterol', 'sugar', 'saturated_fats', 'omega_3', 'omega_6'
+  ];
+
+  // Default values for other nutrients if missing
+  const DEFAULT_OTHER_VALUES = {
+    'fiber': 2.0,
+    'cholesterol': 10.0,
+    'sugar': 5.0,
+    'saturated_fats': 1.0,
+    'omega_3': 0.2,
+    'omega_6': 0.5
+  };
+
+  // Helper function to round to exactly one decimal place
+  const roundToOneDecimal = (value) => {
+    if (typeof value === 'number') {
+      return parseFloat(value.toFixed(1));
+    } else if (typeof value === 'string') {
+      const numberValue = parseFloat(value.replace(/[^\d.-]/g, ''));
+      return isNaN(numberValue) ? 0.0 : parseFloat(numberValue.toFixed(1));
+    }
+    return 0.0;
+  };
+
+  // Process each ingredient's nutrients
+  const processedIngredientNutrients = data.ingredient_nutrients.map(nutrient => {
+    const result = {
+      ingredient_name_ref: nutrient.ingredient_name_ref,
+      calories: roundToOneDecimal(nutrient.calories || 0),
+      protein: roundToOneDecimal(nutrient.protein || 0),
+      fat: roundToOneDecimal(nutrient.fat || 0),
+      carbs: roundToOneDecimal(nutrient.carbs || 0),
+      fiber: roundToOneDecimal(nutrient.fiber || 0),
+      vitamins: {},
+      minerals: {},
+      other: {}
+    };
+
+    // Process vitamins
+    REQUIRED_VITAMINS.forEach(vitamin => {
+      if (nutrient.vitamins && nutrient.vitamins[vitamin] !== undefined) {
+        result.vitamins[vitamin] = roundToOneDecimal(nutrient.vitamins[vitamin]);
+      } else {
+        result.vitamins[vitamin] = 0.0;
+      }
+    });
+
+    // Process minerals
+    REQUIRED_MINERALS.forEach(mineral => {
+      if (nutrient.minerals && nutrient.minerals[mineral] !== undefined) {
+        result.minerals[mineral] = roundToOneDecimal(nutrient.minerals[mineral]);
+      } else {
+        result.minerals[mineral] = 0.0;
+      }
+    });
+
+    // Process other nutrients with enhanced checking and defaults
+    let hasOtherData = false;
+    
+    // Create a placeholder for other nutrient data
+    let otherData = {};
+    
+    // First check if 'other' object exists and has any of our required fields
+    if (nutrient.other && typeof nutrient.other === 'object') {
+      REQUIRED_OTHER.forEach(otherNutrient => {
+        if (nutrient.other[otherNutrient] !== undefined) {
+          otherData[otherNutrient] = roundToOneDecimal(nutrient.other[otherNutrient]);
+          hasOtherData = true;
+        }
+      });
+    }
+    
+    // Then check for other nutrients at the root level of the ingredient
+    REQUIRED_OTHER.forEach(otherNutrient => {
+      if (nutrient[otherNutrient] !== undefined) {
+        otherData[otherNutrient] = roundToOneDecimal(nutrient[otherNutrient]);
+        hasOtherData = true;
+      }
+    });
+
+    // Special case for 'saturated_fat' -> 'saturated_fats' conversion
+    if (nutrient.other && nutrient.other.saturated_fat !== undefined) {
+      otherData.saturated_fats = roundToOneDecimal(nutrient.other.saturated_fat);
+      hasOtherData = true;
+    } else if (nutrient.saturated_fat !== undefined) {
+      otherData.saturated_fats = roundToOneDecimal(nutrient.saturated_fat);
+      hasOtherData = true;
+    }
+
+    // Log if other nutrients are missing
+    if (!hasOtherData) {
+      console.log(`WARNING: No other nutrients found for ${nutrient.ingredient_name_ref}. Using default values.`);
+    }
+
+    // Ensure all required other nutrients exist with appropriate values
+    REQUIRED_OTHER.forEach(otherNutrient => {
+      if (otherData[otherNutrient] === undefined) {
+        // If we don't have data for this nutrient, use the default
+        otherData[otherNutrient] = DEFAULT_OTHER_VALUES[otherNutrient] || 0.0;
+      }
+      
+      // Ensure exactly one decimal place
+      result.other[otherNutrient] = roundToOneDecimal(otherData[otherNutrient]);
+    });
+
+    return result;
+  });
+
+  // Return the transformed data
+  return {
     meal_name: data.meal_name,
     ingredients: data.ingredients,
-    ingredient_nutrients: data.ingredient_nutrients.map(ingredient => ({
-      ...ingredient,
-      // Ensure each ingredient has its specific nutrients
-      vitamins: ingredient.vitamins || {},
-      minerals: ingredient.minerals || {},
-      other: ingredient.other || {}
-    })),
-    // Calculate total values by summing up from ingredients
-    calories: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
-    protein: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.protein || 0), 0),
-    fat: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.fat || 0), 0),
-    carbs: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.carbs || 0), 0),
-    vitamins: {
-      vitamin_a: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_a || 0)), 0),
-      vitamin_c: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_c || 0)), 0),
-      vitamin_d: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_d || 0)), 0),
-      vitamin_e: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_e || 0)), 0),
-      vitamin_k: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_k || 0)), 0),
-      vitamin_b1: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b1 || 0)), 0),
-      vitamin_b2: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b2 || 0)), 0),
-      vitamin_b3: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b3 || 0)), 0),
-      vitamin_b5: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b5 || 0)), 0),
-      vitamin_b6: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b6 || 0)), 0),
-      vitamin_b7: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b7 || 0)), 0),
-      vitamin_b9: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b9 || 0)), 0),
-      vitamin_b12: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b12 || 0)), 0)
-    },
-    minerals: {
-      calcium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.calcium || 0)), 0),
-      chloride: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.chloride || 0)), 0),
-      chromium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.chromium || 0)), 0),
-      copper: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.copper || 0)), 0),
-      fluoride: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.fluoride || 0)), 0),
-      iodine: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.iodine || 0)), 0),
-      iron: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.iron || 0)), 0),
-      magnesium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.magnesium || 0)), 0),
-      manganese: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.manganese || 0)), 0),
-      molybdenum: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.molybdenum || 0)), 0),
-      phosphorus: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.phosphorus || 0)), 0),
-      potassium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.potassium || 0)), 0),
-      selenium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.selenium || 0)), 0),
-      sodium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.sodium || 0)), 0),
-      zinc: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.zinc || 0)), 0)
-    },
-    other: {
-      fiber: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.fiber || 0)), 0),
-      cholesterol: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.cholesterol || 0)), 0),
-      sugar: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.sugar || 0)), 0),
-      saturated_fats: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.saturated_fats || 0)), 0),
-      omega_3: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.omega_3 || 0)), 0),
-      omega_6: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.omega_6 || 0)), 0)
-    },
-    health_score: data.health_score || "0/10"
+    ingredient_nutrients: processedIngredientNutrients
   };
-  
-  return transformedData;
 }
+
+// Export the transformToRequiredFormat function for testing
+module.exports = {
+  transformToRequiredFormat
+};
 
 // Start the server
 app.listen(PORT, () => {
-  console.log('Server running on port ' + PORT);
-  console.log('API Key configured: ' + (process.env.OPENAI_API_KEY ? 'Yes' : 'No'));
-  console.log('Allowed origins: ' + allowedOrigins.join(', '));
-});
-
-// Error handling for unhandled promises
-process.on('unhandledRejection', (error) => {
-  console.error('Unhandled Promise Rejection:', error);
+  console.log(`Server running on port ${PORT}`);
 }); 
