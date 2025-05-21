@@ -102,6 +102,34 @@ class FoodAnalyzerApi {
       // Check for HTTP errors
       if (response.statusCode != 200) {
         print('API error: ${response.statusCode}, ${response.body}');
+
+        // Special handling for rate limit errors
+        if (response.statusCode == 429) {
+          Map<String, dynamic> errorData = {};
+          try {
+            errorData = jsonDecode(response.body);
+          } catch (e) {
+            // If can't parse JSON, use empty map
+          }
+
+          // Extract detailed error message if available
+          String errorDetail = "";
+          if (errorData.containsKey('details')) {
+            errorDetail = errorData['details'];
+          } else if (errorData.containsKey('error')) {
+            errorDetail = errorData['error'];
+          }
+
+          if (errorDetail.contains('too large') ||
+              errorDetail.contains('tokens per min')) {
+            throw Exception(
+                'Image too large or complex. Please try with a simpler or smaller food image.');
+          } else {
+            throw Exception(
+                'Server is busy. Please try again in a moment (Rate limit reached).');
+          }
+        }
+
         throw Exception('Failed to analyze image: ${response.statusCode}');
       }
 
