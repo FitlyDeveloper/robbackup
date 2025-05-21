@@ -283,66 +283,112 @@ function transformToRequiredFormat(data) {
     throw new Error('Invalid or missing data: Required fields meal_name, ingredients, and ingredient_nutrients must be provided');
   }
 
-  // Transform ingredient data while preserving all specific nutrients
-    const transformedData = {
+  // Define all required nutrients with their standard keys
+  const REQUIRED_VITAMINS = [
+    'vitamin_a', 'vitamin_c', 'vitamin_d', 'vitamin_e', 'vitamin_k',
+    'vitamin_b1', 'vitamin_b2', 'vitamin_b3', 'vitamin_b5', 'vitamin_b6',
+    'vitamin_b7', 'vitamin_b9', 'vitamin_b12'
+  ];
+
+  const REQUIRED_MINERALS = [
+    'calcium', 'chloride', 'chromium', 'copper', 'fluoride', 'iodine',
+    'iron', 'magnesium', 'manganese', 'molybdenum', 'phosphorus',
+    'potassium', 'selenium', 'sodium', 'zinc'
+  ];
+
+  const REQUIRED_OTHER = [
+    'fiber', 'cholesterol', 'sugar', 'saturated_fats', 'omega_3', 'omega_6'
+  ];
+
+  // Transform ingredient nutrients while ensuring all required fields are present
+  const transformedIngredientNutrients = data.ingredient_nutrients.map(ingredient => {
+    const result = {
+      ...ingredient,
+      vitamins: {},
+      minerals: {},
+      other: {}
+    };
+
+    // Ensure all vitamins exist, set to 0 if missing
+    REQUIRED_VITAMINS.forEach(vitamin => {
+      result.vitamins[vitamin] = (ingredient.vitamins && ingredient.vitamins[vitamin]) || 0.0;
+    });
+
+    // Ensure all minerals exist, set to 0 if missing
+    REQUIRED_MINERALS.forEach(mineral => {
+      result.minerals[mineral] = (ingredient.minerals && ingredient.minerals[mineral]) || 0.0;
+    });
+
+    // Ensure all other nutrients exist, set to 0 if missing
+    REQUIRED_OTHER.forEach(nutrient => {
+      result.other[nutrient] = 0.0;
+    });
+
+    // Map standard nutrient fields to other category if they exist in the ingredient
+    // This handles nutrients that were at the root level
+    if (ingredient.fiber !== undefined) result.other.fiber = ingredient.fiber;
+    if (ingredient.cholesterol !== undefined) result.other.cholesterol = ingredient.cholesterol;
+    if (ingredient.sugar !== undefined) result.other.sugar = ingredient.sugar;
+    if (ingredient.saturated_fats !== undefined) result.other.saturated_fats = ingredient.saturated_fats;
+    if (ingredient.omega_3 !== undefined) result.other.omega_3 = ingredient.omega_3;
+    if (ingredient.omega_6 !== undefined) result.other.omega_6 = ingredient.omega_6;
+
+    return result;
+  });
+
+  // Calculate total values by summing up from ingredients
+  const totals = {
+    vitamins: {},
+    minerals: {},
+    other: {}
+  };
+
+  // Initialize all totals to 0
+  REQUIRED_VITAMINS.forEach(vitamin => totals.vitamins[vitamin] = 0.0);
+  REQUIRED_MINERALS.forEach(mineral => totals.minerals[mineral] = 0.0);
+  REQUIRED_OTHER.forEach(other => totals.other[other] = 0.0);
+
+  // Sum up totals from all ingredients
+  transformedIngredientNutrients.forEach(ingredient => {
+    // Sum vitamins
+    REQUIRED_VITAMINS.forEach(vitamin => {
+      totals.vitamins[vitamin] += ingredient.vitamins[vitamin] || 0.0;
+    });
+
+    // Sum minerals
+    REQUIRED_MINERALS.forEach(mineral => {
+      totals.minerals[mineral] += ingredient.minerals[mineral] || 0.0;
+    });
+
+    // Sum other nutrients
+    REQUIRED_OTHER.forEach(nutrient => {
+      totals.other[nutrient] += ingredient.other[nutrient] || 0.0;
+    });
+  });
+
+  // Build the final transformed data structure
+  const transformedData = {
     meal_name: data.meal_name,
     ingredients: data.ingredients,
-    ingredient_nutrients: data.ingredient_nutrients.map(ingredient => ({
-      ...ingredient,
-      // Ensure each ingredient has its specific nutrients
-      vitamins: ingredient.vitamins || {},
-      minerals: ingredient.minerals || {},
-      other: ingredient.other || {}
-    })),
-    // Calculate total values by summing up from ingredients
+    ingredient_nutrients: transformedIngredientNutrients,
     calories: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
     protein: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.protein || 0), 0),
     fat: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.fat || 0), 0),
     carbs: data.ingredient_nutrients.reduce((sum, ing) => sum + (ing.carbs || 0), 0),
-    vitamins: {
-      vitamin_a: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_a || 0)), 0),
-      vitamin_c: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_c || 0)), 0),
-      vitamin_d: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_d || 0)), 0),
-      vitamin_e: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_e || 0)), 0),
-      vitamin_k: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_k || 0)), 0),
-      vitamin_b1: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b1 || 0)), 0),
-      vitamin_b2: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b2 || 0)), 0),
-      vitamin_b3: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b3 || 0)), 0),
-      vitamin_b5: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b5 || 0)), 0),
-      vitamin_b6: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b6 || 0)), 0),
-      vitamin_b7: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b7 || 0)), 0),
-      vitamin_b9: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b9 || 0)), 0),
-      vitamin_b12: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.vitamins?.vitamin_b12 || 0)), 0)
-    },
-    minerals: {
-      calcium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.calcium || 0)), 0),
-      chloride: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.chloride || 0)), 0),
-      chromium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.chromium || 0)), 0),
-      copper: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.copper || 0)), 0),
-      fluoride: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.fluoride || 0)), 0),
-      iodine: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.iodine || 0)), 0),
-      iron: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.iron || 0)), 0),
-      magnesium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.magnesium || 0)), 0),
-      manganese: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.manganese || 0)), 0),
-      molybdenum: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.molybdenum || 0)), 0),
-      phosphorus: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.phosphorus || 0)), 0),
-      potassium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.potassium || 0)), 0),
-      selenium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.selenium || 0)), 0),
-      sodium: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.sodium || 0)), 0),
-      zinc: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.minerals?.zinc || 0)), 0)
-    },
-    other: {
-      fiber: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.fiber || 0)), 0),
-      cholesterol: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.cholesterol || 0)), 0),
-      sugar: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.sugar || 0)), 0),
-      saturated_fats: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.saturated_fats || 0)), 0),
-      omega_3: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.omega_3 || 0)), 0),
-      omega_6: data.ingredient_nutrients.reduce((sum, ing) => sum + ((ing.other?.omega_6 || 0)), 0)
-    },
+    vitamins: totals.vitamins,
+    minerals: totals.minerals,
+    other: totals.other,
     health_score: data.health_score || "0/10"
-    };
-    
-    return transformedData;
+  };
+
+  // Final validation - ensure we have all required nutrients
+  console.log('Transformed data contains all required nutrients:', 
+    `Vitamins: ${Object.keys(transformedData.vitamins).length}/${REQUIRED_VITAMINS.length}`,
+    `Minerals: ${Object.keys(transformedData.minerals).length}/${REQUIRED_MINERALS.length}`,
+    `Other: ${Object.keys(transformedData.other).length}/${REQUIRED_OTHER.length}`
+  );
+  
+  return transformedData;
 }
 
 // Start the server
