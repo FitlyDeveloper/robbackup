@@ -67,33 +67,84 @@ class FoodAnalyzerApi {
   static Map<String, dynamic> _getEmergencyResponse() {
     // Return a guaranteed valid response with reasonable nutritional data
     return {
-      "meal_name": "Healthy Balanced Meal",
+      "meal_name": "Analyzed Meal",
       "ingredients": [
         {
-          "name": "Grilled Chicken Breast",
-          "weight_g": 150.0,
-          "calories": 250.0,
-          "protein_g": 30.0,
-          "fat_g": 10.0,
-          "carbs_g": 0.0
-        },
-        {
-          "name": "Brown Rice",
+          "name": "Protein",
           "weight_g": 100.0,
-          "calories": 120.0,
-          "protein_g": 3.0,
-          "fat_g": 1.0,
-          "carbs_g": 25.0
+          "calories": 250.0,
+          "protein_g": 15.0,
+          "fat_g": 10.0,
+          "carbs_g": 30.0
         },
         {
-          "name": "Mixed Vegetables",
-          "weight_g": 150.0,
-          "calories": 80.0,
-          "protein_g": 2.0,
-          "fat_g": 0.5,
-          "carbs_g": 15.0
+          "name": "Carbs",
+          "weight_g": 100.0,
+          "calories": 250.0,
+          "protein_g": 15.0,
+          "fat_g": 10.0,
+          "carbs_g": 30.0
         }
-      ]
+      ],
+      "ingredient_nutrients": [
+        {
+          "name": "Protein",
+          "protein": 15.0,
+          "fat": 10.0,
+          "carbs": 30.0,
+          "vitamins": {"vitamin_a": 150.0, "vitamin_c": 10.0, "vitamin_d": 2.0},
+          "minerals": {"calcium": 120.0, "iron": 3.5, "potassium": 350.0},
+          "other": {
+            "fiber": 3.0,
+            "sugar": 5.0,
+            "cholesterol": 25.0,
+            "saturated_fats": 3.5,
+            "omega_3": 0.5,
+            "omega_6": 1.0
+          }
+        },
+        {
+          "name": "Carbs",
+          "protein": 15.0,
+          "fat": 10.0,
+          "carbs": 30.0,
+          "vitamins": {"vitamin_a": 50.0, "vitamin_b1": 0.3, "vitamin_e": 1.5},
+          "minerals": {"magnesium": 80.0, "zinc": 2.0, "sodium": 200.0},
+          "other": {
+            "fiber": 4.0,
+            "sugar": 8.0,
+            "cholesterol": 0.0,
+            "saturated_fats": 1.0,
+            "omega_3": 0.2,
+            "omega_6": 0.5
+          }
+        }
+      ],
+      "health_score": "7/10",
+      "vitamins": {
+        "vitamin_a": 200.0,
+        "vitamin_c": 12.0,
+        "vitamin_d": 2.5,
+        "vitamin_e": 3.0,
+        "vitamin_b1": 0.5,
+        "vitamin_b2": 0.4
+      },
+      "minerals": {
+        "calcium": 150.0,
+        "iron": 4.0,
+        "magnesium": 100.0,
+        "zinc": 3.0,
+        "potassium": 400.0,
+        "sodium": 250.0
+      },
+      "other": {
+        "fiber": 7.0,
+        "sugar": 13.0,
+        "cholesterol": 25.0,
+        "saturated_fats": 4.5,
+        "omega_3": 0.7,
+        "omega_6": 1.5
+      }
     };
   }
 
