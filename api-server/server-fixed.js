@@ -197,4 +197,26 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
       
       return res.status(response.status).json({
         success: false,
-        error: `
+        error: `OpenAI API error: ${response.status}`
+      });
+    }
+
+    // Process the response
+    const responseData = await response.json();
+    return res.json({
+      success: true,
+      data: responseData
+    });
+  } catch (error) {
+    console.error('Server error:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: `Server error: ${error.message}`
+    });
+  }
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
