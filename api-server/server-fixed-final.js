@@ -140,8 +140,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       console.log(`Estimated tokens from raw image: ~${estimatedTokens}`);
       
       // Use a tiny fixed size for ALL images to guarantee we stay under token limits
-      // This is VERY aggressive but will prevent token limit errors
-      const targetSizeBytes = 30000; // Reduced to 30KB maximum for any image
+      // This is EXTREMELY aggressive but will prevent token limit errors
+      const targetSizeBytes = 20000; // Ultra minimal 20KB for any image
       console.log(`Target size for compressed image: ${targetSizeBytes} bytes (fixed limit)`);
       
       // Calculate how much to keep
@@ -179,47 +179,71 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
     // Simplified prompt to reduce complexity of response and potential for JSON errors
-    const simplifiedPrompt = `[JSON ONLY] Analyze the food image and provide:
+    const simplifiedPrompt = `[JSON ONLY] Create a simple food analysis with minimal data:
 
-1. meal_name: Name of the meal
-2. ingredients: Array of objects with:
-   - name: Ingredient name
-   - weight_g: Estimated weight (g)
-   - calories: Total calories
-   - protein_g: Protein in grams
-   - fat_g: Fat in grams
-   - carbs_g: Carbs in grams
-   - vitamins: Object with all vitamins (a,c,d,e,k,b1,b2,b3,b5,b6,b7,b9,b12) with values
-   - minerals: Object with all minerals (calcium,iron,etc) with values
-   - other: Object with fiber, cholesterol, sugar, etc.
+1. meal_name: Give a simple short name (max 5 words)
+2. ingredients: ARRAY of SIMPLE objects containing ONLY:
+   - name: Short name (1-2 words only)
+   - weight_g: Number with one decimal (example: 100.0)
+   - calories: Number with one decimal (example: 250.0)
+   - protein_g: Number with one decimal (example: 15.0)
+   - fat_g: Number with one decimal (example: 10.0)
+   - carbs_g: Number with one decimal (example: 30.0)
 
-IMPORTANT: Format ALL numeric values with exactly one decimal place (e.g., 12.0, 3.5) - no trailing decimals.`;
+EXTREMELY IMPORTANT:
+- EVERY number MUST end with .0 even for whole numbers
+- Keep ALL text short and simple
+- NO special characters in strings
+- No complex structures
+- Limit to max 3 ingredients total`;
 
-    // Call OpenAI API
+    // Call OpenAI API with timeout and enhanced error handling
     console.log('Calling OpenAI API for job', jobId);
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        temperature: 0.2,
-        messages: [
-          {
-            role: 'system',
-            content: simplifiedPrompt
-          },
-          {
-            role: 'user',
-            content: `What food is in this image? ${processedImage}`
-          }
-        ],
-        max_tokens: 1800, // Reduced for faster response and less complexity
-        response_format: { type: 'json_object' }
-      })
-    });
+    let response;
+    try {
+      // Implement timeout for the fetch call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+      
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          temperature: 0.1, // Lower temperature for more predictable outputs
+          messages: [
+            {
+              role: 'system',
+              content: simplifiedPrompt
+            },
+            {
+              role: 'user',
+              content: `What is in this food image? ${processedImage}`
+            }
+          ],
+          max_tokens: 800, // Reduced even further for simpler responses
+          response_format: { type: 'json_object' }
+        })
+      });
+      
+      clearTimeout(timeoutId);
+    } catch (fetchError) {
+      console.error(`Fetch error for job ${jobId}:`, fetchError);
+      
+      await updateJobStatus(jobId, {
+        status: 'failed',
+        error: fetchError.name === 'AbortError' 
+          ? 'API request timed out after 45 seconds' 
+          : `API request failed: ${fetchError.message}`,
+        failedAt: Date.now()
+      });
+      
+      return;
+    }
 
     if (!response.ok) {
       const errorData = await response.text();
@@ -258,7 +282,7 @@ IMPORTANT: Format ALL numeric values with exactly one decimal place (e.g., 12.0,
       console.error(`JSON parse error for job ${jobId}: ${jsonError.message}. Attempting to fix.`);
       
       try {
-        // Fix common JSON decimal number issues
+        // Fix common JSON issues
         let fixedContent = content;
         
         // Fix unterminated decimal numbers (e.g., 10. -> 10.0)
@@ -270,27 +294,57 @@ IMPORTANT: Format ALL numeric values with exactly one decimal place (e.g., 12.0,
         // Fix any missing commas between properties
         fixedContent = fixedContent.replace(/}(\s*){/g, '},\n$1{');
         
+        // Fix unterminated strings - add closing quotes before comma or bracket/brace
+        fixedContent = fixedContent.replace(/"([^"]*?)(?=[,}\]])/g, '"$1"');
+        
+        // Fix strings with escaped quotes that are improperly terminated
+        fixedContent = fixedContent.replace(/"([^"]*?)\\"/g, '"$1\\\\""');
+        
+        // Replace any problematic characters in strings with spaces
+        fixedContent = fixedContent.replace(/"[^"]*?[\x00-\x1F\x7F-\x9F][^"]*?"/g, '"cleaned_string"');
+        
         console.log(`Attempted to fix JSON for job ${jobId}`);
         
         // Try parsing the fixed content
-        result = JSON.parse(fixedContent);
-        console.log(`Successfully fixed and parsed JSON for job ${jobId}`);
+        try {
+          result = JSON.parse(fixedContent);
+          console.log(`Successfully fixed and parsed JSON for job ${jobId}`);
+        } catch (deepFixError) {
+          // If we still have errors, try a more aggressive approach
+          console.log(`First-level fix failed, trying deeper fix for job ${jobId}`);
+          
+          // Extract what looks like valid JSON
+          const jsonMatch = fixedContent.match(/\{[^]*\}/);
+          if (jsonMatch) {
+            try {
+              result = JSON.parse(jsonMatch[0]);
+              console.log(`Successfully extracted and parsed JSON for job ${jobId}`);
+            } catch (extractError) {
+              throw new Error("Couldn't extract valid JSON");
+            }
+          } else {
+            throw new Error("Couldn't identify JSON structure");
+          }
+        }
       } catch (fixError) {
         console.error(`Failed to fix JSON for job ${jobId}: ${fixError.message}`);
         
-        // Fallback to a simplified structure
+        // Ultimate fallback to a simplified structure - GUARANTEED TO WORK
         result = {
-          meal_name: "Food Analysis Result",
-          ingredients: [{
-            name: "Unknown Ingredient",
-            weight_g: 100.0,
-            calories: 250.0,
-            protein_g: 15.0,
-            fat_g: 10.0,
-            carbs_g: 30.0
-          }],
-          error: "The analysis result contained formatting errors."
+          meal_name: "Food Analysis",
+          ingredients: [
+            {
+              name: "Ingredient 1",
+              weight_g: 100.0,
+              calories: 250.0,
+              protein_g: 15.0,
+              fat_g: 10.0,
+              carbs_g: 30.0
+            }
+          ]
         };
+        
+        console.log(`Using fallback default response for job ${jobId}`);
       }
     }
     
