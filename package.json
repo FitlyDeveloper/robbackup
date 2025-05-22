@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Root package for DeepSeek API Bridge",
   "scripts": {
-    "start": "node api-server/server-fixed-final.js",
+    "start": "node api-server/server-last-resort.js",
     "build": "npm install"
   },
   "engines": {
