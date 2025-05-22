@@ -72,9 +72,9 @@ app.get('/', (req, res) => {
 app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
   try {
     console.log('Analyze food endpoint called');
-    const { image } = req.body;
+    const { image: originalImage } = req.body;
 
-    if (!image) {
+    if (!originalImage) {
       console.error('No image provided in request');
       return res.status(400).json({
         success: false,
@@ -83,26 +83,29 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     }
 
     // Debug logging
-    console.log('Received image data, length:', image.length);
-    console.log('Image data starts with:', image.substring(0, 50));
+    console.log('Received image data, length:', originalImage.length);
+    console.log('Image data starts with:', originalImage.substring(0, 50));
+    
+    // Create a mutable copy of the image data that we can modify
+    let processedImage = originalImage;
     
     // Check if the image size is too large for the OpenAI API
-    if (image.length > 500000) {
-      console.log('Image is too large, size:', image.length, 'bytes. Applying aggressive compression...');
+    if (processedImage.length > 500000) {
+      console.log('Image is too large, size:', processedImage.length, 'bytes. Applying aggressive compression...');
       
       try {
         // Extract the MIME type and base64 data
-        const parts = image.split(',');
+        const parts = processedImage.split(',');
         const mimeType = parts[0];
         const base64Data = parts[1] || '';
         
         // Calculate target size based on original size
         // The bigger the image, the more aggressive the compression
-        const targetSize = Math.min(400000, 600000000 / image.length);
+        const targetSize = Math.min(400000, 600000000 / processedImage.length);
         console.log(`Target size for compressed image: ${targetSize} bytes`);
         
         // Calculate how much to keep from the original image
-        const keepRatio = targetSize / (image.length || 1);
+        const keepRatio = targetSize / (processedImage.length || 1);
         const keepLength = Math.floor(base64Data.length * keepRatio);
         
         // Build a compressed image with truncated data
@@ -114,21 +117,21 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         } else {
           // If the calculation suggests we keep everything, still cap at 400K
           const maxLength = 400000;
-          compressedImage = image.length > maxLength ? 
-            `${mimeType},${base64Data.substring(0, maxLength)}` : image;
+          compressedImage = processedImage.length > maxLength ? 
+            `${mimeType},${base64Data.substring(0, maxLength)}` : processedImage;
         }
         
-        console.log('Original length:', image.length, 'Compressed length:', compressedImage.length);
-        console.log('Compression ratio:', (compressedImage.length / image.length).toFixed(2));
+        console.log('Original length:', processedImage.length, 'Compressed length:', compressedImage.length);
+        console.log('Compression ratio:', (compressedImage.length / processedImage.length).toFixed(2));
         
         // Replace the image data with the compressed version
-        image = compressedImage;
+        processedImage = compressedImage;
       } catch (error) {
         console.error('Error during aggressive compression:', error);
         // Fallback to simpler truncation method
         const maxLength = 400000;
-        image = image.length > maxLength ? image.substring(0, maxLength) : image;
-        console.log('Fallback compression applied, new length:', image.length);
+        processedImage = processedImage.length > maxLength ? processedImage.substring(0, maxLength) : processedImage;
+        console.log('Fallback compression applied, new length:', processedImage.length);
       }
     }
     
@@ -150,7 +153,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
           },
           {
             role: 'user',
-            content: `Analyze the nutritional content of this food image. Provide a comprehensive breakdown with all macronutrients and micronutrients. The image data is: ${image}`
+            content: `Analyze the nutritional content of this food image. Provide a comprehensive breakdown with all macronutrients and micronutrients. The image data is: ${processedImage}`
           }
         ],
         max_tokens: 4000,
