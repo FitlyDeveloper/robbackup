@@ -14,8 +14,8 @@ class FoodAnalyzerApi {
   // Legacy endpoint (kept for backward compatibility)
   static const String analyzeEndpoint = '/api/analyze-food';
 
-  // Emergency client-side mode - set to true to bypass server entirely
-  static const bool EMERGENCY_CLIENT_MODE = true;
+  // Emergency client-side mode - set to false to use actual server
+  static const bool EMERGENCY_CLIENT_MODE = false;
 
   // Define vitamin units for API consistency
   static const Map<String, String> vitaminUnits = {
@@ -186,6 +186,33 @@ class FoodAnalyzerApi {
       if (submitResponse.statusCode != 201) {
         print(
             'API job submission error: ${submitResponse.statusCode}, ${submitResponse.body}');
+
+        // Try legacy endpoint as fallback
+        print('Trying legacy endpoint as fallback...');
+        final legacyResponse = await http
+            .post(
+              Uri.parse('$baseUrl$analyzeEndpoint'),
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: jsonEncode({
+                'image': dataUri,
+              }),
+            )
+            .timeout(const Duration(seconds: 30));
+
+        if (legacyResponse.statusCode == 200) {
+          try {
+            final Map<String, dynamic> legacyData =
+                jsonDecode(legacyResponse.body);
+            if (legacyData['success'] == true && legacyData['data'] != null) {
+              return legacyData['data'];
+            }
+          } catch (e) {
+            print('Legacy endpoint JSON decode error: $e');
+          }
+        }
+
         // Return hardcoded data on error
         return _getEmergencyResponse();
       }
@@ -264,6 +291,31 @@ class FoodAnalyzerApi {
           statusData = jsonDecode(statusResponse.body);
         } catch (e) {
           print('JSON decode error in status check: $e');
+          // Try to manually fix JSON if it's a known format
+          final String responseBody = statusResponse.body;
+          if (responseBody.contains('"success":') &&
+              responseBody.contains('"data":')) {
+            try {
+              // Simple fix for unterminated string issues
+              final fixedJson = responseBody
+                  .replaceAll('\\"', '"') // Fix escaped quotes
+                  .replaceAll('"{', '{') // Fix string wrapped objects
+                  .replaceAll('}"', '}')
+                  .replaceAll('\n', ' ') // Remove newlines
+                  .replaceAll('\r', ' '); // Remove carriage returns
+
+              final fixedData = jsonDecode(fixedJson);
+              if (fixedData['success'] == true && fixedData['data'] != null) {
+                print('Successfully repaired JSON response');
+                if (fixedData['status'] == 'completed') {
+                  return fixedData['data'];
+                }
+              }
+            } catch (e2) {
+              print('JSON repair attempt failed: $e2');
+            }
+          }
+
           // Return hardcoded data on JSON error
           return _getEmergencyResponse();
         }
@@ -275,7 +327,29 @@ class FoodAnalyzerApi {
           print('Job completed successfully');
           // Make sure we have data
           if (statusData['data'] != null) {
-            return statusData['data'];
+            // Try to validate the data format
+            try {
+              final Map<String, dynamic> resultData = statusData['data'];
+
+              // Validate basic structure
+              if (!resultData.containsKey('meal_name') ||
+                  !resultData.containsKey('ingredients')) {
+                print('Invalid data format, missing required fields');
+                return _getEmergencyResponse();
+              }
+
+              // If ingredients exists but is empty, use emergency data
+              if (resultData['ingredients'] is List &&
+                  (resultData['ingredients'] as List).isEmpty) {
+                print('Empty ingredients list, using emergency data');
+                return _getEmergencyResponse();
+              }
+
+              return resultData;
+            } catch (e) {
+              print('Data validation failed: $e');
+              return _getEmergencyResponse();
+            }
           } else {
             print('No data in completed job, using emergency response');
             return _getEmergencyResponse();
