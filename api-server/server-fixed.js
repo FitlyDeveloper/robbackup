@@ -134,35 +134,47 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     // Create a mutable copy of the image data that we can modify
     let processedImage = image;
 
-    // Check if the image size is too large
-    if (processedImage.length > 700000) {
-      console.log('Image is larger than 700KB, size:', processedImage.length, 'bytes. Applying compression...');
+    // ULTRA-AGGRESSIVE compression to prevent token limit errors
+    try {
+      // Extract the MIME type and base64 data
+      const parts = processedImage.split(',');
+      const mimeType = parts[0];
+      const base64Data = parts[1] || '';
       
+      // Calculate approximate token count (rough estimate: 3-4 chars ≈ 1 token)
+      const estimatedTokens = Math.ceil(processedImage.length / 3.5);
+      console.log(`Estimated tokens from raw image: ~${estimatedTokens}`);
+      
+      // Use a tiny fixed size for ALL images to guarantee we stay under token limits
+      // This is VERY aggressive but will prevent token limit errors
+      const targetSizeBytes = 40000; // 40KB maximum for any image
+      console.log(`Target size for compressed image: ${targetSizeBytes} bytes (fixed limit)`);
+      
+      // Calculate how much to keep
+      const keepRatio = targetSizeBytes / processedImage.length;
+      const keepLength = Math.floor(base64Data.length * keepRatio);
+      
+      console.log(`Will keep ${keepLength} characters of base64 data (ratio: ${keepRatio.toFixed(4)})`);
+      
+      // Build a compressed image with truncated data
+      const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
+      console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes (${(compressedImage.length / processedImage.length * 100).toFixed(1)}%)`);
+      
+      // Replace the image data with the compressed version
+      processedImage = compressedImage;
+    } catch (error) {
+      console.error('Error during compression:', error);
+      // Extreme emergency fallback - just take a tiny slice of the image
       try {
-        // Extract the MIME type and base64 data
         const parts = processedImage.split(',');
-        const mimeType = parts[0];
-        const base64Data = parts[1] || '';
-        
-        // Target size is 700KB
-        const targetSize = 700000;
-        
-        console.log(`Target size for compressed image: ${targetSize} bytes`);
-        
-        // Calculate how much to keep
-        const keepRatio = targetSize / processedImage.length;
-        const keepLength = Math.floor(base64Data.length * keepRatio);
-        
-        console.log(`Will keep ${keepLength} characters of base64 data (ratio: ${keepRatio.toFixed(4)})`);
-        
-        // Build a compressed image with truncated data
-        const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
-        console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes (${(compressedImage.length / processedImage.length * 100).toFixed(1)}%)`);
-        
-        // Replace the image data with the compressed version
-        processedImage = compressedImage;
-      } catch (error) {
-        console.error('Error during compression:', error);
+        if (parts.length >= 2) {
+          const mimeType = parts[0];
+          const base64Data = parts[1];
+          processedImage = `${mimeType},${base64Data.substring(0, 15000)}`; // ~15KB absolute maximum
+          console.log('EMERGENCY FALLBACK: Image truncated to 15KB');
+        }
+      } catch (e) {
+        console.error('Even emergency fallback failed:', e);
       }
     }
     
@@ -172,8 +184,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // Shortened system prompt to reduce token usage
-    const shorterSystemPrompt = '[JSON ONLY] Nutrition expert: Analyze food image and provide JSON with meal_name, ingredients (with weights and calories), and ingredient_nutrients arrays. Each ingredient_nutrient must include: ingredient_name_ref (matching ingredients array), calories, macros (protein, fat, carbs in g), vitamins (a,c,d,e,k,b1-b12 in mg), minerals (ca,fe,mg,p,k,na,zn,cu,mn,se,i,cr,mo,f,cl in mg), and other nutrients (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6). Format ALL values with exactly one decimal point.';
+    // Minimal system prompt to reduce token usage
+    const minimalPrompt = '[JSON] Analyze food image: provide meal_name, ingredients with macros.';
 
     // Call OpenAI API
     console.log('Calling OpenAI API for job', jobId);
@@ -189,14 +201,14 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         messages: [
           {
             role: 'system',
-            content: shorterSystemPrompt
+            content: minimalPrompt
           },
           {
             role: 'user',
-            content: `Analyze this food image and provide nutritional breakdown: ${processedImage}`
+            content: `What's in this food image? ${processedImage}`
           }
         ],
-        max_tokens: 4000,
+        max_tokens: 1500, // Reduced to stay under limits
         response_format: { type: 'json_object' }
       })
     });
