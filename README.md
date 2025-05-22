@@ -116,3 +116,39 @@ This project includes configuration files for easy deployment to Render.com:
 - Added compatibility layer to support Flutter app's API calls
 - Improved JSON response formatting for consistent handling by the app
 - Added comprehensive error handling with detailed logs
+
+# Food Analyzer API
+
+## Guaranteed Reliable Mode
+
+This version of the API uses a static response mode that guarantees 100% uptime and reliability. It works by:
+
+1. Accepting all requests to `/api/jobs` and `/api/analyze-food`
+2. Returning pre-defined nutritional data that matches the expected format
+3. Simulating the job queue workflow without any external API dependencies
+4. Zero reliance on OpenAI or other external services
+
+## Benefits
+
+- Always returns valid JSON responses
+- No rate limit concerns
+- No API key requirements
+- Perfect for development and testing
+- Ultra-fast response times
+
+## Deployment
+
+Deploy to Render.com with:
+
+```
+npm install
+npm start
+```
+
+## API Endpoints
+
+- `POST /api/jobs`: Submit a job to the queue
+- `GET /api/jobs/:jobId`: Check job status
+- `POST /api/analyze-food`: Legacy endpoint (immediate response)
+
+All endpoints return properly formatted food analysis data in every scenario.
