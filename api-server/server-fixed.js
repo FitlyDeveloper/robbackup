@@ -82,7 +82,59 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
       });
     }
 
-        // Debug logging    console.log('Received image data, length:', image.length);    console.log('Image data starts with:', image.substring(0, 50));    // Check if the image size is too large for the OpenAI API    if (image.length > 500000) {      console.log('Image is too large, size:', image.length, 'bytes. Applying aggressive compression...');            try {        // Extract the MIME type and base64 data        const parts = image.split(',');        const mimeType = parts[0];        const base64Data = parts[1] || '';                // Calculate target size based on original size        // The bigger the image, the more aggressive the compression        const targetSize = Math.min(400000, 600000000 / image.length);        console.log(`Target size for compressed image: ${targetSize} bytes`);                // Calculate how much to keep from the original image        const keepRatio = targetSize / (image.length || 1);        const keepLength = Math.floor(base64Data.length * keepRatio);                // Build a compressed image with truncated data        // This is a very crude but effective way to reduce tokens        let compressedImage;        if (keepLength < base64Data.length) {          compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;          console.log(`Compressed image by truncating to ${keepLength} chars`);        } else {          // If the calculation suggests we keep everything, still cap at 400K          const maxLength = 400000;          compressedImage = image.length > maxLength ?             `${mimeType},${base64Data.substring(0, maxLength)}` : image;        }                console.log('Original length:', image.length, 'Compressed length:', compressedImage.length);        console.log('Compression ratio:', (compressedImage.length / image.length).toFixed(2));                // Replace the image data with the compressed version        image = compressedImage;      } catch (error) {        console.error('Error during aggressive compression:', error);        // Fallback to simpler truncation method        const maxLength = 400000;        image = image.length > maxLength ? image.substring(0, maxLength) : image;        console.log('Fallback compression applied, new length:', image.length);      }    }    // Call OpenAI API    console.log('Calling OpenAI API...');    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Debug logging
+    console.log('Received image data, length:', image.length);
+    console.log('Image data starts with:', image.substring(0, 50));
+    
+    // Check if the image size is too large for the OpenAI API
+    if (image.length > 500000) {
+      console.log('Image is too large, size:', image.length, 'bytes. Applying aggressive compression...');
+      
+      try {
+        // Extract the MIME type and base64 data
+        const parts = image.split(',');
+        const mimeType = parts[0];
+        const base64Data = parts[1] || '';
+        
+        // Calculate target size based on original size
+        // The bigger the image, the more aggressive the compression
+        const targetSize = Math.min(400000, 600000000 / image.length);
+        console.log(`Target size for compressed image: ${targetSize} bytes`);
+        
+        // Calculate how much to keep from the original image
+        const keepRatio = targetSize / (image.length || 1);
+        const keepLength = Math.floor(base64Data.length * keepRatio);
+        
+        // Build a compressed image with truncated data
+        // This is a very crude but effective way to reduce tokens
+        let compressedImage;
+        if (keepLength < base64Data.length) {
+          compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
+          console.log(`Compressed image by truncating to ${keepLength} chars`);
+        } else {
+          // If the calculation suggests we keep everything, still cap at 400K
+          const maxLength = 400000;
+          compressedImage = image.length > maxLength ? 
+            `${mimeType},${base64Data.substring(0, maxLength)}` : image;
+        }
+        
+        console.log('Original length:', image.length, 'Compressed length:', compressedImage.length);
+        console.log('Compression ratio:', (compressedImage.length / image.length).toFixed(2));
+        
+        // Replace the image data with the compressed version
+        image = compressedImage;
+      } catch (error) {
+        console.error('Error during aggressive compression:', error);
+        // Fallback to simpler truncation method
+        const maxLength = 400000;
+        image = image.length > maxLength ? image.substring(0, maxLength) : image;
+        console.log('Fallback compression applied, new length:', image.length);
+      }
+    }
+    
+    // Call OpenAI API
+    console.log('Calling OpenAI API...');
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
