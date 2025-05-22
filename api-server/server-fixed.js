@@ -91,7 +91,7 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
     
     // Check if the image size is too large for the OpenAI API
     if (processedImage.length > 500000) {
-      console.log('Image is too large, size:', processedImage.length, 'bytes. Applying aggressive compression...');
+      console.log('Image is too large, size:', processedImage.length, 'bytes. Applying compression...');
       
       try {
         // Extract the MIME type and base64 data
@@ -99,39 +99,61 @@ app.post('/api/analyze-food', limiter, checkApiKey, async (req, res) => {
         const mimeType = parts[0];
         const base64Data = parts[1] || '';
         
-        // Calculate target size based on original size
-        // The bigger the image, the more aggressive the compression
-        const targetSize = Math.min(400000, 600000000 / processedImage.length);
-        console.log(`Target size for compressed image: ${targetSize} bytes`);
+        // Set reasonable minimum and maximum sizes
+        const MIN_SIZE = 200000; // 200KB minimum
+        const MAX_SIZE = 400000; // 400KB maximum
         
-        // Calculate how much to keep from the original image
-        const keepRatio = targetSize / (processedImage.length || 1);
-        const keepLength = Math.floor(base64Data.length * keepRatio);
-        
-        // Build a compressed image with truncated data
-        // This is a very crude but effective way to reduce tokens
-        let compressedImage;
-        if (keepLength < base64Data.length) {
-          compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
-          console.log(`Compressed image by truncating to ${keepLength} chars`);
+        // Calculate target size - larger images get more compression
+        let targetSize;
+        if (processedImage.length > 1000000) {
+          // Very large images (>1MB) get compressed to 300KB
+          targetSize = 300000;
         } else {
-          // If the calculation suggests we keep everything, still cap at 400K
-          const maxLength = 400000;
-          compressedImage = processedImage.length > maxLength ? 
-            `${mimeType},${base64Data.substring(0, maxLength)}` : processedImage;
+          // Images between 500KB-1MB get compressed to 400KB
+          targetSize = MAX_SIZE;
         }
         
-        console.log('Original length:', processedImage.length, 'Compressed length:', compressedImage.length);
-        console.log('Compression ratio:', (compressedImage.length / processedImage.length).toFixed(2));
+        console.log(`Target size for compressed image: ${targetSize} bytes`);
+        
+        // Calculate how much to keep
+        const keepRatio = targetSize / processedImage.length;
+        const keepLength = Math.max(MIN_SIZE, Math.floor(base64Data.length * keepRatio));
+        
+        console.log(`Will keep ${keepLength} characters of base64 data`);
+        
+        // Build a compressed image with truncated data
+        const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
+        console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes`);
         
         // Replace the image data with the compressed version
         processedImage = compressedImage;
       } catch (error) {
-        console.error('Error during aggressive compression:', error);
-        // Fallback to simpler truncation method
-        const maxLength = 400000;
-        processedImage = processedImage.length > maxLength ? processedImage.substring(0, maxLength) : processedImage;
-        console.log('Fallback compression applied, new length:', processedImage.length);
+        console.error('Error during compression:', error);
+        
+        // Simple fallback approach if the main approach fails
+        const MIN_SIZE = 200000;
+        const MAX_SIZE = 400000;
+        
+        if (processedImage.length > MAX_SIZE) {
+          // Extract parts and truncate to 400KB
+          try {
+            const parts = processedImage.split(',');
+            if (parts.length >= 2) {
+              const mimeType = parts[0];
+              const base64Data = parts[1];
+              processedImage = `${mimeType},${base64Data.substring(0, MAX_SIZE)}`;
+            } else {
+              // Simple truncation if split fails
+              processedImage = processedImage.substring(0, MAX_SIZE);
+            }
+          } catch (e) {
+            // Last resort - simple truncation
+            processedImage = processedImage.substring(0, MAX_SIZE);
+          }
+          console.log('Fallback compression applied, new length:', processedImage.length);
+        } else {
+          console.log('Image already within size limits:', processedImage.length);
+        }
       }
     }
     
