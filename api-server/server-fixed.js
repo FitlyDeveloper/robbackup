@@ -184,8 +184,58 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // Minimal system prompt to reduce token usage
-    const minimalPrompt = '[JSON] Analyze food image: provide meal_name, ingredients with macros.';
+    // Detailed prompt to get comprehensive nutritional data for each ingredient
+    const detailedPrompt = `[JSON ONLY] Analyze the food image and provide:
+
+1. meal_name: The name of the meal
+2. ingredients: Array of all ingredients with estimated weights and calories
+3. ingredient_nutrients: Array of detailed nutrition for EACH ingredient including:
+   - name: Ingredient name
+   - weight_g: Estimated weight in grams
+   - calories: Total calories
+   - macros: protein, fat, carbs in grams
+   - vitamins: {
+     vitamin_a: value in mcg,
+     vitamin_c: value in mg,
+     vitamin_d: value in mcg,
+     vitamin_e: value in mg,
+     vitamin_k: value in mcg,
+     vitamin_b1: value in mg,
+     vitamin_b2: value in mg,
+     vitamin_b3: value in mg,
+     vitamin_b5: value in mg,
+     vitamin_b6: value in mg,
+     vitamin_b7: value in mcg,
+     vitamin_b9: value in mcg,
+     vitamin_b12: value in mcg
+   }
+   - minerals: {
+     calcium: value in mg,
+     chloride: value in mg,
+     chromium: value in mcg,
+     copper: value in mcg,
+     fluoride: value in mg,
+     iodine: value in mcg,
+     iron: value in mg,
+     magnesium: value in mg,
+     manganese: value in mg,
+     molybdenum: value in mcg,
+     phosphorus: value in mg,
+     potassium: value in mg,
+     selenium: value in mcg,
+     sodium: value in mg,
+     zinc: value in mg
+   }
+   - other: {
+     fiber: value in g,
+     cholesterol: value in mg,
+     sugar: value in g,
+     saturated_fats: value in g,
+     omega_3: value in mg,
+     omega_6: value in g
+   }
+
+Use realistic values and format all numbers with one decimal point.`;
 
     // Call OpenAI API
     console.log('Calling OpenAI API for job', jobId);
@@ -201,14 +251,14 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         messages: [
           {
             role: 'system',
-            content: minimalPrompt
+            content: detailedPrompt
           },
           {
             role: 'user',
             content: `What's in this food image? ${processedImage}`
           }
         ],
-        max_tokens: 1500, // Reduced to stay under limits
+        max_tokens: 2000, // Increased slightly for detailed data
         response_format: { type: 'json_object' }
       })
     });
