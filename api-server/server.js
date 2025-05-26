@@ -119,26 +119,75 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI Vision API...'
     });
 
-    // Simplified prompt to avoid truncation issues
-    const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY valid JSON with this exact structure:
+    // Comprehensive prompt to get all nutrition data from OpenAI
+    const systemPrompt = `You are a precise food-image analyzer.  
+- Only identify items you can visually confirm in the image.  
+- Do NOT guess or hallucinate extra foods.  
+- If uncertain of an ingredient, label it "unknown".
+- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
+- DO NOT use IU (International Units) for any nutrient values.
+- Return strictly valid JSON with exactly these keys:
 {
   "ingredients": [
     { 
-      "name": "ingredient_name", 
-      "weight_g": 100, 
-      "calories": 200,
-      "protein_g": 10, 
-      "fat_g": 5, 
-      "carbs_g": 20
+      "name": String, 
+      "weight_g": Number, 
+      "calories": Number,
+      "protein_g": Number, 
+      "fat_g": Number, 
+      "carbs_g": Number,
+      "vitamins": {
+        "vitamin_a": Number, // in mcg (NOT IU)
+        "vitamin_c": Number, // in mg
+        "vitamin_d": Number, // in mcg (NOT IU)
+        "vitamin_e": Number, // in mg (NOT IU)
+        "vitamin_k": Number, // in mcg
+        "vitamin_b1": Number, // in mg
+        "vitamin_b2": Number, // in mg
+        "vitamin_b3": Number, // in mg
+        "vitamin_b5": Number, // in mg
+        "vitamin_b6": Number, // in mg
+        "vitamin_b7": Number, // in mcg
+        "vitamin_b9": Number, // in mcg
+        "vitamin_b12": Number // in mcg
+      },
+      "minerals": {
+        "calcium": Number, // in mg
+        "chloride": Number, // in mg
+        "chromium": Number, // in mcg
+        "copper": Number, // in mcg
+        "fluoride": Number, // in mg
+        "iodine": Number, // in mcg
+        "iron": Number, // in mg
+        "magnesium": Number, // in mg
+        "manganese": Number, // in mg
+        "molybdenum": Number, // in mcg
+        "phosphorus": Number, // in mg
+        "potassium": Number, // in mg
+        "selenium": Number, // in mcg
+        "sodium": Number, // in mg
+        "zinc": Number // in mg
+      },
+      "other": {
+        "fiber": Number, // in g
+        "sugar": Number, // in g
+        "cholesterol": Number, // in mg
+        "saturated_fats": Number, // in g
+        "omega_3": Number, // in mg
+        "omega_6": Number // in g
+      }
     }
-  ]
-}
-
-Rules:
-- Use only mcg, mg, g units (NO IU)
-- Keep response under 500 tokens
-- Only include foods you can clearly see
-- Maximum 3 ingredients to avoid truncation`;
+  ],
+  "total": { 
+    "calories": Number,
+    "protein_g": Number,
+    "fat_g": Number,
+    "carbs_g": Number,
+    "vitamins": { /* same structure as above */ },
+    "minerals": { /* same structure as above */ },
+    "other": { /* same structure as above */ }
+  }
+}`;
 
     let finalResponse = null;
     
@@ -173,7 +222,7 @@ Rules:
                 ]
               }
             ],
-            max_tokens: 500  // Reduced to prevent truncation
+            max_tokens: 1000  // Increased to handle full nutrition data
           })
         });
         
@@ -306,7 +355,7 @@ Rules:
 
 // Process Vision API response into our expected format
 function processVisionResponse(visionResponse) {
-  const { ingredients } = visionResponse;
+  const { ingredients, total } = visionResponse;
   
   // Map ingredients to our format
   const mappedIngredients = ingredients.map(item => ({
@@ -322,46 +371,28 @@ function processVisionResponse(visionResponse) {
   const foodNames = mappedIngredients.map(item => item.name);
   const mealName = foodNames.length > 0 ? foodNames.join(' with ') : "Analyzed Meal";
   
-  // Generate comprehensive nutrition data for each ingredient
+  // Use the actual nutrition data from OpenAI if available, otherwise generate fallback
   const ingredientNutrients = ingredients.map(ingredient => {
     return {
       name: ingredient.name,
       protein: ingredient.protein_g || 0,
       fat: ingredient.fat_g || 0,
       carbs: ingredient.carbs_g || 0,
-      vitamins: generateNutritionData('vitamins', ingredient),
-      minerals: generateNutritionData('minerals', ingredient),
-      other: generateNutritionData('other', ingredient)
+      vitamins: ingredient.vitamins || generateNutritionData('vitamins', ingredient),
+      minerals: ingredient.minerals || generateNutritionData('minerals', ingredient),
+      other: ingredient.other || generateNutritionData('other', ingredient)
     };
   });
   
-  // Calculate totals from all ingredients
-  const totalVitamins = generateNutritionData('vitamins');
-  const totalMinerals = generateNutritionData('minerals');
-  const totalOther = generateNutritionData('other');
-  
-  // Sum up values from all ingredients (basic estimation)
-  ingredientNutrients.forEach(ingredient => {
-    Object.keys(totalVitamins).forEach(vitamin => {
-      totalVitamins[vitamin] += ingredient.vitamins[vitamin] || 0;
-    });
-    Object.keys(totalMinerals).forEach(mineral => {
-      totalMinerals[mineral] += ingredient.minerals[mineral] || 0;
-    });
-    Object.keys(totalOther).forEach(nutrient => {
-      totalOther[nutrient] += ingredient.other[nutrient] || 0;
-    });
-  });
-  
-  // Return structured response with comprehensive nutrition data
+  // Return structured response - use the actual totals from OpenAI if available
   return {
     meal_name: mealName,
     ingredients: mappedIngredients,
     ingredient_nutrients: ingredientNutrients,
     health_score: calculateHealthScore(mappedIngredients),
-    vitamins: totalVitamins,
-    minerals: totalMinerals,
-    other: totalOther
+    vitamins: total?.vitamins || generateNutritionData('vitamins'),
+    minerals: total?.minerals || generateNutritionData('minerals'),
+    other: total?.other || generateNutritionData('other')
   };
 }
 
@@ -657,52 +688,101 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // System prompt for accurate food recognition
-      const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY valid JSON with this exact structure:
+      const systemPrompt = `You are a precise food-image analyzer.  
+- Only identify items you can visually confirm in the image.  
+- Do NOT guess or hallucinate extra foods.  
+- If uncertain of an ingredient, label it "unknown".
+- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
+- DO NOT use IU (International Units) for any nutrient values.
+- Return strictly valid JSON with exactly these keys:
 {
   "ingredients": [
     { 
-      "name": "ingredient_name", 
-      "weight_g": 100, 
-      "calories": 200,
-      "protein_g": 10, 
-      "fat_g": 5, 
-      "carbs_g": 20
+      "name": String, 
+      "weight_g": Number, 
+      "calories": Number,
+      "protein_g": Number, 
+      "fat_g": Number, 
+      "carbs_g": Number,
+      "vitamins": {
+        "vitamin_a": Number, // in mcg (NOT IU)
+        "vitamin_c": Number, // in mg
+        "vitamin_d": Number, // in mcg (NOT IU)
+        "vitamin_e": Number, // in mg (NOT IU)
+        "vitamin_k": Number, // in mcg
+        "vitamin_b1": Number, // in mg
+        "vitamin_b2": Number, // in mg
+        "vitamin_b3": Number, // in mg
+        "vitamin_b5": Number, // in mg
+        "vitamin_b6": Number, // in mg
+        "vitamin_b7": Number, // in mcg
+        "vitamin_b9": Number, // in mcg
+        "vitamin_b12": Number // in mcg
+      },
+      "minerals": {
+        "calcium": Number, // in mg
+        "chloride": Number, // in mg
+        "chromium": Number, // in mcg
+        "copper": Number, // in mcg
+        "fluoride": Number, // in mg
+        "iodine": Number, // in mcg
+        "iron": Number, // in mg
+        "magnesium": Number, // in mg
+        "manganese": Number, // in mg
+        "molybdenum": Number, // in mcg
+        "phosphorus": Number, // in mg
+        "potassium": Number, // in mg
+        "selenium": Number, // in mcg
+        "sodium": Number, // in mg
+        "zinc": Number // in mg
+      },
+      "other": {
+        "fiber": Number, // in g
+        "sugar": Number, // in g
+        "cholesterol": Number, // in mg
+        "saturated_fats": Number, // in g
+        "omega_3": Number, // in mg
+        "omega_6": Number // in g
+      }
     }
-  ]
-}
-
-Rules:
-- Use only mcg, mg, g units (NO IU)
-- Keep response under 500 tokens
-- Only include foods you can clearly see
-- Maximum 3 ingredients to avoid truncation`;
+  ],
+  "total": { 
+    "calories": Number,
+    "protein_g": Number,
+    "fat_g": Number,
+    "carbs_g": Number,
+    "vitamins": { /* same structure as above */ },
+    "minerals": { /* same structure as above */ },
+    "other": { /* same structure as above */ }
+  }
+}`;
 
       // Make OpenAI API call
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
         timeout: 60000, // 60 second timeout for legacy endpoint
-      body: JSON.stringify({
+        body: JSON.stringify({
           model: "gpt-4o", // Using gpt-4o which can handle images
           temperature: 0.0,
           response_format: { type: "json_object" },
-        messages: [
-          {
+          messages: [
+            {
               role: "system",
               content: systemPrompt
-          },
-          {
+            },
+            {
               role: "user",
-            content: [
+              content: [
                 { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
                 { type: "image_url", image_url: { url: processedImage } }
               ]
             }
           ],
-          max_tokens: 500  // Reduced to prevent truncation
+          max_tokens: 1000
         })
       });
       
@@ -763,4 +843,4 @@ Rules:
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server with real OpenAI integration running on port ${PORT}`);
-}); 
+});
