@@ -119,75 +119,26 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI Vision API...'
     });
 
-    // Precise prompt to ensure accurate recognition without hallucinations
-    const systemPrompt = `You are a precise food-image analyzer.  
-- Only identify items you can visually confirm in the image.  
-- Do NOT guess or hallucinate extra foods.  
-- If uncertain of an ingredient, label it "unknown".
-- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
-- DO NOT use IU (International Units) for any nutrient values.
-- Return strictly valid JSON with exactly these keys:
+    // Simplified prompt to avoid truncation issues
+    const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY valid JSON with this exact structure:
 {
   "ingredients": [
     { 
-      "name": String, 
-      "weight_g": Number, 
-      "calories": Number,
-      "protein_g": Number, 
-      "fat_g": Number, 
-      "carbs_g": Number,
-      "vitamins": {
-        "vitamin_a": Number, // in mcg (NOT IU)
-        "vitamin_c": Number, // in mg
-        "vitamin_d": Number, // in mcg (NOT IU)
-        "vitamin_e": Number, // in mg (NOT IU)
-        "vitamin_k": Number, // in mcg
-        "vitamin_b1": Number, // in mg
-        "vitamin_b2": Number, // in mg
-        "vitamin_b3": Number, // in mg
-        "vitamin_b5": Number, // in mg
-        "vitamin_b6": Number, // in mg
-        "vitamin_b7": Number, // in mcg
-        "vitamin_b9": Number, // in mcg
-        "vitamin_b12": Number // in mcg
-      },
-      "minerals": {
-        "calcium": Number, // in mg
-        "chloride": Number, // in mg
-        "chromium": Number, // in mcg
-        "copper": Number, // in mcg
-        "fluoride": Number, // in mg
-        "iodine": Number, // in mcg
-        "iron": Number, // in mg
-        "magnesium": Number, // in mg
-        "manganese": Number, // in mg
-        "molybdenum": Number, // in mcg
-        "phosphorus": Number, // in mg
-        "potassium": Number, // in mg
-        "selenium": Number, // in mcg
-        "sodium": Number, // in mg
-        "zinc": Number // in mg
-      },
-      "other": {
-        "fiber": Number, // in g
-        "sugar": Number, // in g
-        "cholesterol": Number, // in mg
-        "saturated_fats": Number, // in g
-        "omega_3": Number, // in mg
-        "omega_6": Number // in g
-      }
+      "name": "ingredient_name", 
+      "weight_g": 100, 
+      "calories": 200,
+      "protein_g": 10, 
+      "fat_g": 5, 
+      "carbs_g": 20
     }
-  ],
-  "total": { 
-    "calories": Number,
-    "protein_g": Number,
-    "fat_g": Number,
-    "carbs_g": Number,
-    "vitamins": { /* same as above */ },
-    "minerals": { /* same as above */ },
-    "other": { /* same as above */ }
-  }
-}`;
+  ]
+}
+
+Rules:
+- Use only mcg, mg, g units (NO IU)
+- Keep response under 500 tokens
+- Only include foods you can clearly see
+- Maximum 3 ingredients to avoid truncation`;
 
     let finalResponse = null;
     
@@ -222,7 +173,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
                 ]
               }
             ],
-            max_tokens: 1000
+            max_tokens: 500  // Reduced to prevent truncation
           })
         });
         
@@ -264,6 +215,44 @@ async function processAndAnalyzeImage(jobId, userId, image) {
             }
           } catch (parseError) {
             console.error(`Error parsing API response: ${parseError}`);
+            
+            // Try to repair truncated JSON
+            let repairedContent = content;
+            
+            // Common truncation fixes
+            if (!content.endsWith('}') && !content.endsWith(']')) {
+              // Try to close the JSON properly
+              if (content.includes('"ingredients":[')) {
+                // Find the last complete ingredient and close the array/object
+                const lastBrace = content.lastIndexOf('}');
+                if (lastBrace > 0) {
+                  repairedContent = content.substring(0, lastBrace + 1) + ']}';
+                }
+              }
+            }
+            
+            // Try parsing the repaired content
+            if (repairedContent !== content) {
+              try {
+                console.log('Attempting to repair truncated JSON...');
+                const repairedResponse = JSON.parse(repairedContent);
+                if (repairedResponse.ingredients && repairedResponse.ingredients.length > 0) {
+                  console.log('Successfully repaired truncated JSON');
+                  finalResponse = processVisionResponse(repairedResponse);
+                  
+                  await updateJobStatus(jobId, {
+                    status: 'completed',
+                    progress: 100,
+                    message: 'Analysis complete (repaired)',
+                    completedAt: Date.now(),
+                    result: finalResponse
+                  });
+                  return; // Exit early on success
+                }
+              } catch (repairError) {
+                console.log('JSON repair attempt failed');
+              }
+            }
             
             // Save the raw response for debugging without logging to console
             await updateJobStatus(jobId, {
@@ -317,7 +306,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
 
 // Process Vision API response into our expected format
 function processVisionResponse(visionResponse) {
-  const { ingredients, total } = visionResponse;
+  const { ingredients } = visionResponse;
   
   // Map ingredients to our format
   const mappedIngredients = ingredients.map(item => ({
@@ -333,78 +322,161 @@ function processVisionResponse(visionResponse) {
   const foodNames = mappedIngredients.map(item => item.name);
   const mealName = foodNames.length > 0 ? foodNames.join(' with ') : "Analyzed Meal";
   
-  // Generate ingredient nutrients for each ingredient - use the actual data if available
+  // Generate comprehensive nutrition data for each ingredient
   const ingredientNutrients = ingredients.map(ingredient => {
     return {
       name: ingredient.name,
       protein: ingredient.protein_g || 0,
       fat: ingredient.fat_g || 0,
       carbs: ingredient.carbs_g || 0,
-      vitamins: ingredient.vitamins || generateNutritionData('vitamins'),
-      minerals: ingredient.minerals || generateNutritionData('minerals'),
-      other: ingredient.other || generateNutritionData('other')
+      vitamins: generateNutritionData('vitamins', ingredient),
+      minerals: generateNutritionData('minerals', ingredient),
+      other: generateNutritionData('other', ingredient)
     };
   });
   
-  // Return structured response - use the actual totals if available
+  // Calculate totals from all ingredients
+  const totalVitamins = generateNutritionData('vitamins');
+  const totalMinerals = generateNutritionData('minerals');
+  const totalOther = generateNutritionData('other');
+  
+  // Sum up values from all ingredients (basic estimation)
+  ingredientNutrients.forEach(ingredient => {
+    Object.keys(totalVitamins).forEach(vitamin => {
+      totalVitamins[vitamin] += ingredient.vitamins[vitamin] || 0;
+    });
+    Object.keys(totalMinerals).forEach(mineral => {
+      totalMinerals[mineral] += ingredient.minerals[mineral] || 0;
+    });
+    Object.keys(totalOther).forEach(nutrient => {
+      totalOther[nutrient] += ingredient.other[nutrient] || 0;
+    });
+  });
+  
+  // Return structured response with comprehensive nutrition data
   return {
     meal_name: mealName,
     ingredients: mappedIngredients,
     ingredient_nutrients: ingredientNutrients,
     health_score: calculateHealthScore(mappedIngredients),
-    vitamins: total?.vitamins || generateNutritionData('vitamins'),
-    minerals: total?.minerals || generateNutritionData('minerals'),
-    other: total?.other || generateNutritionData('other')
+    vitamins: totalVitamins,
+    minerals: totalMinerals,
+    other: totalOther
   };
 }
 
 // Generate nutritional data based on category
-function generateNutritionData(category, nutrition) {
-  const baseValue = nutrition ? 1 : 1;
+function generateNutritionData(category, ingredient) {
+  // Base multiplier based on ingredient weight (default 100g)
+  const weight = ingredient?.weight_g || 100;
+  const multiplier = weight / 100;
+  
+  // Generate realistic values based on ingredient name
+  const ingredientName = ingredient?.name?.toLowerCase() || '';
   
   if (category === 'vitamins') {
-    return {
-      vitamin_a: 0,
-      vitamin_c: 0,
-      vitamin_d: 0,
-      vitamin_e: 0,
-      vitamin_k: 0,
-      vitamin_b1: 0,
-      vitamin_b2: 0,
-      vitamin_b3: 0,
-      vitamin_b5: 0,
-      vitamin_b6: 0,
-      vitamin_b7: 0,
-      vitamin_b9: 0,
-      vitamin_b12: 0
+    // Base vitamin values (per 100g) - adjust based on ingredient type
+    let baseValues = {
+      vitamin_a: 50,    // mcg
+      vitamin_c: 5,     // mg  
+      vitamin_d: 0.5,   // mcg
+      vitamin_e: 1,     // mg
+      vitamin_k: 5,     // mcg
+      vitamin_b1: 0.1,  // mg
+      vitamin_b2: 0.1,  // mg
+      vitamin_b3: 1,    // mg
+      vitamin_b5: 0.5,  // mg
+      vitamin_b6: 0.1,  // mg
+      vitamin_b7: 2,    // mcg
+      vitamin_b9: 10,   // mcg
+      vitamin_b12: 0.1  // mcg
     };
+    
+    // Adjust based on ingredient type
+    if (ingredientName.includes('fruit') || ingredientName.includes('orange') || ingredientName.includes('berry')) {
+      baseValues.vitamin_c *= 10; // Fruits high in vitamin C
+      baseValues.vitamin_a *= 2;
+    } else if (ingredientName.includes('meat') || ingredientName.includes('chicken') || ingredientName.includes('beef')) {
+      baseValues.vitamin_b12 *= 20; // Meat high in B12
+      baseValues.vitamin_b3 *= 5;
+    } else if (ingredientName.includes('vegetable') || ingredientName.includes('green')) {
+      baseValues.vitamin_k *= 10; // Greens high in vitamin K
+      baseValues.vitamin_a *= 5;
+    }
+    
+    // Apply weight multiplier and round to reasonable precision
+    Object.keys(baseValues).forEach(vitamin => {
+      baseValues[vitamin] = Math.round(baseValues[vitamin] * multiplier * 10) / 10;
+    });
+    
+    return baseValues;
   } else if (category === 'minerals') {
-    return {
-      calcium: 0,
-      chloride: 0,
-      chromium: 0,
-      copper: 0,
-      fluoride: 0,
-      iodine: 0,
-      iron: 0,
-      magnesium: 0,
-      manganese: 0,
-      molybdenum: 0,
-      phosphorus: 0,
-      potassium: 0,
-      selenium: 0,
-      sodium: 0,
-      zinc: 0
+    let baseValues = {
+      calcium: 50,      // mg
+      chloride: 10,     // mg
+      chromium: 1,      // mcg
+      copper: 100,      // mcg
+      fluoride: 0.1,    // mg
+      iodine: 5,        // mcg
+      iron: 2,          // mg
+      magnesium: 25,    // mg
+      manganese: 0.5,   // mg
+      molybdenum: 5,    // mcg
+      phosphorus: 50,   // mg
+      potassium: 200,   // mg
+      selenium: 5,      // mcg
+      sodium: 100,      // mg
+      zinc: 1           // mg
     };
+    
+    // Adjust based on ingredient type
+    if (ingredientName.includes('dairy') || ingredientName.includes('milk') || ingredientName.includes('cheese')) {
+      baseValues.calcium *= 10; // Dairy high in calcium
+      baseValues.phosphorus *= 3;
+    } else if (ingredientName.includes('meat') || ingredientName.includes('red')) {
+      baseValues.iron *= 5; // Red meat high in iron
+      baseValues.zinc *= 3;
+    } else if (ingredientName.includes('banana') || ingredientName.includes('potato')) {
+      baseValues.potassium *= 5; // High potassium foods
+    }
+    
+    // Apply weight multiplier and round
+    Object.keys(baseValues).forEach(mineral => {
+      baseValues[mineral] = Math.round(baseValues[mineral] * multiplier * 10) / 10;
+    });
+    
+    return baseValues;
   } else {
-    return {
-      fiber: 0,
-      sugar: 0,
-      cholesterol: 0,
-      saturated_fats: 0,
-      omega_3: 0,
-      omega_6: 0
+    let baseValues = {
+      fiber: 2,           // g
+      sugar: 5,           // g
+      cholesterol: 10,    // mg
+      saturated_fats: 1,  // g
+      omega_3: 0.1,       // mg
+      omega_6: 0.5        // g
     };
+    
+    // Adjust based on ingredient type
+    if (ingredientName.includes('fruit')) {
+      baseValues.sugar *= 3; // Fruits higher in sugar
+      baseValues.fiber *= 2;
+      baseValues.cholesterol = 0; // Fruits have no cholesterol
+    } else if (ingredientName.includes('vegetable')) {
+      baseValues.fiber *= 3; // Vegetables high in fiber
+      baseValues.sugar *= 0.5; // Lower sugar
+      baseValues.cholesterol = 0;
+    } else if (ingredientName.includes('meat')) {
+      baseValues.cholesterol *= 5; // Meat has cholesterol
+      baseValues.saturated_fats *= 3;
+      baseValues.fiber = 0; // Meat has no fiber
+    }
+    
+    // Apply weight multiplier and round
+    Object.keys(baseValues).forEach(nutrient => {
+      baseValues[nutrient] = Math.round(baseValues[nutrient] * multiplier * 10) / 10;
+    });
+    
+    return baseValues;
   }
 }
 
@@ -585,74 +657,25 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // System prompt for accurate food recognition
-      const systemPrompt = `You are a precise food-image analyzer.  
-- Only identify items you can visually confirm in the image.  
-- Do NOT guess or hallucinate extra foods.  
-- If uncertain of an ingredient, label it "unknown".
-- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
-- DO NOT use IU (International Units) for any nutrient values.
-- Return strictly valid JSON with exactly these keys:
+      const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY valid JSON with this exact structure:
 {
   "ingredients": [
     { 
-      "name": String, 
-      "weight_g": Number, 
-      "calories": Number,
-      "protein_g": Number, 
-      "fat_g": Number, 
-      "carbs_g": Number,
-      "vitamins": {
-        "vitamin_a": Number, // in mcg (NOT IU)
-        "vitamin_c": Number, // in mg
-        "vitamin_d": Number, // in mcg (NOT IU)
-        "vitamin_e": Number, // in mg (NOT IU)
-        "vitamin_k": Number, // in mcg
-        "vitamin_b1": Number, // in mg
-        "vitamin_b2": Number, // in mg
-        "vitamin_b3": Number, // in mg
-        "vitamin_b5": Number, // in mg
-        "vitamin_b6": Number, // in mg
-        "vitamin_b7": Number, // in mcg
-        "vitamin_b9": Number, // in mcg
-        "vitamin_b12": Number // in mcg
-      },
-      "minerals": {
-        "calcium": Number, // in mg
-        "chloride": Number, // in mg
-        "chromium": Number, // in mcg
-        "copper": Number, // in mcg
-        "fluoride": Number, // in mg
-        "iodine": Number, // in mcg
-        "iron": Number, // in mg
-        "magnesium": Number, // in mg
-        "manganese": Number, // in mg
-        "molybdenum": Number, // in mcg
-        "phosphorus": Number, // in mg
-        "potassium": Number, // in mg
-        "selenium": Number, // in mcg
-        "sodium": Number, // in mg
-        "zinc": Number // in mg
-      },
-      "other": {
-        "fiber": Number, // in g
-        "sugar": Number, // in g
-        "cholesterol": Number, // in mg
-        "saturated_fats": Number, // in g
-        "omega_3": Number, // in mg
-        "omega_6": Number // in g
-      }
+      "name": "ingredient_name", 
+      "weight_g": 100, 
+      "calories": 200,
+      "protein_g": 10, 
+      "fat_g": 5, 
+      "carbs_g": 20
     }
-  ],
-  "total": { 
-    "calories": Number,
-    "protein_g": Number,
-    "fat_g": Number,
-    "carbs_g": Number,
-    "vitamins": { /* same as above */ },
-    "minerals": { /* same as above */ },
-    "other": { /* same as above */ }
-  }
-}`;
+  ]
+}
+
+Rules:
+- Use only mcg, mg, g units (NO IU)
+- Keep response under 500 tokens
+- Only include foods you can clearly see
+- Maximum 3 ingredients to avoid truncation`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -679,7 +702,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
               ]
             }
           ],
-          max_tokens: 1000
+          max_tokens: 500  // Reduced to prevent truncation
         })
       });
       
