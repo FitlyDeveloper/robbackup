@@ -3,7 +3,7 @@ services:
     name: food-analyzer-api
     env: node
     buildCommand: bash render-build.sh
-    startCommand: node server.js
+    startCommand: node api-server/100_percent_reliable.js
     envVars:
       - key: PORT
         value: 3000
