@@ -123,7 +123,9 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     const systemPrompt = `You are a precise food-image analyzer.  
 - Only identify items you can visually confirm in the image.  
 - Do NOT guess or hallucinate extra foods.  
-- If uncertain of an ingredient, label it "unknown".  
+- If uncertain of an ingredient, label it "unknown".
+- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
+- DO NOT use IU (International Units) for any nutrient values.
 - Return strictly valid JSON with exactly these keys:
 {
   "ingredients": [
@@ -135,28 +137,44 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       "fat_g": Number, 
       "carbs_g": Number,
       "vitamins": {
-        "vitamin_a": Number,
-        "vitamin_c": Number,
-        "vitamin_d": Number,
-        "vitamin_e": Number,
-        "vitamin_b1": Number,
-        "vitamin_b2": Number
+        "vitamin_a": Number, // in mcg (NOT IU)
+        "vitamin_c": Number, // in mg
+        "vitamin_d": Number, // in mcg (NOT IU)
+        "vitamin_e": Number, // in mg (NOT IU)
+        "vitamin_k": Number, // in mcg
+        "vitamin_b1": Number, // in mg
+        "vitamin_b2": Number, // in mg
+        "vitamin_b3": Number, // in mg
+        "vitamin_b5": Number, // in mg
+        "vitamin_b6": Number, // in mg
+        "vitamin_b7": Number, // in mcg
+        "vitamin_b9": Number, // in mcg
+        "vitamin_b12": Number // in mcg
       },
       "minerals": {
-        "calcium": Number,
-        "iron": Number,
-        "magnesium": Number,
-        "zinc": Number,
-        "potassium": Number,
-        "sodium": Number
+        "calcium": Number, // in mg
+        "chloride": Number, // in mg
+        "chromium": Number, // in mcg
+        "copper": Number, // in mcg
+        "fluoride": Number, // in mg
+        "iodine": Number, // in mcg
+        "iron": Number, // in mg
+        "magnesium": Number, // in mg
+        "manganese": Number, // in mg
+        "molybdenum": Number, // in mcg
+        "phosphorus": Number, // in mg
+        "potassium": Number, // in mg
+        "selenium": Number, // in mcg
+        "sodium": Number, // in mg
+        "zinc": Number // in mg
       },
       "other": {
-        "fiber": Number,
-        "sugar": Number,
-        "cholesterol": Number,
-        "saturated_fats": Number,
-        "omega_3": Number,
-        "omega_6": Number
+        "fiber": Number, // in g
+        "sugar": Number, // in g
+        "cholesterol": Number, // in mg
+        "saturated_fats": Number, // in g
+        "omega_3": Number, // in mg
+        "omega_6": Number // in g
       }
     }
   ],
@@ -346,17 +364,33 @@ function generateNutritionData(category, nutrition) {
       vitamin_c: 0,
       vitamin_d: 0,
       vitamin_e: 0,
+      vitamin_k: 0,
       vitamin_b1: 0,
-      vitamin_b2: 0
+      vitamin_b2: 0,
+      vitamin_b3: 0,
+      vitamin_b5: 0,
+      vitamin_b6: 0,
+      vitamin_b7: 0,
+      vitamin_b9: 0,
+      vitamin_b12: 0
     };
   } else if (category === 'minerals') {
     return {
       calcium: 0,
+      chloride: 0,
+      chromium: 0,
+      copper: 0,
+      fluoride: 0,
+      iodine: 0,
       iron: 0,
       magnesium: 0,
-      zinc: 0,
+      manganese: 0,
+      molybdenum: 0,
+      phosphorus: 0,
       potassium: 0,
-      sodium: 0
+      selenium: 0,
+      sodium: 0,
+      zinc: 0
     };
   } else {
     return {
@@ -550,7 +584,9 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const systemPrompt = `You are a precise food-image analyzer.  
 - Only identify items you can visually confirm in the image.  
 - Do NOT guess or hallucinate extra foods.  
-- If uncertain of an ingredient, label it "unknown".  
+- If uncertain of an ingredient, label it "unknown".
+- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
+- DO NOT use IU (International Units) for any nutrient values.
 - Return strictly valid JSON with exactly these keys:
 {
   "ingredients": [
@@ -562,28 +598,44 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       "fat_g": Number, 
       "carbs_g": Number,
       "vitamins": {
-        "vitamin_a": Number,
-        "vitamin_c": Number,
-        "vitamin_d": Number,
-        "vitamin_e": Number,
-        "vitamin_b1": Number,
-        "vitamin_b2": Number
+        "vitamin_a": Number, // in mcg (NOT IU)
+        "vitamin_c": Number, // in mg
+        "vitamin_d": Number, // in mcg (NOT IU)
+        "vitamin_e": Number, // in mg (NOT IU)
+        "vitamin_k": Number, // in mcg
+        "vitamin_b1": Number, // in mg
+        "vitamin_b2": Number, // in mg
+        "vitamin_b3": Number, // in mg
+        "vitamin_b5": Number, // in mg
+        "vitamin_b6": Number, // in mg
+        "vitamin_b7": Number, // in mcg
+        "vitamin_b9": Number, // in mcg
+        "vitamin_b12": Number // in mcg
       },
       "minerals": {
-        "calcium": Number,
-        "iron": Number,
-        "magnesium": Number,
-        "zinc": Number,
-        "potassium": Number,
-        "sodium": Number
+        "calcium": Number, // in mg
+        "chloride": Number, // in mg
+        "chromium": Number, // in mcg
+        "copper": Number, // in mcg
+        "fluoride": Number, // in mg
+        "iodine": Number, // in mcg
+        "iron": Number, // in mg
+        "magnesium": Number, // in mg
+        "manganese": Number, // in mg
+        "molybdenum": Number, // in mcg
+        "phosphorus": Number, // in mg
+        "potassium": Number, // in mg
+        "selenium": Number, // in mcg
+        "sodium": Number, // in mg
+        "zinc": Number // in mg
       },
       "other": {
-        "fiber": Number,
-        "sugar": Number,
-        "cholesterol": Number,
-        "saturated_fats": Number,
-        "omega_3": Number,
-        "omega_6": Number
+        "fiber": Number, // in g
+        "sugar": Number, // in g
+        "cholesterol": Number, // in mg
+        "saturated_fats": Number, // in g
+        "omega_3": Number, // in mg
+        "omega_6": Number // in g
       }
     }
   ],
