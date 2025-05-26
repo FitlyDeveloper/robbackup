@@ -258,18 +258,13 @@ class FoodAnalyzerApi {
       String jobId) async {
     print('Polling for job completion: $jobId');
 
-    // Maximum time to wait for job completion (45 seconds)
-    const maxWaitTime = Duration(seconds: 45);
-    final startTime = DateTime.now();
+    final Completer<Map<String, dynamic>> completer = Completer();
+    int attempts = 0;
+    const maxAttempts = 30; // 30 attempts = 60 seconds max
 
-    // Initial poll interval (2 seconds)
-    int pollIntervalMs = 2000;
-    const maxPollIntervalMs = 5000; // Maximum 5 seconds between polls
+    Timer.periodic(const Duration(seconds: 2), (timer) async {
+      attempts++;
 
-    // Track last progress to avoid excessive logging
-    int lastReportedProgress = -1;
-
-    while (DateTime.now().difference(startTime) < maxWaitTime) {
       try {
         // Query job status
         final statusResponse = await http.get(
@@ -283,10 +278,16 @@ class FoodAnalyzerApi {
           print(
               'Job status check failed: ${statusResponse.statusCode}, ${statusResponse.body}');
 
-          // Increase backoff on errors
-          await Future.delayed(Duration(milliseconds: pollIntervalMs));
-          pollIntervalMs = min(pollIntervalMs * 2, maxPollIntervalMs);
-          continue;
+          // If we've exceeded max attempts, stop and return emergency response
+          if (attempts >= maxAttempts) {
+            timer.cancel();
+            print(
+                "Stopped polling after $attempts attempts; status check failed");
+            if (!completer.isCompleted) {
+              completer.complete(_getEmergencyResponse());
+            }
+          }
+          return;
         }
 
         final Map<String, dynamic> statusData;
@@ -294,40 +295,27 @@ class FoodAnalyzerApi {
           statusData = jsonDecode(statusResponse.body);
         } catch (e) {
           print('JSON decode error in status check: $e');
-          // Try to manually fix JSON if it's a known format
-          final String responseBody = statusResponse.body;
-          if (responseBody.contains('"success":') &&
-              responseBody.contains('"data":')) {
-            try {
-              // Simple fix for unterminated string issues
-              final fixedJson = responseBody
-                  .replaceAll('\\"', '"') // Fix escaped quotes
-                  .replaceAll('"{', '{') // Fix string wrapped objects
-                  .replaceAll('}"', '}')
-                  .replaceAll('\n', ' ') // Remove newlines
-                  .replaceAll('\r', ' '); // Remove carriage returns
 
-              final fixedData = jsonDecode(fixedJson);
-              if (fixedData['success'] == true && fixedData['data'] != null) {
-                print('Successfully repaired JSON response');
-                if (fixedData['status'] == 'completed') {
-                  return fixedData['data'];
-                }
-              }
-            } catch (e2) {
-              print('JSON repair attempt failed: $e2');
+          // If we've exceeded max attempts, stop and return emergency response
+          if (attempts >= maxAttempts) {
+            timer.cancel();
+            print(
+                "Stopped polling after $attempts attempts; JSON decode error");
+            if (!completer.isCompleted) {
+              completer.complete(_getEmergencyResponse());
             }
           }
-
-          // Return hardcoded data on JSON error
-          return _getEmergencyResponse();
+          return;
         }
 
         final String status = statusData['status'] ?? 'unknown';
 
         // If job is complete, return the data
         if (status == 'completed') {
-          print('Job completed successfully');
+          timer.cancel();
+          print(
+              "Stopped polling after $attempts attempts; final status: completed");
+
           // Make sure we have data
           if (statusData['data'] != null) {
             // Try to validate the data format
@@ -338,82 +326,87 @@ class FoodAnalyzerApi {
               if (!resultData.containsKey('meal_name') ||
                   !resultData.containsKey('ingredients')) {
                 print('Invalid data format, missing required fields');
-                return _getEmergencyResponse();
+                if (!completer.isCompleted) {
+                  completer.complete(_getEmergencyResponse());
+                }
+                return;
               }
 
               // If ingredients exists but is empty, use emergency data
               if (resultData['ingredients'] is List &&
                   (resultData['ingredients'] as List).isEmpty) {
                 print('Empty ingredients list, using emergency data');
-                return _getEmergencyResponse();
+                if (!completer.isCompleted) {
+                  completer.complete(_getEmergencyResponse());
+                }
+                return;
               }
 
-              return resultData;
+              if (!completer.isCompleted) {
+                completer.complete(resultData);
+              }
+              return;
             } catch (e) {
               print('Data validation failed: $e');
-              return _getEmergencyResponse();
+              if (!completer.isCompleted) {
+                completer.complete(_getEmergencyResponse());
+              }
+              return;
             }
           } else {
             print('No data in completed job, using emergency response');
-            return _getEmergencyResponse();
+            if (!completer.isCompleted) {
+              completer.complete(_getEmergencyResponse());
+            }
+            return;
           }
         }
 
         // If job failed, use emergency response
         if (status == 'failed' || status == 'error') {
+          timer.cancel();
+          print(
+              "Stopped polling after $attempts attempts; final status: $status");
           print('Job failed: ${statusData['error'] ?? "Unknown error"}');
 
-          // Check if this is specifically a parsing error
-          if (statusData['error'] ==
-              'Invalid response format from image analysis') {
-            print(
-                'Detected parsing error on server - trying legacy endpoint as fallback');
-
-            // If we have the original image, try the legacy endpoint
-            // For now, we'll use emergency response since we don't have the original image here
-            print('Using emergency response for parsing failure');
-            return _getEmergencyResponse();
+          if (!completer.isCompleted) {
+            completer.complete(_getEmergencyResponse());
           }
-
-          return _getEmergencyResponse();
+          return;
         }
 
         // Job is still processing, report progress if available
         final int progress = statusData['progress'] ?? 0;
         final String message = statusData['message'] ?? 'Processing...';
 
-        // Only log if progress changed or every 5th poll
-        if (progress != lastReportedProgress) {
-          print('Job in progress: $progress% - $message');
-          lastReportedProgress = progress;
-        }
+        print(
+            'Job in progress: $progress% - $message (attempt $attempts/$maxAttempts)');
 
-        // Wait before polling again
-        await Future.delayed(Duration(milliseconds: pollIntervalMs));
-
-        // Gradually increase poll interval for longer-running jobs
-        if (pollIntervalMs < maxPollIntervalMs) {
-          pollIntervalMs = min(pollIntervalMs * 1.5, maxPollIntervalMs).round();
+        // If we've exceeded max attempts, stop and return emergency response
+        if (attempts >= maxAttempts) {
+          timer.cancel();
+          print("Stopped polling after $attempts attempts; analysis timeout");
+          if (!completer.isCompleted) {
+            completer.complete(_getEmergencyResponse());
+          }
+          return;
         }
       } catch (e) {
         print('Error checking job status: $e');
 
-        // After a few retries, just return emergency data
-        if (DateTime.now().difference(startTime) >
-            const Duration(seconds: 20)) {
-          print('Multiple polling errors, using emergency response');
-          return _getEmergencyResponse();
+        // If we've exceeded max attempts, stop and return emergency response
+        if (attempts >= maxAttempts) {
+          timer.cancel();
+          print("Stopped polling after $attempts attempts; polling error");
+          if (!completer.isCompleted) {
+            completer.complete(_getEmergencyResponse());
+          }
+          return;
         }
-
-        // Backoff on error
-        await Future.delayed(Duration(milliseconds: pollIntervalMs));
-        pollIntervalMs = min(pollIntervalMs * 2, maxPollIntervalMs);
       }
-    }
+    });
 
-    // If we get here, we've exceeded the maximum wait time
-    print('Analysis timed out, using emergency response');
-    return _getEmergencyResponse();
+    return completer.future;
   }
 
   // Helper method to validate that nutrients have correct units

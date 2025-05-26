@@ -198,34 +198,34 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
         
         // Use GPT-4o with image analysis capability
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-          },
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
           signal: controller.signal,
-          body: JSON.stringify({
+      body: JSON.stringify({
             model: "gpt-4o", // Using gpt-4o which can handle images
             temperature: 0.0,
             response_format: { type: "json_object" },
-            messages: [
-              {
+        messages: [
+          {
                 role: "system",
                 content: systemPrompt
-              },
-              {
+          },
+          {
                 role: "user",
-                content: [
+            content: [
                   { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
             ],
             max_tokens: 1000  // Increased to handle full nutrition data
-          })
-        });
-        
+      })
+    });
+
         clearTimeout(timeoutId);
         
         if (response.ok) {
@@ -252,6 +252,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
                 completedAt: Date.now(),
                 result: finalResponse
               });
+              
+              console.log(`Job ${jobId} marked completed at ${new Date().toISOString()}`);
             } else {
               // No ingredients found - return error
               console.log('No ingredients detected by API');
@@ -261,6 +263,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
                 completedAt: Date.now(),
                 error: 'No food ingredients could be detected in the image'
               });
+              
+              console.log(`Job ${jobId} marked failed at ${new Date().toISOString()}`);
             }
           } catch (parseError) {
             console.error(`Error parsing API response: ${parseError}`);
@@ -296,6 +300,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
                     completedAt: Date.now(),
                     result: finalResponse
                   });
+                  
+                  console.log(`Job ${jobId} marked completed (repaired JSON) at ${new Date().toISOString()}`);
                   return; // Exit early on success
                 }
               } catch (repairError) {
@@ -311,8 +317,10 @@ async function processAndAnalyzeImage(jobId, userId, image) {
               error: 'Invalid response format from image analysis',
               raw_response_size: content.length // Include size instead of content
             });
+            
+            console.log(`Job ${jobId} marked failed (JSON parse error) at ${new Date().toISOString()}`);
           }
-        } else {
+          } else {
           const errorData = await response.text();
           console.error('OpenAI API error:', response.status, errorData);
           await updateJobStatus(jobId, {
@@ -321,6 +329,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
             completedAt: Date.now(),
             error: `Image analysis failed: ${response.status}`
           });
+          
+          console.log(`Job ${jobId} marked failed (API error ${response.status}) at ${new Date().toISOString()}`);
         }
       } catch (error) {
         console.error(`API call failed for job ${jobId}:`, error);
@@ -330,6 +340,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
           completedAt: Date.now(),
           error: `API call error: ${error.message}`
         });
+        
+        console.log(`Job ${jobId} marked failed (API call error) at ${new Date().toISOString()}`);
       }
     } else {
       console.log('No OpenAI API key available');
@@ -339,6 +351,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         completedAt: Date.now(),
         error: 'API key not configured'
       });
+      
+      console.log(`Job ${jobId} marked failed (no API key) at ${new Date().toISOString()}`);
     }
     
     console.log(`Job ${jobId} processing completed`);
@@ -350,6 +364,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       completedAt: Date.now(),
       error: `Server error: ${error.message}`
     });
+    
+    console.log(`Job ${jobId} marked failed (server error) at ${new Date().toISOString()}`);
   }
 }
 
@@ -477,7 +493,7 @@ function generateNutritionData(category, ingredient) {
     });
     
     return baseValues;
-  } else {
+        } else {
     let baseValues = {
       fiber: 2,           // g
       sugar: 5,           // g
@@ -606,19 +622,19 @@ app.get('/api/jobs/:jobId', async (req, res) => {
     // If job is completed, include results
     if (jobData.status === 'completed') {
       if (jobData.result) {
-      return res.json({
-        success: true,
-          status: jobData.status,
+        return res.json({
+          success: true,
+          status: 'completed',
           progress: 100,
           createdAt: jobData.createdAt,
           completedAt: jobData.completedAt || Date.now(),
           data: jobData.result
         });
       } else {
-      return res.status(500).json({
+        return res.status(500).json({
           success: false,
           status: 'error',
-          error: 'Analysis failed - no results available'
+          error: 'Analysis completed but no results available'
         });
       }
     } else if (jobData.status === 'failed') {
@@ -633,10 +649,10 @@ app.get('/api/jobs/:jobId', async (req, res) => {
       });
     }
 
-    // For non-completed jobs, return status info
+    // For non-completed jobs, return status info (always read from stored status)
     return res.json({
       success: true,
-      status: jobData.status,
+      status: jobData.status || 'pending', // Always use stored status
       progress: jobData.progress || 0,
       createdAt: jobData.createdAt,
       message: jobData.message || null
@@ -819,10 +835,14 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       } else {
         const errorData = await response.text();
         console.error('OpenAI API error:', response.status, errorData);
-        return res.status(500).json({
-          success: false,
+        await updateJobStatus(jobId, {
+          status: 'failed',
+          progress: 100,
+          completedAt: Date.now(),
           error: `Image analysis failed: ${response.status}`
         });
+        
+        console.log(`Job ${jobId} marked failed (API error ${response.status}) at ${new Date().toISOString()}`);
       }
     } catch (error) {
       console.error('OpenAI API error:', error);
