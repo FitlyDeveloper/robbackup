@@ -112,21 +112,28 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     // Update progress
     await updateJobStatus(jobId, {
       progress: 30,
-      message: 'Image processed, calling OpenAI API...'
+      message: 'Image processed, calling OpenAI Vision API...'
     });
 
-    // Detailed prompt to help with analysis
-    const prompt = `
-You are a food analyzer for an app. I will show you a picture of food.
-Please identify what food items you see and list them one per line with very basic nutritional info.
-Each line should follow this format:
-{food name} - {estimated calories} calories - {protein}g protein - {fat}g fat - {carbs}g carbs
-
-Only provide 1-3 main food items. This is a very simple response.
-For each food, just list the name, calories, protein, fat, and carbs on a single line.
-If you can't clearly identify the food, make your best guess based on what you can see.
-Do not include any explanations, intros, or metadata.
-`;
+    // Precise prompt to ensure accurate recognition without hallucinations
+    const systemPrompt = `You are a precise food-image analyzer.  
+- Only identify items you can visually confirm in the image.  
+- Do NOT guess or hallucinate extra foods.  
+- If uncertain of an ingredient, label it "unknown".  
+- Return strictly valid JSON with exactly these keys:
+{
+  "ingredients": [
+    { "name": String, "weight_g": Number, "calories": Number,
+      "protein_g": Number, "fat_g": Number, "carbs_g": Number
+    }
+  ],
+  "total": { 
+    "calories": Number,
+    "protein_g": Number,
+    "fat_g": Number,
+    "carbs_g": Number
+  }
+}`;
 
     let finalResponse = null;
     
@@ -136,7 +143,7 @@ Do not include any explanations, intros, or metadata.
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
         
-        // Use GPT-4o for text response (not JSON)
+        // Use GPT-4 Vision API for image recognition
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -145,19 +152,23 @@ Do not include any explanations, intros, or metadata.
           },
           signal: controller.signal,
           body: JSON.stringify({
-            model: 'gpt-4o',
-            temperature: 0.2,
+            model: "gpt-4-vision-preview",
+            temperature: 0.0,
+            response_format: { type: "json_object" },
             messages: [
               {
-                role: 'system',
-                content: prompt
+                role: "system",
+                content: systemPrompt
               },
               {
-                role: 'user',
-                content: `What food is in this image: ${processedImage}`
+                role: "user",
+                content: [
+                  { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
+                  { type: "image_url", image_url: { url: processedImage } }
+                ]
               }
             ],
-            max_tokens: 200
+            max_tokens: 300
           })
         });
         
@@ -166,18 +177,27 @@ Do not include any explanations, intros, or metadata.
         if (response.ok) {
           const responseData = await response.json();
           const content = responseData.choices[0].message.content.trim();
-          console.log('OpenAI response:', content);
+          console.log('OpenAI Vision API response:', content);
           
-          // If OpenAI can't identify the food, provide some reasonable defaults
-          if (content.includes("can't identify") || content.includes("cannot identify") || content.includes("unable to identify") || content.includes("I'm sorry")) {
-            console.log('OpenAI could not identify the food, using fallback values');
+          try {
+            // Parse JSON response
+            const jsonResponse = JSON.parse(content);
+            console.log('Parsed Vision API response:', JSON.stringify(jsonResponse, null, 2));
+            
+            // Check if we have valid ingredients
+            if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
+              // Convert OpenAI's response to our expected format
+              finalResponse = processVisionResponse(jsonResponse);
+            } else {
+              console.log('No ingredients detected by Vision API, using fallback');
+              finalResponse = getFallbackResponse();
+            }
+          } catch (parseError) {
+            console.error('Error parsing Vision API response:', parseError);
             finalResponse = getFallbackResponse();
-          } else {
-            // Parse text response into a structured format
-            finalResponse = processTextResponse(content);
           }
         } else {
-          console.error('OpenAI API error:', response.status);
+          console.error('OpenAI Vision API error:', response.status);
           finalResponse = getDefaultResponse();
         }
       } catch (error) {
@@ -212,85 +232,26 @@ Do not include any explanations, intros, or metadata.
   }
 }
 
-// Process text response from OpenAI into structured data
-function processTextResponse(text) {
-  console.log('Processing OpenAI text response:', text);
+// Process Vision API response into our expected format
+function processVisionResponse(visionResponse) {
+  const { ingredients, total } = visionResponse;
   
-  // Split by lines and process each food item
-  const lines = text.split('\n').filter(line => line.trim().length > 0);
-  const ingredients = [];
-  let mealName = "Food Analysis";
+  // Map ingredients to our format
+  const mappedIngredients = ingredients.map(item => ({
+    name: item.name,
+    weight_g: item.weight_g || 100.0,
+    calories: item.calories || 0,
+    protein_g: item.protein_g || 0,
+    fat_g: item.fat_g || 0,
+    carbs_g: item.carbs_g || 0
+  }));
   
-  // If no valid food items found, return default
-  if (lines.length === 0) {
-    return getDefaultResponse();
-  }
-  
-  // Combine food names for meal name
-  const foodNames = [];
-  
-  // Process each line to extract food items
-  for (const line of lines) {
-    try {
-      // Extract basic info using regex
-      const basicMatch = line.match(/^(.*?)\s*-\s*(\d+)\s*calories\s*-\s*(\d+\.?\d*)g\s*protein\s*-\s*(\d+\.?\d*)g\s*fat\s*-\s*(\d+\.?\d*)g\s*carbs/i);
-      
-      if (basicMatch) {
-        const [_, name, calories, protein, fat, carbs] = basicMatch;
-        foodNames.push(name.trim());
-        
-        const ingredient = {
-          name: name.trim(),
-          weight_g: 100.0,
-          calories: parseFloat(calories),
-          protein_g: parseFloat(protein),
-          fat_g: parseFloat(fat),
-          carbs_g: parseFloat(carbs)
-        };
-        
-        ingredients.push(ingredient);
-          } else {
-        // Try more flexible regex if the standard format fails
-        const nameMatch = line.match(/^(.*?)(?:\s*-|\s*:)/);
-        const caloriesMatch = line.match(/(\d+)\s*(?:kcal|calories)/i);
-        const proteinMatch = line.match(/(\d+\.?\d*)\s*g\s*protein/i);
-        const fatMatch = line.match(/(\d+\.?\d*)\s*g\s*fat/i);
-        const carbsMatch = line.match(/(\d+\.?\d*)\s*g\s*carbs/i);
-        
-        if (nameMatch) {
-          const name = nameMatch[1].trim();
-          foodNames.push(name);
-          
-          const ingredient = {
-            name: name,
-            weight_g: 100.0,
-            calories: caloriesMatch ? parseFloat(caloriesMatch[1]) : 200,
-            protein_g: proteinMatch ? parseFloat(proteinMatch[1]) : 10,
-            fat_g: fatMatch ? parseFloat(fatMatch[1]) : 8,
-            carbs_g: carbsMatch ? parseFloat(carbsMatch[1]) : 15
-          };
-          
-          ingredients.push(ingredient);
-        }
-      }
-    } catch (e) {
-      console.error('Error processing line:', line, e);
-    }
-  }
-  
-  // Limit to 3 ingredients
-  const finalIngredients = ingredients.slice(0, 3);
-  
-  // Create meal name from food names
-  if (foodNames.length > 0) {
-    mealName = foodNames.join(' with ');
-  }
-  
-  // Calculate total nutrition
-  const totalNutrition = calculateTotalNutrition(finalIngredients);
+  // Create a meal name from the ingredients
+  const foodNames = mappedIngredients.map(item => item.name);
+  const mealName = foodNames.length > 0 ? foodNames.join(' with ') : "Analyzed Meal";
   
   // Generate ingredient nutrients for each ingredient
-  const ingredientNutrients = finalIngredients.map(ingredient => {
+  const ingredientNutrients = mappedIngredients.map(ingredient => {
     return {
       name: ingredient.name,
       protein: ingredient.protein_g,
@@ -305,12 +266,12 @@ function processTextResponse(text) {
   // Return structured response
   return {
     meal_name: mealName,
-    ingredients: finalIngredients,
+    ingredients: mappedIngredients,
     ingredient_nutrients: ingredientNutrients,
-    health_score: calculateHealthScore(finalIngredients),
-    vitamins: generateRandomVitamins(totalNutrition),
-    minerals: generateRandomMinerals(totalNutrition),
-    other: generateRandomOtherNutrients(totalNutrition)
+    health_score: calculateHealthScore(mappedIngredients),
+    vitamins: generateRandomVitamins(total),
+    minerals: generateRandomMinerals(total),
+    other: generateRandomOtherNutrients(total)
   };
 }
 
@@ -813,18 +774,30 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
     
     if (process.env.OPENAI_API_KEY) {
       try {
-        // Use the original image - no compression
+        // Use the original image without compression
         const processedImage = image;
         
-        // Use better prompt for text format
-        const prompt = `
-You are a food analyzer. Identify what food items you see in this image.
-List each food item on a separate line with format: {name} - {calories} calories - {protein}g protein - {fat}g fat - {carbs}g carbs
-Provide only 1-3 main items, no introduction or explanation.
-If you can't clearly identify the food, make your best guess based on what you can see.
-`;
+        // System prompt for accurate food recognition
+        const systemPrompt = `You are a precise food-image analyzer.  
+- Only identify items you can visually confirm in the image.  
+- Do NOT guess or hallucinate extra foods.  
+- If uncertain of an ingredient, label it "unknown".  
+- Return strictly valid JSON with exactly these keys:
+{
+  "ingredients": [
+    { "name": String, "weight_g": Number, "calories": Number,
+      "protein_g": Number, "fat_g": Number, "carbs_g": Number
+    }
+  ],
+  "total": { 
+    "calories": Number,
+    "protein_g": Number,
+    "fat_g": Number,
+    "carbs_g": Number
+  }
+}`;
 
-        // Make OpenAI API call with TEXT format
+        // Make OpenAI Vision API call
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -832,33 +805,46 @@ If you can't clearly identify the food, make your best guess based on what you c
             'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
           },
           body: JSON.stringify({
-            model: 'gpt-4o',
-            temperature: 0.2,
+            model: "gpt-4-vision-preview",
+            temperature: 0.0,
+            response_format: { type: "json_object" },
             messages: [
               {
-                role: 'system',
-                content: prompt
+                role: "system",
+                content: systemPrompt
               },
               {
-                role: 'user',
-                content: `Analyze this food: ${processedImage}`
+                role: "user",
+                content: [
+                  { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
+                  { type: "image_url", image_url: { url: processedImage } }
+                ]
               }
             ],
-            max_tokens: 200
+            max_tokens: 300
           })
         });
         
         if (response.ok) {
           const responseData = await response.json();
           const content = responseData.choices[0].message.content.trim();
-          console.log('Legacy endpoint OpenAI response:', content);
+          console.log('Legacy endpoint Vision API response:', content);
           
-          // Check if OpenAI could identify the food
-          if (content.includes("can't identify") || content.includes("cannot identify") || content.includes("unable to identify") || content.includes("I'm sorry")) {
+          try {
+            // Parse JSON response
+            const jsonResponse = JSON.parse(content);
+            console.log('Parsed Vision API response:', JSON.stringify(jsonResponse, null, 2));
+            
+            // Check if we have valid ingredients
+            if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
+              // Convert OpenAI's response to our expected format
+              result = processVisionResponse(jsonResponse);
+            } else {
+              result = getFallbackResponse();
+            }
+          } catch (parseError) {
+            console.error('Error parsing Vision API response:', parseError);
             result = getFallbackResponse();
-          } else {
-            // Process text response into structured data
-            result = processTextResponse(content);
           }
         }
       } catch (error) {
