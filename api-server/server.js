@@ -127,15 +127,47 @@ async function processAndAnalyzeImage(jobId, userId, image) {
 - Return strictly valid JSON with exactly these keys:
 {
   "ingredients": [
-    { "name": String, "weight_g": Number, "calories": Number,
-      "protein_g": Number, "fat_g": Number, "carbs_g": Number
+    { 
+      "name": String, 
+      "weight_g": Number, 
+      "calories": Number,
+      "protein_g": Number, 
+      "fat_g": Number, 
+      "carbs_g": Number,
+      "vitamins": {
+        "vitamin_a": Number,
+        "vitamin_c": Number,
+        "vitamin_d": Number,
+        "vitamin_e": Number,
+        "vitamin_b1": Number,
+        "vitamin_b2": Number
+      },
+      "minerals": {
+        "calcium": Number,
+        "iron": Number,
+        "magnesium": Number,
+        "zinc": Number,
+        "potassium": Number,
+        "sodium": Number
+      },
+      "other": {
+        "fiber": Number,
+        "sugar": Number,
+        "cholesterol": Number,
+        "saturated_fats": Number,
+        "omega_3": Number,
+        "omega_6": Number
+      }
     }
   ],
   "total": { 
     "calories": Number,
     "protein_g": Number,
     "fat_g": Number,
-    "carbs_g": Number
+    "carbs_g": Number,
+    "vitamins": { /* same as above */ },
+    "minerals": { /* same as above */ },
+    "other": { /* same as above */ }
   }
 }`;
 
@@ -172,7 +204,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
                 ]
               }
             ],
-            max_tokens: 300
+            max_tokens: 1000
           })
         });
         
@@ -279,28 +311,28 @@ function processVisionResponse(visionResponse) {
   const foodNames = mappedIngredients.map(item => item.name);
   const mealName = foodNames.length > 0 ? foodNames.join(' with ') : "Analyzed Meal";
   
-  // Generate ingredient nutrients for each ingredient
-  const ingredientNutrients = mappedIngredients.map(ingredient => {
+  // Generate ingredient nutrients for each ingredient - use the actual data if available
+  const ingredientNutrients = ingredients.map(ingredient => {
     return {
       name: ingredient.name,
-      protein: ingredient.protein_g,
-      fat: ingredient.fat_g,
-      carbs: ingredient.carbs_g,
-      vitamins: generateNutritionData('vitamins'),
-      minerals: generateNutritionData('minerals'),
-      other: generateNutritionData('other')
+      protein: ingredient.protein_g || 0,
+      fat: ingredient.fat_g || 0,
+      carbs: ingredient.carbs_g || 0,
+      vitamins: ingredient.vitamins || generateNutritionData('vitamins'),
+      minerals: ingredient.minerals || generateNutritionData('minerals'),
+      other: ingredient.other || generateNutritionData('other')
     };
   });
   
-  // Return structured response
+  // Return structured response - use the actual totals if available
   return {
     meal_name: mealName,
     ingredients: mappedIngredients,
     ingredient_nutrients: ingredientNutrients,
     health_score: calculateHealthScore(mappedIngredients),
-    vitamins: generateNutritionData('vitamins', total),
-    minerals: generateNutritionData('minerals', total),
-    other: generateNutritionData('other', total)
+    vitamins: total?.vitamins || generateNutritionData('vitamins'),
+    minerals: total?.minerals || generateNutritionData('minerals'),
+    other: total?.other || generateNutritionData('other')
   };
 }
 
@@ -522,15 +554,47 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
 - Return strictly valid JSON with exactly these keys:
 {
   "ingredients": [
-    { "name": String, "weight_g": Number, "calories": Number,
-      "protein_g": Number, "fat_g": Number, "carbs_g": Number
+    { 
+      "name": String, 
+      "weight_g": Number, 
+      "calories": Number,
+      "protein_g": Number, 
+      "fat_g": Number, 
+      "carbs_g": Number,
+      "vitamins": {
+        "vitamin_a": Number,
+        "vitamin_c": Number,
+        "vitamin_d": Number,
+        "vitamin_e": Number,
+        "vitamin_b1": Number,
+        "vitamin_b2": Number
+      },
+      "minerals": {
+        "calcium": Number,
+        "iron": Number,
+        "magnesium": Number,
+        "zinc": Number,
+        "potassium": Number,
+        "sodium": Number
+      },
+      "other": {
+        "fiber": Number,
+        "sugar": Number,
+        "cholesterol": Number,
+        "saturated_fats": Number,
+        "omega_3": Number,
+        "omega_6": Number
+      }
     }
   ],
   "total": { 
     "calories": Number,
     "protein_g": Number,
     "fat_g": Number,
-    "carbs_g": Number
+    "carbs_g": Number,
+    "vitamins": { /* same as above */ },
+    "minerals": { /* same as above */ },
+    "other": { /* same as above */ }
   }
 }`;
 
@@ -558,7 +622,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
               ]
             }
           ],
-          max_tokens: 300
+          max_tokens: 1000
         })
       });
       
