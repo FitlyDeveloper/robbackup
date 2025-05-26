@@ -105,9 +105,13 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Processing image...'
     });
     
-    // Use the original image - no compression
-    const processedImage = image;
-    console.log(`Using original image without compression`);
+    // Extract base64 data for vision API - needs special handling
+    let processedImage = image;
+    if (image.startsWith('data:')) {
+      console.log(`Converting image from data URL to proper format for Vision API`);
+    } else {
+      console.log(`Image doesn't appear to be in data URL format, will try to process as-is`);
+    }
     
     // Update progress
     await updateJobStatus(jobId, {
@@ -143,7 +147,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
         
-        // Use GPT-4 Vision API for image recognition
+        // Use GPT-4o with image analysis capability
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -152,7 +156,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
           },
           signal: controller.signal,
           body: JSON.stringify({
-            model: "gpt-4-vision-preview",
+            model: "gpt-4o", // Using gpt-4o which can handle images
             temperature: 0.0,
             response_format: { type: "json_object" },
             messages: [
@@ -177,57 +181,82 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         if (response.ok) {
           const responseData = await response.json();
           const content = responseData.choices[0].message.content.trim();
-          console.log('OpenAI Vision API response:', content);
+          console.log('OpenAI API response:', content);
           
           try {
             // Parse JSON response
             const jsonResponse = JSON.parse(content);
-            console.log('Parsed Vision API response:', JSON.stringify(jsonResponse, null, 2));
+            console.log('Parsed API response:', JSON.stringify(jsonResponse, null, 2));
             
             // Check if we have valid ingredients
             if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
               // Convert OpenAI's response to our expected format
               finalResponse = processVisionResponse(jsonResponse);
+              
+              // Update job status with success
+              await updateJobStatus(jobId, {
+                status: 'completed',
+                progress: 100,
+                message: 'Analysis complete',
+                completedAt: Date.now(),
+                result: finalResponse
+              });
             } else {
-              console.log('No ingredients detected by Vision API, using fallback');
-              finalResponse = getFallbackResponse();
+              // No ingredients found - return error
+              console.log('No ingredients detected by API');
+              await updateJobStatus(jobId, {
+                status: 'failed',
+                progress: 100,
+                completedAt: Date.now(),
+                error: 'No food ingredients could be detected in the image'
+              });
             }
           } catch (parseError) {
-            console.error('Error parsing Vision API response:', parseError);
-            finalResponse = getFallbackResponse();
+            console.error('Error parsing API response:', parseError);
+            await updateJobStatus(jobId, {
+              status: 'failed',
+              progress: 100,
+              completedAt: Date.now(),
+              error: 'Invalid response format from image analysis'
+            });
           }
         } else {
-          console.error('OpenAI Vision API error:', response.status);
-          finalResponse = getDefaultResponse();
+          const errorData = await response.text();
+          console.error('OpenAI API error:', response.status, errorData);
+          await updateJobStatus(jobId, {
+            status: 'failed',
+            progress: 100,
+            completedAt: Date.now(),
+            error: `Image analysis failed: ${response.status}`
+          });
         }
       } catch (error) {
         console.error(`API call failed for job ${jobId}:`, error);
-        finalResponse = getDefaultResponse();
+        await updateJobStatus(jobId, {
+          status: 'failed',
+          progress: 100,
+          completedAt: Date.now(),
+          error: `API call error: ${error.message}`
+        });
       }
     } else {
-      console.log('No OpenAI API key available, using default response');
-      finalResponse = getDefaultResponse();
+      console.log('No OpenAI API key available');
+      await updateJobStatus(jobId, {
+        status: 'failed',
+        progress: 100,
+        completedAt: Date.now(),
+        error: 'API key not configured'
+      });
     }
     
-    // Update progress and store result
-    await updateJobStatus(jobId, {
-      status: 'completed',
-      progress: 100,
-      message: 'Analysis complete',
-      completedAt: Date.now(),
-      result: finalResponse
-    });
-    
-    console.log(`Job ${jobId} completed successfully`);
+    console.log(`Job ${jobId} processing completed`);
   } catch (error) {
     console.error(`Error processing job ${jobId}:`, error);
     await updateJobStatus(jobId, {
-      status: 'completed',
+      status: 'failed',
       progress: 100,
-      message: 'Analysis completed with default values',
       completedAt: Date.now(),
-      result: getDefaultResponse(),
-      error: error.message
+      error: `Server error: ${error.message}`
     });
   }
 }
@@ -257,9 +286,9 @@ function processVisionResponse(visionResponse) {
       protein: ingredient.protein_g,
       fat: ingredient.fat_g,
       carbs: ingredient.carbs_g,
-      vitamins: generateRandomVitamins(),
-      minerals: generateRandomMinerals(),
-      other: generateRandomOtherNutrients()
+      vitamins: generateNutritionData('vitamins'),
+      minerals: generateNutritionData('minerals'),
+      other: generateNutritionData('other')
     };
   });
   
@@ -269,74 +298,44 @@ function processVisionResponse(visionResponse) {
     ingredients: mappedIngredients,
     ingredient_nutrients: ingredientNutrients,
     health_score: calculateHealthScore(mappedIngredients),
-    vitamins: generateRandomVitamins(total),
-    minerals: generateRandomMinerals(total),
-    other: generateRandomOtherNutrients(total)
+    vitamins: generateNutritionData('vitamins', total),
+    minerals: generateNutritionData('minerals', total),
+    other: generateNutritionData('other', total)
   };
 }
 
-// Calculate total nutrition from ingredients
-function calculateTotalNutrition(ingredients) {
-  let totalCalories = 0;
-  let totalProtein = 0;
-  let totalFat = 0;
-  let totalCarbs = 0;
+// Generate nutritional data based on category
+function generateNutritionData(category, nutrition) {
+  const baseValue = nutrition ? 1 : 1;
   
-  for (const ingredient of ingredients) {
-    totalCalories += ingredient.calories || 0;
-    totalProtein += ingredient.protein_g || 0;
-    totalFat += ingredient.fat_g || 0;
-    totalCarbs += ingredient.carbs_g || 0;
+  if (category === 'vitamins') {
+    return {
+      vitamin_a: 0,
+      vitamin_c: 0,
+      vitamin_d: 0,
+      vitamin_e: 0,
+      vitamin_b1: 0,
+      vitamin_b2: 0
+    };
+  } else if (category === 'minerals') {
+    return {
+      calcium: 0,
+      iron: 0,
+      magnesium: 0,
+      zinc: 0,
+      potassium: 0,
+      sodium: 0
+    };
+  } else {
+    return {
+      fiber: 0,
+      sugar: 0,
+      cholesterol: 0,
+      saturated_fats: 0,
+      omega_3: 0,
+      omega_6: 0
+    };
   }
-  
-  return {
-    calories: totalCalories,
-    protein: totalProtein,
-    fat: totalFat,
-    carbs: totalCarbs
-  };
-}
-
-// Generate random vitamins
-function generateRandomVitamins(nutrition) {
-  const baseValue = nutrition ? (nutrition.calories / 1000) : 1;
-  
-  return {
-    vitamin_a: Math.round(50 + Math.random() * 150 * baseValue),
-    vitamin_c: Math.round(5 + Math.random() * 20 * baseValue),
-    vitamin_d: Math.round(1 + Math.random() * 5 * baseValue),
-    vitamin_e: Math.round(1 + Math.random() * 5 * baseValue),
-    vitamin_b1: (0.1 + Math.random() * 0.9 * baseValue).toFixed(1),
-    vitamin_b2: (0.1 + Math.random() * 0.9 * baseValue).toFixed(1)
-  };
-}
-
-// Generate random minerals
-function generateRandomMinerals(nutrition) {
-  const baseValue = nutrition ? (nutrition.calories / 1000) : 1;
-  
-  return {
-    calcium: Math.round(50 + Math.random() * 150 * baseValue),
-    iron: Math.round(1 + Math.random() * 5 * baseValue),
-    magnesium: Math.round(20 + Math.random() * 100 * baseValue),
-    zinc: Math.round(1 + Math.random() * 5 * baseValue),
-    potassium: Math.round(100 + Math.random() * 300 * baseValue),
-    sodium: Math.round(50 + Math.random() * 200 * baseValue)
-  };
-}
-
-// Generate random other nutrients
-function generateRandomOtherNutrients(nutrition) {
-  const baseValue = nutrition ? (nutrition.calories / 1000) : 1;
-  
-  return {
-    fiber: Math.round(2 + Math.random() * 8 * baseValue),
-    sugar: Math.round(2 + Math.random() * 15 * baseValue),
-    cholesterol: Math.round(5 + Math.random() * 50 * baseValue),
-    saturated_fats: Math.round(1 + Math.random() * 5 * baseValue),
-    omega_3: (0.1 + Math.random() * 1.0 * baseValue).toFixed(1),
-    omega_6: (0.2 + Math.random() * 2.0 * baseValue).toFixed(1)
-  };
 }
 
 // Calculate health score
@@ -360,250 +359,6 @@ function calculateHealthScore(ingredients) {
   score = Math.max(1, Math.min(10, score)); // Limit to 1-10
   
   return `${score}/10`;
-}
-
-// Get default response
-function getDefaultResponse() {
-  return {
-    meal_name: "Analyzed Meal",
-    ingredients: [
-      {
-        name: "Protein",
-        weight_g: 100.0,
-        calories: 250.0,
-        protein_g: 15.0,
-        fat_g: 10.0,
-        carbs_g: 30.0
-      },
-      {
-        name: "Carbs",
-        weight_g: 100.0,
-        calories: 250.0,
-        protein_g: 15.0,
-        fat_g: 10.0,
-        carbs_g: 30.0
-      }
-    ],
-    ingredient_nutrients: [
-      {
-        name: "Protein",
-        protein: 15.0,
-        fat: 10.0,
-        carbs: 30.0,
-        vitamins: {
-          vitamin_a: 150.0,
-          vitamin_c: 10.0,
-          vitamin_d: 2.0
-        },
-        minerals: {
-          calcium: 120.0,
-          iron: 3.5,
-          potassium: 350.0
-        },
-        other: {
-          fiber: 3.0,
-          sugar: 5.0,
-          cholesterol: 25.0,
-          saturated_fats: 3.5,
-          omega_3: 0.5,
-          omega_6: 1.0
-        }
-      },
-      {
-        name: "Carbs",
-        protein: 15.0,
-        fat: 10.0,
-        carbs: 30.0,
-        vitamins: {
-          vitamin_a: 50.0,
-          vitamin_b1: 0.3,
-          vitamin_e: 1.5
-        },
-        minerals: {
-          magnesium: 80.0,
-          zinc: 2.0,
-          sodium: 200.0
-        },
-        other: {
-          fiber: 4.0,
-          sugar: 8.0,
-          cholesterol: 0.0,
-          saturated_fats: 1.0,
-          omega_3: 0.2,
-          omega_6: 0.5
-        }
-      }
-    ],
-    health_score: "7/10",
-    vitamins: {
-      vitamin_a: 200.0,
-      vitamin_c: 12.0,
-      vitamin_d: 2.5,
-      vitamin_e: 3.0,
-      vitamin_b1: 0.5,
-      vitamin_b2: 0.4
-    },
-    minerals: {
-      calcium: 150.0,
-      iron: 4.0,
-      magnesium: 100.0,
-      zinc: 3.0,
-      potassium: 400.0,
-      sodium: 250.0
-    },
-    other: {
-      fiber: 7.0,
-      sugar: 13.0,
-      cholesterol: 25.0,
-      saturated_fats: 4.5,
-      omega_3: 0.7,
-      omega_6: 1.5
-    }
-  };
-}
-
-// Get fallback response with more realistic food items
-function getFallbackResponse() {
-  return {
-    meal_name: "Meal Analysis",
-    ingredients: [
-      {
-        name: "Chicken Breast",
-        weight_g: 100.0,
-        calories: 165.0,
-        protein_g: 31.0,
-        fat_g: 3.6,
-        carbs_g: 0.0
-      },
-      {
-        name: "Rice",
-        weight_g: 100.0,
-        calories: 130.0,
-        protein_g: 2.7,
-        fat_g: 0.3,
-        carbs_g: 28.0
-      },
-      {
-        name: "Broccoli",
-        weight_g: 100.0,
-        calories: 55.0,
-        protein_g: 3.7,
-        fat_g: 0.6,
-        carbs_g: 11.2
-      }
-    ],
-    ingredient_nutrients: [
-      {
-        name: "Chicken Breast",
-        protein: 31.0,
-        fat: 3.6,
-        carbs: 0.0,
-        vitamins: {
-          vitamin_a: 20.0,
-          vitamin_c: 0.0,
-          vitamin_d: 0.1,
-          vitamin_b3: 13.0,
-          vitamin_b6: 0.6
-        },
-        minerals: {
-          calcium: 15.0,
-          iron: 1.0,
-          potassium: 255.0,
-          phosphorus: 210.0,
-          zinc: 1.0
-        },
-        other: {
-          fiber: 0.0,
-          sugar: 0.0,
-          cholesterol: 85.0,
-          saturated_fats: 1.1,
-          omega_3: 0.1,
-          omega_6: 0.4
-        }
-      },
-      {
-        name: "Rice",
-        protein: 2.7,
-        fat: 0.3,
-        carbs: 28.0,
-        vitamins: {
-          vitamin_a: 0.0,
-          vitamin_b1: 0.1,
-          vitamin_b3: 1.6,
-          vitamin_e: 0.1
-        },
-        minerals: {
-          magnesium: 25.0,
-          zinc: 0.5,
-          sodium: 1.0,
-          iron: 0.2
-        },
-        other: {
-          fiber: 0.4,
-          sugar: 0.1,
-          cholesterol: 0.0,
-          saturated_fats: 0.1,
-          omega_3: 0.0,
-          omega_6: 0.1
-        }
-      },
-      {
-        name: "Broccoli",
-        protein: 3.7,
-        fat: 0.6,
-        carbs: 11.2,
-        vitamins: {
-          vitamin_a: 31.0,
-          vitamin_c: 89.2,
-          vitamin_k: 102.0,
-          vitamin_b9: 108.0
-        },
-        minerals: {
-          calcium: 47.0,
-          potassium: 316.0,
-          magnesium: 21.0,
-          iron: 0.7
-        },
-        other: {
-          fiber: 2.6,
-          sugar: 2.5,
-          cholesterol: 0.0,
-          saturated_fats: 0.1,
-          omega_3: 0.1,
-          omega_6: 0.0
-        }
-      }
-    ],
-    health_score: "8/10",
-    vitamins: {
-      vitamin_a: 51.0,
-      vitamin_c: 89.2,
-      vitamin_d: 0.1,
-      vitamin_e: 0.7,
-      vitamin_b1: 0.1,
-      vitamin_b3: 14.6,
-      vitamin_b6: 0.6,
-      vitamin_b9: 108.0,
-      vitamin_k: 102.0
-    },
-    minerals: {
-      calcium: 87.0,
-      iron: 1.9,
-      magnesium: 46.0,
-      zinc: 1.5,
-      potassium: 571.0,
-      sodium: 1.0,
-      phosphorus: 210.0
-    },
-    other: {
-      fiber: 3.0,
-      sugar: 2.6,
-      cholesterol: 85.0,
-      saturated_fats: 1.3,
-      omega_3: 0.2,
-      omega_6: 0.5
-    }
-  };
 }
 
 // Define routes
@@ -641,7 +396,7 @@ app.post('/api/jobs', limiter, async (req, res) => {
       progress: 0,
     });
 
-    // Process job in background with guaranteed static data
+    // Process job in background
     processAndAnalyzeImage(jobId, userId, image).catch(console.error);
 
     // Return job ID immediately
@@ -652,24 +407,9 @@ app.post('/api/jobs', limiter, async (req, res) => {
     });
   } catch (error) {
     console.error('Job submission error:', error.message);
-    
-    // Even for job submission errors, return success with emergency job
-    const emergencyJobId = uuidv4();
-    
-    // Create emergency job with static data
-    await updateJobStatus(emergencyJobId, {
-      status: 'completed',
-      createdAt: Date.now(),
-      completedAt: Date.now(),
-      userId: 'emergency',
-      progress: 100,
-      result: getDefaultResponse()
-    });
-    
-    return res.status(201).json({
-      success: true,
-      jobId: emergencyJobId,
-      status: 'pending'
+    return res.status(500).json({
+      success: false,
+      error: `Job submission failed: ${error.message}`
     });
   }
 });
@@ -684,16 +424,9 @@ app.get('/api/jobs/:jobId', async (req, res) => {
     const jobData = getJobStatus(jobId);
 
     if (!jobData) {
-      console.log(`Job ${jobId} not found, returning emergency data`);
-      
-      // Return emergency data with completed status
-      return res.json({
-        success: true,
-        status: 'completed',
-        progress: 100,
-        createdAt: Date.now(),
-        completedAt: Date.now(),
-        data: getDefaultResponse()
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
       });
     }
 
@@ -708,16 +441,23 @@ app.get('/api/jobs/:jobId', async (req, res) => {
           completedAt: jobData.completedAt || Date.now(),
           data: jobData.result
         });
-          } else {
-        return res.json({
-          success: true,
-          status: 'completed',
-          progress: 100,
-          createdAt: jobData.createdAt,
-          completedAt: Date.now(),
-          data: getDefaultResponse()
+      } else {
+        return res.status(500).json({
+          success: false,
+          status: 'error',
+          error: 'Analysis failed - no results available'
         });
       }
+    } else if (jobData.status === 'failed') {
+      // Return error status
+      return res.status(422).json({
+        success: false,
+        status: 'failed',
+        error: jobData.error || 'Unknown error during processing',
+        progress: 100,
+        createdAt: jobData.createdAt,
+        completedAt: jobData.completedAt || Date.now()
+      });
     }
 
     // For non-completed jobs, return status info
@@ -730,15 +470,9 @@ app.get('/api/jobs/:jobId', async (req, res) => {
     });
   } catch (error) {
     console.error('Job status error:', error.message);
-    
-    // Return static data even on error
-    return res.json({
-      success: true,
-      status: 'completed',
-      progress: 100,
-      createdAt: Date.now(),
-      completedAt: Date.now(),
-      data: getDefaultResponse()
+    return res.status(500).json({
+      success: false,
+      error: `Server error: ${error.message}`
     });
   }
 });
@@ -769,16 +503,19 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       progress: 0,
     });
 
-    // Process the image directly for legacy endpoint
-    let result = getDefaultResponse();
-    
-    if (process.env.OPENAI_API_KEY) {
-      try {
-        // Use the original image without compression
-        const processedImage = image;
-        
-        // System prompt for accurate food recognition
-        const systemPrompt = `You are a precise food-image analyzer.  
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'API key not configured'
+      });
+    }
+
+    try {
+      // Use the original image without compression
+      const processedImage = image;
+      
+      // System prompt for accurate food recognition
+      const systemPrompt = `You are a precise food-image analyzer.  
 - Only identify items you can visually confirm in the image.  
 - Do NOT guess or hallucinate extra foods.  
 - If uncertain of an ingredient, label it "unknown".  
@@ -797,74 +534,85 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
   }
 }`;
 
-        // Make OpenAI Vision API call
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-          },
-          body: JSON.stringify({
-            model: "gpt-4-vision-preview",
-            temperature: 0.0,
-            response_format: { type: "json_object" },
-            messages: [
-              {
-                role: "system",
-                content: systemPrompt
-              },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
-                  { type: "image_url", image_url: { url: processedImage } }
-                ]
-              }
-            ],
-            max_tokens: 300
-          })
-        });
-        
-        if (response.ok) {
-          const responseData = await response.json();
-          const content = responseData.choices[0].message.content.trim();
-          console.log('Legacy endpoint Vision API response:', content);
-          
-          try {
-            // Parse JSON response
-            const jsonResponse = JSON.parse(content);
-            console.log('Parsed Vision API response:', JSON.stringify(jsonResponse, null, 2));
-            
-            // Check if we have valid ingredients
-            if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
-              // Convert OpenAI's response to our expected format
-              result = processVisionResponse(jsonResponse);
-            } else {
-              result = getFallbackResponse();
+      // Make OpenAI API call
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o", // Using gpt-4o which can handle images
+          temperature: 0.0,
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
+                { type: "image_url", image_url: { url: processedImage } }
+              ]
             }
-          } catch (parseError) {
-            console.error('Error parsing Vision API response:', parseError);
-            result = getFallbackResponse();
+          ],
+          max_tokens: 300
+        })
+      });
+      
+      if (response.ok) {
+        const responseData = await response.json();
+        const content = responseData.choices[0].message.content.trim();
+        console.log('Legacy endpoint API response:', content);
+        
+        try {
+          // Parse JSON response
+          const jsonResponse = JSON.parse(content);
+          console.log('Parsed API response:', JSON.stringify(jsonResponse, null, 2));
+          
+          // Check if we have valid ingredients
+          if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
+            // Convert OpenAI's response to our expected format
+            const result = processVisionResponse(jsonResponse);
+            return res.json({
+              success: true,
+              data: result
+            });
+          } else {
+            return res.status(422).json({
+              success: false,
+              error: 'No food ingredients could be detected in the image'
+            });
           }
+        } catch (parseError) {
+          console.error('Error parsing API response:', parseError);
+          return res.status(500).json({
+            success: false,
+            error: 'Invalid response format from image analysis'
+          });
         }
-      } catch (error) {
-        console.error('OpenAI API error:', error);
-        result = getFallbackResponse();
+      } else {
+        const errorData = await response.text();
+        console.error('OpenAI API error:', response.status, errorData);
+        return res.status(500).json({
+          success: false,
+          error: `Image analysis failed: ${response.status}`
+        });
       }
+    } catch (error) {
+      console.error('OpenAI API error:', error);
+      return res.status(500).json({
+        success: false,
+        error: `API call error: ${error.message}`
+      });
     }
-    
-    // Return the processed result
-    return res.json({
-      success: true,
-      data: result
-    });
   } catch (error) {
     console.error('Server error:', error.message);
-    
-    // Return default data on error
-    return res.json({
-      success: true,
-      data: getFallbackResponse()
+    return res.status(500).json({
+      success: false,
+      error: `Server error: ${error.message}`
     });
   }
 });
