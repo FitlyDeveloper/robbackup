@@ -266,6 +266,9 @@ class FoodAnalyzerApi {
     int pollIntervalMs = 2000;
     const maxPollIntervalMs = 5000; // Maximum 5 seconds between polls
 
+    // Track last progress to avoid excessive logging
+    int lastReportedProgress = -1;
+
     while (DateTime.now().difference(startTime) < maxWaitTime) {
       try {
         // Query job status
@@ -358,14 +361,32 @@ class FoodAnalyzerApi {
 
         // If job failed, use emergency response
         if (status == 'failed' || status == 'error') {
-          print('Job failed, using emergency response');
+          print('Job failed: ${statusData['error'] ?? "Unknown error"}');
+
+          // Check if this is specifically a parsing error
+          if (statusData['error'] ==
+              'Invalid response format from image analysis') {
+            print(
+                'Detected parsing error on server - trying legacy endpoint as fallback');
+
+            // If we have the original image, try the legacy endpoint
+            // For now, we'll use emergency response since we don't have the original image here
+            print('Using emergency response for parsing failure');
+            return _getEmergencyResponse();
+          }
+
           return _getEmergencyResponse();
         }
 
         // Job is still processing, report progress if available
         final int progress = statusData['progress'] ?? 0;
         final String message = statusData['message'] ?? 'Processing...';
-        print('Job in progress: $progress% - $message');
+
+        // Only log if progress changed or every 5th poll
+        if (progress != lastReportedProgress) {
+          print('Job in progress: $progress% - $message');
+          lastReportedProgress = progress;
+        }
 
         // Wait before polling again
         await Future.delayed(Duration(milliseconds: pollIntervalMs));

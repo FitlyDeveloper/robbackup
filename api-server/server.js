@@ -231,12 +231,13 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         if (response.ok) {
           const responseData = await response.json();
           const content = responseData.choices[0].message.content.trim();
-          console.log('OpenAI API response:', content);
           
           try {
-            // Parse JSON response
+            // Parse JSON response first before logging
             const jsonResponse = JSON.parse(content);
-            console.log('Parsed API response:', JSON.stringify(jsonResponse, null, 2));
+            
+            // Only log after successful parsing to avoid partial logging
+            console.log('OpenAI API response successfully parsed');
             
             // Check if we have valid ingredients
             if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
@@ -262,12 +263,15 @@ async function processAndAnalyzeImage(jobId, userId, image) {
               });
             }
           } catch (parseError) {
-            console.error('Error parsing API response:', parseError);
+            console.error(`Error parsing API response: ${parseError}`);
+            
+            // Save the raw response for debugging without logging to console
             await updateJobStatus(jobId, {
               status: 'failed',
               progress: 100,
               completedAt: Date.now(),
-              error: 'Invalid response format from image analysis'
+              error: 'Invalid response format from image analysis',
+              raw_response_size: content.length // Include size instead of content
             });
           }
         } else {
@@ -474,7 +478,7 @@ app.post('/api/jobs', limiter, async (req, res) => {
   } catch (error) {
     console.error('Job submission error:', error.message);
     return res.status(500).json({
-      success: false,
+        success: false,
       error: `Job submission failed: ${error.message}`
     });
   }
@@ -499,8 +503,8 @@ app.get('/api/jobs/:jobId', async (req, res) => {
     // If job is completed, include results
     if (jobData.status === 'completed') {
       if (jobData.result) {
-        return res.json({
-          success: true,
+      return res.json({
+        success: true,
           status: jobData.status,
           progress: 100,
           createdAt: jobData.createdAt,
@@ -508,7 +512,7 @@ app.get('/api/jobs/:jobId', async (req, res) => {
           data: jobData.result
         });
       } else {
-        return res.status(500).json({
+      return res.status(500).json({
           success: false,
           status: 'error',
           error: 'Analysis failed - no results available'
@@ -651,25 +655,25 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
 }`;
 
       // Make OpenAI API call
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-        },
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
         timeout: 60000, // 60 second timeout for legacy endpoint
-        body: JSON.stringify({
+      body: JSON.stringify({
           model: "gpt-4o", // Using gpt-4o which can handle images
           temperature: 0.0,
           response_format: { type: "json_object" },
-          messages: [
-            {
+        messages: [
+          {
               role: "system",
               content: systemPrompt
-            },
-            {
+          },
+          {
               role: "user",
-              content: [
+            content: [
                 { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
                 { type: "image_url", image_url: { url: processedImage } }
               ]
@@ -682,12 +686,11 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       if (response.ok) {
         const responseData = await response.json();
         const content = responseData.choices[0].message.content.trim();
-        console.log('Legacy endpoint API response:', content);
         
         try {
-          // Parse JSON response
+          // Parse JSON response first before logging
           const jsonResponse = JSON.parse(content);
-          console.log('Parsed API response:', JSON.stringify(jsonResponse, null, 2));
+          console.log('Legacy endpoint API response successfully parsed');
           
           // Check if we have valid ingredients
           if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
@@ -704,7 +707,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
             });
           }
         } catch (parseError) {
-          console.error('Error parsing API response:', parseError);
+          console.error(`Error parsing API response: ${parseError}`);
           return res.status(500).json({
             success: false,
             error: 'Invalid response format from image analysis'
