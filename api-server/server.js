@@ -105,39 +105,9 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Processing image...'
     });
     
-    // Create a mutable copy of the image data that we can modify
-    let processedImage = image;
-
-    // Smarter compression to preserve image quality
-    try {
-      // Extract the MIME type and base64 data
-      const parts = processedImage.split(',');
-      const mimeType = parts[0];
-      const base64Data = parts[1] || '';
-      
-      // Use a more reasonable compression target - 150KB
-      const targetSizeBytes = 150000;
-      
-      if (base64Data.length > targetSizeBytes) {
-        // Calculate compression ratio to maintain reasonable quality
-        const ratio = targetSizeBytes / base64Data.length;
-        // Keep a higher percentage of the original data
-        const keepLength = Math.floor(base64Data.length * Math.max(ratio, 0.5));
-        
-        // Build a compressed image with better quality
-        const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
-        console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes (${(compressedImage.length / processedImage.length * 100).toFixed(1)}%)`);
-        
-        // Replace the image data with the compressed version
-        processedImage = compressedImage;
-      } else {
-        console.log(`Image already under size limit (${base64Data.length} bytes), no compression needed`);
-      }
-    } catch (error) {
-      console.error('Error during compression:', error);
-      // Don't use dummy data, just continue with original image
-      console.log('Continuing with original image');
-    }
+    // Use the original image - no compression
+    const processedImage = image;
+    console.log(`Using original image without compression`);
     
     // Update progress
     await updateJobStatus(jobId, {
@@ -167,30 +137,30 @@ Do not include any explanations, intros, or metadata.
         const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
         
         // Use GPT-4o for text response (not JSON)
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-          signal: controller.signal,
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        temperature: 0.2,
-        messages: [
-          {
-            role: 'system',
-                content: prompt
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
           },
-          {
-            role: 'user',
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            temperature: 0.2,
+            messages: [
+              {
+                role: 'system',
+                content: prompt
+              },
+              {
+                role: 'user',
                 content: `What food is in this image: ${processedImage}`
               }
             ],
             max_tokens: 200
-      })
-    });
-
+          })
+        });
+        
         clearTimeout(timeoutId);
         
         if (response.ok) {
@@ -199,7 +169,7 @@ Do not include any explanations, intros, or metadata.
           console.log('OpenAI response:', content);
           
           // If OpenAI can't identify the food, provide some reasonable defaults
-          if (content.includes("can't identify") || content.includes("cannot identify") || content.includes("unable to identify")) {
+          if (content.includes("can't identify") || content.includes("cannot identify") || content.includes("unable to identify") || content.includes("I'm sorry")) {
             console.log('OpenAI could not identify the food, using fallback values');
             finalResponse = getFallbackResponse();
           } else {
@@ -843,23 +813,8 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
     
     if (process.env.OPENAI_API_KEY) {
       try {
-        // Extract and compress the image - use more reasonable compression
-        let processedImage = image;
-        const parts = processedImage.split(',');
-        const mimeType = parts[0];
-        const base64Data = parts[1] || '';
-        
-        // Use better compression ratio - 150KB
-        const targetSizeBytes = 150000;
-        
-        // Only compress if needed
-        let compressedImage = processedImage;
-        if (base64Data.length > targetSizeBytes) {
-          const ratio = targetSizeBytes / base64Data.length;
-          const keepLength = Math.floor(base64Data.length * Math.max(ratio, 0.5));
-          compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
-          console.log(`Compressed legacy image from ${processedImage.length} to ${compressedImage.length} bytes`);
-        }
+        // Use the original image - no compression
+        const processedImage = image;
         
         // Use better prompt for text format
         const prompt = `
@@ -886,7 +841,7 @@ If you can't clearly identify the food, make your best guess based on what you c
               },
               {
                 role: 'user',
-                content: `Analyze this food: ${compressedImage}`
+                content: `Analyze this food: ${processedImage}`
               }
             ],
             max_tokens: 200
@@ -899,7 +854,7 @@ If you can't clearly identify the food, make your best guess based on what you c
           console.log('Legacy endpoint OpenAI response:', content);
           
           // Check if OpenAI could identify the food
-          if (content.includes("can't identify") || content.includes("cannot identify") || content.includes("unable to identify")) {
+          if (content.includes("can't identify") || content.includes("cannot identify") || content.includes("unable to identify") || content.includes("I'm sorry")) {
             result = getFallbackResponse();
           } else {
             // Process text response into structured data
