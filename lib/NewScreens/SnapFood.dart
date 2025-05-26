@@ -201,50 +201,57 @@ class _SnapFoodState extends State<SnapFood> {
     });
 
     try {
-      Uint8List imageBytes;
+      // Read image as bytes
+      Uint8List? imageBytes;
 
-      // Get bytes from the image - do this once and reuse
-      if (kIsWeb && _webImageBytes != null) {
-        // For web, use the bytes we already have
-        imageBytes = _webImageBytes!;
+      if (kIsWeb) {
+        // For web platform
+        imageBytes = _webImageBytes ?? await image.readAsBytes();
       } else {
-        // Read as bytes from the file
+        // For mobile platforms
         imageBytes = await image.readAsBytes();
       }
 
-      // Get image size in MB for logging
-      final double originalSizeMB = imageBytes.length / (1024 * 1024);
+      if (imageBytes == null || imageBytes.isEmpty) {
+        throw Exception('Could not read image data');
+      }
 
-      // Process image - compressImage now handles the target size of 0.7MB automatically
-      Uint8List processedBytes;
-      try {
-        // Use our image compression function that targets 0.7MB for large images
-        processedBytes = await compressImage(
-          imageBytes,
-          targetWidth: 1200, // Use a reasonable width that preserves details
-        );
+      print(
+          'Image loaded, size: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB');
 
-        final double compressedSizeMB = processedBytes.length / (1024 * 1024);
-      } catch (e) {
-        // Fall back to original bytes if compression fails
-        processedBytes = imageBytes;
+      // Compress the image if needed
+      final Uint8List compressedImage = await _compressImage(imageBytes);
+      print(
+          'Image processed, final size: ${(compressedImage.length / 1024).toStringAsFixed(1)}KB');
+
+      // Show progress update
+      if (mounted) {
+        setState(() {
+          // Update processing step
+          _processingStep = 1; // Move to identification step
+        });
       }
 
       try {
-        // Use our secure API service via Firebase
-        final response = await FoodAnalyzerApi.analyzeFoodImage(processedBytes);
+        // Call the updated API service that handles job submission and polling
+        print('Submitting image for analysis...');
+        final Map<String, dynamic> response =
+            await FoodAnalyzerApi.analyzeFoodImage(compressedImage);
 
-        // Cancel the processing timer as we got a response
-        processingTimer.cancel();
-        processingTimer = null;
+        // Cancel the processing timer
+        if (processingTimer != null) {
+          processingTimer.cancel();
+          processingTimer = null;
+        }
 
-        if (mounted) {
+        if (response != null) {
           setState(() {
             _analysisResult = response;
+            _formattedAnalysisResult = null;
           });
 
-          // Extract the food name from the response for scanId generation
-          String foodName = '';
+          // Extract the food name for the scan ID
+          String foodName = 'Analyzed Meal';
           if (response.containsKey('meal_name')) {
             foodName = response['meal_name'];
           } else if (response.containsKey('success') &&
@@ -265,7 +272,126 @@ class _SnapFoodState extends State<SnapFood> {
           _displayAnalysisResults(_analysisResult!, scanId);
         }
       } catch (e) {
-        // Cancel the processing timer        if (processingTimer != null) {          processingTimer.cancel();          processingTimer = null;        }        print("API error in _analyzeImage: $e");                // Create a fallback analysis result        Map<String, dynamic> fallbackResult = {          'meal_name': 'Analyzed Meal',          'ingredients': ['Mixed ingredients'],          'ingredient_nutrients': [            {              'ingredient_name_ref': 'Mixed ingredients',              'calories': 250.0,              'protein': 15.0,              'fat': 10.0,              'carbs': 30.0,              'fiber': 2.0,              'vitamins': {                'vitamin_a': 100.0,                'vitamin_c': 10.0,                'vitamin_d': 5.0,                'vitamin_e': 2.0,                'vitamin_k': 2.0,                'vitamin_b1': 0.2,                'vitamin_b2': 0.3,                'vitamin_b3': 3.0,                'vitamin_b5': 1.0,                'vitamin_b6': 0.3,                'vitamin_b7': 5.0,                'vitamin_b9': 20.0,                'vitamin_b12': 0.5,              },              'minerals': {                'calcium': 50.0,                'iron': 2.0,                'magnesium': 30.0,                'phosphorus': 100.0,                'potassium': 300.0,                'sodium': 50.0,                'zinc': 1.0,                'copper': 0.2,                'manganese': 0.5,                'selenium': 10.0,                'iodine': 5.0,                'chromium': 2.0,                'molybdenum': 5.0,                'fluoride': 0.1,                'chloride': 50.0,              },              'other': {                'fiber': 2.0,                'cholesterol': 10.0,                'sugar': 5.0,                'saturated_fats': 1.0,                 'omega_3': 0.2,                'omega_6': 0.5              }            }          ],          'health_score': '5/10'        };        // Show an error dialog and go back to codia_page        if (mounted) {          // Check if this is a rate limit error          if (e.toString().contains("too large") || e.toString().contains("tokens per min") ||               e.toString().contains("429") || e.toString().contains("rate limit")) {                          print("Rate limit error detected, using fallback data");                        // Use the fallback data instead of showing an error            setState(() {              _analysisResult = fallbackResult;              _isAnalyzing = false;            });                        // Generate a scanId            String scanId = _generateScanId('Analyzed Meal');                        // Show toast message            ScaffoldMessenger.of(context).showSnackBar(              SnackBar(                content: Text("Using default nutrition values due to server rate limits. Try again later with a simpler image."),                duration: Duration(seconds: 5),              ),            );                        // Display results with fallback data            _displayAnalysisResults(fallbackResult, scanId);            return;          } else {            setState(() {              _isAnalyzing = false;            });            // Show a more helpful error message based on the error type            String errorMessage;            if (e.toString().contains("TimeoutException")) {              errorMessage =                  "The server is taking longer than expected to respond. This usually happens when the server is starting up after being idle. Please try again in a few minutes when the server is ready.";            } else {              errorMessage =                  "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection.";            }            // Show error dialog            _showCustomDialog("Analysis Taking Too Long", errorMessage);            // Pop back to codia_page            Navigator.of(context).pop();          }        }
+        // Cancel the processing timer
+        if (processingTimer != null) {
+          processingTimer.cancel();
+          processingTimer = null;
+        }
+
+        print("API error in _analyzeImage: $e");
+
+        // Create a fallback analysis result
+        Map<String, dynamic> fallbackResult = {
+          'meal_name': 'Analyzed Meal',
+          'ingredients': ['Mixed ingredients'],
+          'ingredient_nutrients': [
+            {
+              'ingredient_name_ref': 'Mixed ingredients',
+              'calories': 250.0,
+              'protein': 15.0,
+              'fat': 10.0,
+              'carbs': 30.0,
+              'fiber': 2.0,
+              'vitamins': {
+                'vitamin_a': 100.0,
+                'vitamin_c': 10.0,
+                'vitamin_d': 5.0,
+                'vitamin_e': 2.0,
+                'vitamin_k': 2.0,
+                'vitamin_b1': 0.2,
+                'vitamin_b2': 0.3,
+                'vitamin_b3': 3.0,
+                'vitamin_b5': 1.0,
+                'vitamin_b6': 0.3,
+                'vitamin_b7': 5.0,
+                'vitamin_b9': 20.0,
+                'vitamin_b12': 0.5,
+              },
+              'minerals': {
+                'calcium': 50.0,
+                'iron': 2.0,
+                'magnesium': 30.0,
+                'phosphorus': 100.0,
+                'potassium': 300.0,
+                'sodium': 50.0,
+                'zinc': 1.0,
+                'copper': 0.2,
+                'manganese': 0.5,
+                'selenium': 10.0,
+                'iodine': 5.0,
+                'chromium': 2.0,
+                'molybdenum': 5.0,
+                'fluoride': 0.1,
+                'chloride': 50.0,
+              },
+              'other': {
+                'fiber': 2.0,
+                'cholesterol': 10.0,
+                'sugar': 5.0,
+                'saturated_fats': 1.0,
+                'omega_3': 0.2,
+                'omega_6': 0.5
+              }
+            }
+          ],
+          'health_score': '5/10'
+        };
+
+        // Show an error dialog and go back to codia_page
+        if (mounted) {
+          // Check if this is a rate limit error
+          if (e.toString().contains("too large") ||
+              e.toString().contains("tokens per min") ||
+              e.toString().contains("429") ||
+              e.toString().contains("rate limit")) {
+            print("Rate limit error detected, using fallback data");
+
+            // Use the fallback data instead of showing an error
+            setState(() {
+              _analysisResult = fallbackResult;
+              _isAnalyzing = false;
+            });
+
+            // Generate a scanId
+            String scanId = _generateScanId('Analyzed Meal');
+
+            // Show toast message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    "Using default nutrition values due to server rate limits. Try again later with a simpler image."),
+                duration: Duration(seconds: 5),
+              ),
+            );
+
+            // Display results with fallback data
+            _displayAnalysisResults(fallbackResult, scanId);
+            return;
+          } else {
+            setState(() {
+              _isAnalyzing = false;
+            });
+
+            // Show a more helpful error message based on the error type
+            String errorMessage;
+            if (e.toString().contains("TimeoutException")) {
+              errorMessage =
+                  "The server is taking longer than expected to respond. This usually happens when the server is starting up after being idle. Please try again in a few minutes when the server is ready.";
+            } else if (e.toString().contains("Analysis timed out")) {
+              errorMessage =
+                  "The analysis took too long to complete. This might be due to high server load. Please try again in a few minutes.";
+            } else {
+              errorMessage =
+                  "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection.";
+            }
+
+            // Show error dialog
+            _showCustomDialog("Analysis Taking Too Long", errorMessage);
+
+            // Pop back to codia_page
+            Navigator.of(context).pop();
+          }
+        }
       }
     } catch (e) {
       // Cancel the processing timer
@@ -460,6 +586,11 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   Future<Uint8List> _compressImage(Uint8List imageBytes) async {
+    // Skip compression entirely - just return the original bytes
+    return imageBytes;
+
+    // The code below is disabled to avoid compression issues
+    /*
     try {
       final double imageSizeMB = imageBytes.length / (1024 * 1024);
 
@@ -482,6 +613,7 @@ class _SnapFoodState extends State<SnapFood> {
     } catch (e) {
       return imageBytes; // Return original if compression fails
     }
+    */
   }
 
   void _displayAnalysisResults(
