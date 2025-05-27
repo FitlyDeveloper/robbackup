@@ -195,7 +195,10 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       try {
         // Use AbortController for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+        const timeoutId = setTimeout(() => {
+          console.log(`OpenAI API call timeout for job ${jobId}`);
+          controller.abort();
+        }, 30000); // 30 second timeout instead of 60
         
         // Use GPT-4o with image analysis capability
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -638,8 +641,8 @@ app.get('/api/jobs/:jobId', async (req, res) => {
         });
       }
     } else if (jobData.status === 'failed') {
-      // Return error status
-      return res.status(422).json({
+      // Return error status with 200 code so client can parse it properly
+      return res.status(200).json({
         success: false,
         status: 'failed',
         error: jobData.error || 'Unknown error during processing',

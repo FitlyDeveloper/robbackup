@@ -275,6 +275,26 @@ class FoodAnalyzerApi {
         ).timeout(const Duration(seconds: 10));
 
         if (statusResponse.statusCode != 200) {
+          // Check if this is a 422 (job failed) - stop polling immediately
+          if (statusResponse.statusCode == 422) {
+            timer.cancel();
+            print(
+                "Stopped polling after $attempts attempts; job failed with status 422");
+
+            // Try to parse the error response
+            try {
+              final errorData = jsonDecode(statusResponse.body);
+              print('Job failed: ${errorData['error'] ?? "Unknown error"}');
+            } catch (e) {
+              print('Job failed but could not parse error response');
+            }
+
+            if (!completer.isCompleted) {
+              completer.complete(_getEmergencyResponse());
+            }
+            return;
+          }
+
           print(
               'Job status check failed: ${statusResponse.statusCode}, ${statusResponse.body}');
 
