@@ -529,6 +529,20 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           for (var item in decoded) {
             // Handle both object and string formats
             if (item is Map) {
+              // Skip malformed ingredients that are actually JSON field names
+              String itemName = item['name']?.toString() ?? '';
+              if (itemName.contains(':') ||
+                  itemName.contains('{') ||
+                  itemName.contains('}') ||
+                  itemName.startsWith('weight_g') ||
+                  itemName.startsWith('calories') ||
+                  itemName.startsWith('protein_g') ||
+                  itemName.startsWith('fat_g') ||
+                  itemName.startsWith('carbs_g')) {
+                print('Skipping malformed saved ingredient: $itemName');
+                continue; // Skip this malformed ingredient
+              }
+
               // Make sure all required fields exist
               if (!item.containsKey('name') ||
                   !item.containsKey('amount') ||
@@ -601,6 +615,19 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           }
           print(
               'Loaded and validated ${_ingredients.length} ingredients from SharedPreferences');
+
+          // If we filtered out malformed ingredients, save the cleaned data back
+          if (_ingredients.length < decoded.length) {
+            print(
+                'Cleaned ${decoded.length - _ingredients.length} malformed ingredients, saving cleaned data');
+            try {
+              await prefs.setString(
+                  'food_ingredients_$foodId', jsonEncode(_ingredients));
+              print('Saved cleaned ingredients data');
+            } catch (e) {
+              print('Error saving cleaned ingredients: $e');
+            }
+          }
         } catch (e) {
           print('Error parsing saved ingredients: $e');
           _ingredients = []; // Reset to empty on error
@@ -4685,7 +4712,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
     });
 
-              print(
+    print(
         'NUTRITION TOTALS: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
   }
 
@@ -7323,6 +7350,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       'sodium',
       'sugar',
       'saturated_fat',
+      'saturated_fats', // Also check for this variant
       'omega_3',
       'omega_6',
       'potassium',
@@ -7399,7 +7427,36 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     for (int i = 0; i < ingredientCount; i++) {
       final ingredient = _ingredients[i];
 
-      // First check for common nutrient fields - use direct indexing
+      // FIRST: Check for nested "other" nutrients structure
+      if (ingredient.containsKey('other') && ingredient['other'] is Map) {
+        Map<String, dynamic> otherNutrients =
+            Map<String, dynamic>.from(ingredient['other']);
+        print(
+            "Found 'other' nutrients in ingredient ${ingredient['name']}: $otherNutrients");
+
+        otherNutrients.forEach((key, value) {
+          if (value != null) {
+            String normalizedKey = key.toLowerCase();
+            // Handle saturated_fats vs saturated_fat naming
+            if (normalizedKey == 'saturated_fats') {
+              normalizedKey = 'saturated_fats';
+            }
+
+            // If the nutrient exists in the result, add the values
+            if (result.containsKey(normalizedKey)) {
+              double existingValue =
+                  _parseNutritionValue(result[normalizedKey]);
+              double newValue = _parseNutritionValue(value);
+              result[normalizedKey] = (existingValue + newValue).toString();
+            } else {
+              // Just add the nutrient directly
+              result[normalizedKey] = value.toString();
+            }
+          }
+        });
+      }
+
+      // SECOND: Check for common nutrient fields at the root level - use direct indexing
       for (int j = 0; j < commonNutrients.length; j++) {
         final String field = commonNutrients[j];
         if (ingredient.containsKey(field) && ingredient[field] != null) {
@@ -7416,7 +7473,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
       }
 
-      // Check for vitamins with different naming formats - use direct map access
+      // THIRD: Check for vitamins with different naming formats - use direct map access
       ingredient.forEach((key, value) {
         if (value == null) return;
 

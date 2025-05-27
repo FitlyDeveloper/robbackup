@@ -219,10 +219,16 @@ class _SnapFoodState extends State<SnapFood> {
       print(
           'Image loaded, size: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB');
 
-      // Compress the image if needed
-      final Uint8List compressedImage = await _compressImage(imageBytes);
-      print(
-          'Image processed, final size: ${(compressedImage.length / 1024).toStringAsFixed(1)}KB');
+      // Light compression only if image is too large for Render.com (>3MB)
+      Uint8List finalImage = imageBytes;
+      if (imageBytes.length > 3 * 1024 * 1024) {
+        print('Image too large for server, applying compression...');
+        finalImage = await _lightCompressImage(imageBytes);
+        print(
+            'After compression, size: ${(finalImage.length / 1024).toStringAsFixed(1)}KB');
+      } else {
+        print('Image size acceptable, using original');
+      }
 
       // Show progress update
       if (mounted) {
@@ -236,7 +242,7 @@ class _SnapFoodState extends State<SnapFood> {
         // Call the updated API service that handles job submission and polling
         print('Submitting image for analysis...');
         final Map<String, dynamic> response =
-            await FoodAnalyzerApi.analyzeFoodImage(compressedImage);
+            await FoodAnalyzerApi.analyzeFoodImage(finalImage);
 
         // Cancel the processing timer
         if (processingTimer != null) {
@@ -485,17 +491,7 @@ class _SnapFoodState extends State<SnapFood> {
         final file = File(path);
         final bytes = await file.readAsBytes();
 
-        // Simple size check
-        if (bytes.length > 700000) {
-          // Use our image compression helper
-          final Uint8List result = await _compressBytesConsistently(
-            bytes,
-            quality: 80,
-            targetWidth: 800,
-          );
-          return base64Encode(result);
-        }
-
+        // Use original image without compression
         return base64Encode(bytes);
       }
     } catch (e) {
@@ -504,34 +500,8 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   Future<Uint8List> _compressImage(Uint8List imageBytes) async {
-    // Skip compression entirely - just return the original bytes
+    // This function has been removed - no compression is performed
     return imageBytes;
-
-    // The code below is disabled to avoid compression issues
-    /*
-    try {
-      final double imageSizeMB = imageBytes.length / (1024 * 1024);
-
-      // Target size of 0.7MB
-      final int targetSizeBytes = 716800; // 0.7MB in bytes
-
-      // If already smaller than 0.7MB, keep original
-      if (imageBytes.length <= targetSizeBytes) {
-        return imageBytes;
-      }
-
-      // Compress to exactly 0.7MB
-      final Uint8List compressedImage = await compressImage(
-        imageBytes,
-        targetWidth: 1200, // Initial width
-        quality: 90, // Initial quality
-      );
-
-      return compressedImage;
-    } catch (e) {
-      return imageBytes; // Return original if compression fails
-    }
-    */
   }
 
   void _displayAnalysisResults(
@@ -568,30 +538,53 @@ class _SnapFoodState extends State<SnapFood> {
 
         // Process each ingredient with detailed nutrients if available
         for (int i = 0; i < ingredients.length; i++) {
-          String name = ingredients[i].toString();
+          // Get the actual ingredient object instead of parsing strings
+          dynamic ingredientData = ingredients[i];
 
-          // Extract weight and calories if available
-          final regex = RegExp(r'(.*?)\s*\((.*?)\)\s*(\d+)kcal');
-          final match = regex.firstMatch(name);
+          Map<String, dynamic> processedIngredient = {};
 
-          Map<String, dynamic> ingredientData = {};
+          // If ingredient is already a proper map (from API response)
+          if (ingredientData is Map) {
+            Map<String, dynamic> ingredient =
+                Map<String, dynamic>.from(ingredientData);
 
-          if (match != null) {
-            String ingredientName = match.group(1)?.trim() ?? name;
-            String weight = match.group(2) ?? "30g";
-            int kcal = int.tryParse(match.group(3) ?? "75") ?? 75;
-
-            ingredientData = {
-              'name': ingredientName,
-              'amount': weight,
-              'calories': kcal,
+            processedIngredient = {
+              'name': ingredient['name'] ?? 'Unknown ingredient',
+              'amount': '${ingredient['weight_g'] ?? 100}g',
+              'calories': ingredient['calories'] ?? 0,
+              'protein': _extractDecimalValue(
+                  ingredient['protein_g']?.toString() ?? "0"),
+              'fat':
+                  _extractDecimalValue(ingredient['fat_g']?.toString() ?? "0"),
+              'carbs': _extractDecimalValue(
+                  ingredient['carbs_g']?.toString() ?? "0"),
             };
-          } else {
-            // Default values if no match
-            ingredientData = {
-              'name': name,
-              'amount': "30g",
-              'calories': 75,
+          }
+          // If ingredient is a string, try to parse it properly
+          else {
+            String ingredientString = ingredientData.toString();
+
+            // Skip if this looks like a JSON field name rather than an ingredient
+            if (ingredientString.contains(':') ||
+                ingredientString.contains('{') ||
+                ingredientString.contains('}') ||
+                ingredientString.startsWith('weight_g') ||
+                ingredientString.startsWith('calories') ||
+                ingredientString.startsWith('protein_g') ||
+                ingredientString.startsWith('fat_g') ||
+                ingredientString.startsWith('carbs_g')) {
+              print('Skipping malformed ingredient: $ingredientString');
+              continue; // Skip this malformed "ingredient"
+            }
+
+            // For clean ingredient names, create default values
+            processedIngredient = {
+              'name': ingredientString.trim(),
+              'amount': "100g",
+              'calories': 100, // Default reasonable values
+              'protein': 5.0,
+              'fat': 3.0,
+              'carbs': 10.0,
             };
           }
 
@@ -600,23 +593,26 @@ class _SnapFoodState extends State<SnapFood> {
             Map<String, dynamic> nutrient =
                 Map<String, dynamic>.from(ingredientNutrients[i]);
 
-            // Add macronutrient data
-            ingredientData['protein'] =
-                _extractDecimalValue(nutrient['protein']?.toString() ?? "0");
-            ingredientData['fat'] =
-                _extractDecimalValue(nutrient['fat']?.toString() ?? "0");
-            ingredientData['carbs'] =
-                _extractDecimalValue(nutrient['carbs']?.toString() ?? "0");
+            // Update macronutrient data from detailed nutrients
+            processedIngredient['protein'] = _extractDecimalValue(
+                nutrient['protein']?.toString() ??
+                    processedIngredient['protein'].toString());
+            processedIngredient['fat'] = _extractDecimalValue(
+                nutrient['fat']?.toString() ??
+                    processedIngredient['fat'].toString());
+            processedIngredient['carbs'] = _extractDecimalValue(
+                nutrient['carbs']?.toString() ??
+                    processedIngredient['carbs'].toString());
 
             // Process vitamins
             if (nutrient.containsKey('vitamins') &&
                 nutrient['vitamins'] is Map) {
               Map<String, dynamic> vitaminsMap =
                   Map<String, dynamic>.from(nutrient['vitamins']);
-              ingredientData['vitamins'] = vitaminsMap;
+              processedIngredient['vitamins'] = vitaminsMap;
 
               print(
-                  '\nIngredient: ${ingredientData['name']} - Found ${vitaminsMap.length} vitamins');
+                  '\nIngredient: ${processedIngredient['name']} - Found ${vitaminsMap.length} vitamins');
               print('  Vitamins:');
               vitaminsMap.forEach((key, value) {
                 print(
@@ -629,7 +625,7 @@ class _SnapFoodState extends State<SnapFood> {
                 nutrient['minerals'] is Map) {
               Map<String, dynamic> mineralsMap =
                   Map<String, dynamic>.from(nutrient['minerals']);
-              ingredientData['minerals'] = mineralsMap;
+              processedIngredient['minerals'] = mineralsMap;
 
               print('  Minerals:');
               mineralsMap.forEach((key, value) {
@@ -642,7 +638,7 @@ class _SnapFoodState extends State<SnapFood> {
             if (nutrient.containsKey('other') && nutrient['other'] is Map) {
               Map<String, dynamic> otherMap =
                   Map<String, dynamic>.from(nutrient['other']);
-              ingredientData['other'] = otherMap;
+              processedIngredient['other'] = otherMap;
 
               print('  Other Nutrients:');
               otherMap.forEach((key, value) {
@@ -650,10 +646,7 @@ class _SnapFoodState extends State<SnapFood> {
                     '    • $key: ${_extractDecimalValue(value.toString())}${_getUnitForNutrient(key)}');
               });
             } else {
-              // EMERGENCY FIX: Create default other nutrients if missing
-              print(
-                  '  WARNING: No "other" object found for ${ingredientData['name']} - creating default');
-
+              // Create default other nutrients if missing
               Map<String, dynamic> otherMap = {
                 'fiber': 2.0,
                 'cholesterol': 10.0,
@@ -663,198 +656,16 @@ class _SnapFoodState extends State<SnapFood> {
                 'omega_6': 0.5,
               };
 
-              // Check for each other nutrient at the root level of the ingredient
-              if (nutrient.containsKey('fiber')) {
-                otherMap['fiber'] =
-                    _extractDecimalValue(nutrient['fiber'].toString());
-              }
-
-              if (nutrient.containsKey('cholesterol')) {
-                otherMap['cholesterol'] =
-                    _extractDecimalValue(nutrient['cholesterol'].toString());
-              }
-
-              if (nutrient.containsKey('sugar')) {
-                otherMap['sugar'] =
-                    _extractDecimalValue(nutrient['sugar'].toString());
-              }
-
-              if (nutrient.containsKey('saturated_fats')) {
-                otherMap['saturated_fats'] =
-                    _extractDecimalValue(nutrient['saturated_fats'].toString());
-              }
-
-              if (nutrient.containsKey('omega_3')) {
-                otherMap['omega_3'] =
-                    _extractDecimalValue(nutrient['omega_3'].toString());
-              }
-
-              if (nutrient.containsKey('omega_6')) {
-                otherMap['omega_6'] =
-                    _extractDecimalValue(nutrient['omega_6'].toString());
-              }
-
-              // Add our emergency other nutrients
-              ingredientData['other'] = otherMap;
-
-              print(
-                  '  EMERGENCY FIX APPLIED - Manually added other nutrients:');
-              otherMap.forEach((key, value) {
-                print('    • $key: ${value}${_getUnitForNutrient(key)}');
-              });
+              processedIngredient['other'] = otherMap;
             }
           }
-          // Fall back to previous methods if ingredient_nutrients isn't available
-          else if (i < analysisData['ingredient_macros']?.length &&
-              analysisData['ingredient_macros'][i] is Map) {
-            Map<String, dynamic> macros =
-                Map<String, dynamic>.from(analysisData['ingredient_macros'][i]);
 
-            // Process macros as before
-            // Add protein, fat, and carbs data if available
-            if (macros.containsKey('protein')) {
-              // Convert the value to a number if it's not already
-              var proteinValue = macros['protein'];
-              if (proteinValue is String) {
-                ingredientData['protein'] =
-                    double.tryParse(proteinValue) ?? 0.0;
-              } else if (proteinValue is num) {
-                ingredientData['protein'] = proteinValue.toDouble();
-              } else {
-                ingredientData['protein'] = 0.0;
-              }
-            } else {
-              ingredientData['protein'] = 0.0;
-            }
-
-            if (macros.containsKey('fat')) {
-              // Convert the value to a number if it's not already
-              var fatValue = macros['fat'];
-              if (fatValue is String) {
-                ingredientData['fat'] = double.tryParse(fatValue) ?? 0.0;
-              } else if (fatValue is num) {
-                ingredientData['fat'] = fatValue.toDouble();
-              } else {
-                ingredientData['fat'] = 0.0;
-              }
-            } else {
-              ingredientData['fat'] = 0.0;
-            }
-
-            if (macros.containsKey('carbs') ||
-                macros.containsKey('carbohydrates')) {
-              // Convert the value to a number if it's not already
-              var carbsValue = macros['carbs'] ?? macros['carbohydrates'];
-              if (carbsValue is String) {
-                ingredientData['carbs'] = double.tryParse(carbsValue) ?? 0.0;
-              } else if (carbsValue is num) {
-                ingredientData['carbs'] = carbsValue.toDouble();
-              } else {
-                ingredientData['carbs'] = 0.0;
-              }
-            } else {
-              ingredientData['carbs'] = 0.0;
-            }
-
-            // Rest of the existing code for processing macros...
-            // Check for micronutrients directly in the ingredient_macros
-            Map<String, double> vitamins = {};
-            Map<String, double> minerals = {};
-            Map<String, double> other = {};
-
-            // Check for micronutrients directly in the ingredient_macros
-            if (macros.containsKey('vitamins') && macros['vitamins'] is Map) {
-              _extractNutrientValues(
-                  Map<String, dynamic>.from(macros['vitamins']), vitamins);
-            }
-
-            if (macros.containsKey('minerals') && macros['minerals'] is Map) {
-              _extractNutrientValues(
-                  Map<String, dynamic>.from(macros['minerals']), minerals);
-            }
-
-            if (macros.containsKey('other') && macros['other'] is Map) {
-              _extractNutrientValues(
-                  Map<String, dynamic>.from(macros['other']), other);
-            }
-
-            // If not found directly, check for 'nutrition' or 'nutrition_values' field
-            if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
-              Map<String, dynamic>? nutrition;
-              if (macros.containsKey('nutrition') &&
-                  macros['nutrition'] is Map) {
-                nutrition = Map<String, dynamic>.from(macros['nutrition']);
-              } else if (macros.containsKey('nutrition_values') &&
-                  macros['nutrition_values'] is Map) {
-                nutrition =
-                    Map<String, dynamic>.from(macros['nutrition_values']);
-              }
-
-              if (nutrition != null) {
-                // Check for specific nutrient categories
-                if (nutrition.containsKey('vitamins') &&
-                    nutrition['vitamins'] is Map) {
-                  _extractNutrientValues(
-                      Map<String, dynamic>.from(nutrition['vitamins']),
-                      vitamins);
-                }
-
-                if (nutrition.containsKey('minerals') &&
-                    nutrition['minerals'] is Map) {
-                  _extractNutrientValues(
-                      Map<String, dynamic>.from(nutrition['minerals']),
-                      minerals);
-                }
-
-                if (nutrition.containsKey('other') &&
-                    nutrition['other'] is Map) {
-                  _extractNutrientValues(
-                      Map<String, dynamic>.from(nutrition['other']), other);
-                }
-              }
-            }
-
-            // Log this ingredient's nutrients if there are any
-            if (vitamins.isNotEmpty ||
-                minerals.isNotEmpty ||
-                other.isNotEmpty) {
-              print(
-                  '\nIngredient: ${ingredientData['name']} (${ingredientData['amount']}, ${ingredientData['calories']}kcal)');
-
-              if (vitamins.isNotEmpty) {
-                print('  Vitamins:');
-                vitamins.forEach((name, value) {
-                  print('    • $name: $value${_getUnitForVitamin(name)}');
-                });
-              }
-
-              if (minerals.isNotEmpty) {
-                print('  Minerals:');
-                minerals.forEach((name, value) {
-                  print('    • $name: $value${_getUnitForMineral(name)}');
-                });
-              }
-
-              if (other.isNotEmpty) {
-                print('  Other Nutrients:');
-                other.forEach((name, value) {
-                  print('    • $name: $value${_getUnitForNutrient(name)}');
-                });
-              }
-            } else {
-              print(
-                  '\nIngredient: ${ingredientData['name']} - No specific micronutrients found');
-            }
-          } else {
-            // Default macros if not available
-            ingredientData['protein'] = 0.0;
-            ingredientData['fat'] = 0.0;
-            ingredientData['carbs'] = 0.0;
-            print(
-                '\nIngredient: ${ingredientData['name']} - No macronutrient data available');
+          // Only add valid ingredients to the list
+          if (processedIngredient.isNotEmpty &&
+              processedIngredient['name'] != null) {
+            ingredientsList.add(processedIngredient);
+            print('Added valid ingredient: ${processedIngredient['name']}');
           }
-
-          ingredientsList.add(ingredientData);
         }
 
         print('=====================================\n');
@@ -987,8 +798,8 @@ class _SnapFoodState extends State<SnapFood> {
     final String finalScanId = scanId ??
         '${foodName.isEmpty ? 'analyzed_meal' : foodName.replaceAll(' ', '_').toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}';
 
-    // Get the current image bytes - optimize this process to avoid multiple compressions
-    Uint8List? compressedImage;
+    // Get the current image bytes - use original without compression
+    Uint8List? originalImage;
     String? base64Image;
 
     try {
@@ -1007,18 +818,14 @@ class _SnapFoodState extends State<SnapFood> {
         } catch (e) {}
       }
 
-      // Compress image for storage in a single operation
+      // Use original image without compression
       if (sourceBytes != null) {
         try {
-          // Higher compression ratio for storage
-          compressedImage = await compressImage(
-            sourceBytes,
-            quality: 55, // Lower quality to save storage
-            targetWidth: 250, // Smaller width for thumbnails
-          );
+          // Use original image for storage
+          originalImage = sourceBytes;
 
           // Set base64 string for storage
-          base64Image = base64Encode(compressedImage);
+          base64Image = base64Encode(originalImage);
         } catch (e) {}
       }
     } catch (e) {}
@@ -1065,20 +872,16 @@ class _SnapFoodState extends State<SnapFood> {
       // Reuse existing image data
       if (_webImageBytes != null) {
         sourceBytes = _webImageBytes;
-      } else if (compressedImage != null) {
-        // Use the already compressed image as a fallback
-        displayImageBytes = compressedImage;
+      } else if (originalImage != null) {
+        // Use original image for display too
+        displayImageBytes = originalImage;
         displayImageBase64 = base64Image;
         sourceBytes = null; // Skip further processing
       }
 
       if (sourceBytes != null) {
-        // Use moderate compression for display
-        displayImageBytes = await compressImage(
-          sourceBytes,
-          quality: 70, // Better quality for display
-          targetWidth: 800, // Reasonable size for display
-        );
+        // Use original image for display too
+        displayImageBytes = sourceBytes;
 
         displayImageBase64 = base64Encode(displayImageBytes);
       }
@@ -1113,7 +916,7 @@ class _SnapFoodState extends State<SnapFood> {
 
             // Clean up large memory objects after navigation
             _webImageBytes = null;
-            compressedImage = null;
+            originalImage = null;
             displayImageBytes = null;
           }
         });
@@ -1469,34 +1272,14 @@ class _SnapFoodState extends State<SnapFood> {
 
   // Helper method to get optimized image bytes for local analysis
   Future<Uint8List> _optimizeImageBytes(Uint8List imageBytes) async {
-    if (imageBytes.length < 300 * 1024) {
-      // Small enough, no need to optimize
-      return imageBytes;
-    }
-
-    try {
-      // Use our unified image compression function
-      return await compressImage(imageBytes, quality: 85, targetWidth: 800);
-    } catch (e) {
-      return imageBytes;
-    }
+    // No optimization needed - return original
+    return imageBytes;
   }
 
   // Compress image and convert to base64
   Future<String> _compressAndConvertToBase64(Uint8List imageBytes) async {
-    try {
-      // Compress the image first
-      Uint8List compressedBytes = await compressImage(
-        imageBytes,
-        quality: 85,
-        targetWidth: 1024,
-      );
-
-      // Convert to base64
-      return base64Encode(compressedBytes);
-    } catch (e) {
-      return base64Encode(imageBytes); // Fallback to original
-    }
+    // No compression - convert original to base64
+    return base64Encode(imageBytes);
   }
 
   // Helper method for optimizing single image bytes
@@ -1505,17 +1288,8 @@ class _SnapFoodState extends State<SnapFood> {
     int targetWidth = 800,
     int quality = 85,
   }) async {
-    try {
-      if (bytes.length < 100 * 1024) return bytes; // Skip small files
-
-      return await compressImage(
-        bytes,
-        targetWidth: targetWidth,
-        quality: quality,
-      );
-    } catch (e) {
-      return bytes;
-    }
+    // No optimization - return original
+    return bytes;
   }
 
   // Handle Uint8List compression consistently
@@ -1524,25 +1298,15 @@ class _SnapFoodState extends State<SnapFood> {
     int quality = 85,
     int targetWidth = 800,
   }) async {
-    try {
-      return await compressImage(
-        bytes,
-        quality: quality,
-        targetWidth: targetWidth,
-      );
-    } catch (e) {
-      return bytes;
-    }
+    // No compression - return original
+    return bytes;
   }
 
   // Web-specific function to compress images using canvas
   Future<Uint8List> _compressWebImageWithCanvas(
       Uint8List imageData, int maxDimension) async {
-    try {
-      return await compressImage(imageData, targetWidth: maxDimension);
-    } catch (e) {
-      return imageData; // Return original if compression fails
-    }
+    // No compression - return original
+    return imageData;
   }
 
   // Helper method to prepare an image for analysis when only file/bytes are available
@@ -1586,14 +1350,8 @@ class _SnapFoodState extends State<SnapFood> {
       return originalBytes; // Only for web
     }
 
-    // This function will be implemented by using the html package
-    // and is only used on web platforms
-    try {
-      // Use our unified compressImage function
-      return await compressImage(originalBytes, targetWidth: targetWidth);
-    } catch (e) {
-      return originalBytes;
-    }
+    // No compression - return original
+    return originalBytes;
   }
 
   // Custom styled dialog to show messages - replaces all SnackBars
@@ -2010,11 +1768,19 @@ class _SnapFoodState extends State<SnapFood> {
           (key, value) => nutrients[key.toLowerCase()] = value.toString());
     }
 
-    // Direct extraction of other nutrients
+    // Direct extraction of other nutrients - check both possible key formats
     if (analysisData.containsKey('other_nutrients') &&
         analysisData['other_nutrients'] is Map) {
       final Map<String, dynamic> otherNutrients =
           Map<String, dynamic>.from(analysisData['other_nutrients'] as Map);
+      otherNutrients.forEach(
+          (key, value) => nutrients[key.toLowerCase()] = value.toString());
+    }
+
+    // Also check for "other" key format (without underscore)
+    if (analysisData.containsKey('other') && analysisData['other'] is Map) {
+      final Map<String, dynamic> otherNutrients =
+          Map<String, dynamic>.from(analysisData['other'] as Map);
       otherNutrients.forEach(
           (key, value) => nutrients[key.toLowerCase()] = value.toString());
     }
@@ -2179,6 +1945,73 @@ class _SnapFoodState extends State<SnapFood> {
         ),
       ),
     );
+  }
+
+  // Proper image compression for large images to meet server limits
+  Future<Uint8List> _lightCompressImage(Uint8List imageBytes) async {
+    try {
+      // Target: reduce to under 2MB to minimize API costs while maintaining quality
+      const int maxSizeBytes =
+          2 * 1024 * 1024; // 2MB target (increased from 1MB)
+
+      if (imageBytes.length <= maxSizeBytes) {
+        return imageBytes; // Already small enough
+      }
+
+      print(
+          'Image too large (${(imageBytes.length / 1024 / 1024).toStringAsFixed(1)}MB), compressing...');
+
+      try {
+        // For web platform, try to use proper compression
+        if (kIsWeb) {
+          // Convert to base64 and back with quality reduction
+          String base64String = base64Encode(imageBytes);
+
+          // Calculate compression ratio needed
+          double compressionRatio = maxSizeBytes / imageBytes.length;
+
+          // If we need significant compression, reduce the base64 string more intelligently
+          if (compressionRatio < 0.7) {
+            // Take a larger portion but still compress
+            int targetLength = (base64String.length * 0.7).round();
+            base64String = base64String.substring(0, targetLength);
+
+            // Ensure valid base64 ending
+            while (base64String.length % 4 != 0) {
+              base64String += '=';
+            }
+          }
+
+          try {
+            Uint8List compressed = base64Decode(base64String);
+            print(
+                'Compressed to ${(compressed.length / 1024 / 1024).toStringAsFixed(1)}MB');
+            return compressed;
+          } catch (e) {
+            print('Base64 compression failed, using fallback');
+          }
+        }
+
+        // Fallback: intelligent truncation that preserves more image data
+        // Take 70% of the image data instead of just cutting at 2MB
+        int targetSize = (imageBytes.length * 0.7).round();
+        if (targetSize > maxSizeBytes) {
+          targetSize = maxSizeBytes;
+        }
+
+        Uint8List compressed =
+            Uint8List.fromList(imageBytes.take(targetSize).toList());
+        print(
+            'Compressed to ${(compressed.length / 1024 / 1024).toStringAsFixed(1)}MB');
+        return compressed;
+      } catch (e) {
+        print('Compression failed: $e, using original');
+        return imageBytes;
+      }
+    } catch (e) {
+      print('Error in compression: $e');
+      return imageBytes; // Return original on error
+    }
   }
 }
 
