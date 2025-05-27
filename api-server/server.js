@@ -154,7 +154,12 @@ Return valid JSON with this EXACT structure:
         "magnesium": 29,
         "potassium": 256,
         "sodium": 74,
-        "zinc": 1.9
+        "zinc": 1.9,
+        "chromium": 0.1,
+        "copper": 45,
+        "iodine": 2,
+        "molybdenum": 1.5,
+        "selenium": 8.5
       },
       "other": {
         "fiber": 0,
@@ -192,7 +197,12 @@ Return valid JSON with this EXACT structure:
       "magnesium": 29,
       "potassium": 256,
       "sodium": 74,
-      "zinc": 1.9
+      "zinc": 1.9,
+      "chromium": 0.1,
+      "copper": 45,
+      "iodine": 2,
+      "molybdenum": 1.5,
+      "selenium": 8.5
     },
     "other": {
       "fiber": 0,
@@ -205,17 +215,30 @@ Return valid JSON with this EXACT structure:
   }
 }
 
+CRITICAL UNIT REQUIREMENTS - MUST MATCH NUTRITION.DART EXACTLY:
+
+VITAMINS:
+- vitamin_a, vitamin_d, vitamin_k, vitamin_b7, vitamin_b9, vitamin_b12: VALUES IN MCG (micrograms)
+- vitamin_c, vitamin_e, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6: VALUES IN MG (milligrams)
+
+MINERALS:
+- calcium, iron, magnesium, potassium, sodium, zinc: VALUES IN MG (milligrams)
+- chromium, copper, iodine, molybdenum, selenium: VALUES IN MCG (micrograms)
+
+OTHER NUTRIENTS:
+- fiber, sugar, saturated_fats, omega_6: VALUES IN G (grams)
+- cholesterol, omega_3: VALUES IN MG (milligrams)
+
 IMPORTANT NUTRITION GUIDELINES:
 - Identify 2-4 specific food items visible in the image
 - Use realistic nutrition values based on actual USDA food data
 - Be specific with food names (not just "meat" but "grilled chicken breast")
 - Calculate accurate portion sizes and nutrition values
 - Include ALL vitamins, minerals, and other nutrients with realistic values
-- Vitamin units: A,D,K,B7,B9,B12 in μg; C,E,B1,B2,B3,B5,B6 in mg
-- Mineral units: All in mg (calcium, iron, magnesium, potassium, sodium, zinc)
-- Other nutrient units: fiber,sugar,saturated_fats,omega_6 in g; cholesterol,omega_3 in mg
+- CRITICAL: Return values in the EXACT units specified above - do NOT convert units
 - Use 0 for nutrients not present in the food (e.g., cholesterol in vegetables)
-- Provide realistic values based on standard nutrition databases`;
+- Provide realistic values based on standard nutrition databases
+- For vitamin_a: typical values 0-900 mcg, for vitamin_c: 0-90 mg, etc.`;
 
     let finalResponse = null;
     
@@ -685,7 +708,12 @@ Return valid JSON with this EXACT structure:
         "magnesium": 29,
         "potassium": 256,
         "sodium": 74,
-        "zinc": 1.9
+        "zinc": 1.9,
+        "chromium": 0.1,
+        "copper": 45,
+        "iodine": 2,
+        "molybdenum": 1.5,
+        "selenium": 8.5
       },
       "other": {
         "fiber": 0,
@@ -723,7 +751,12 @@ Return valid JSON with this EXACT structure:
       "magnesium": 29,
       "potassium": 256,
       "sodium": 74,
-      "zinc": 1.9
+      "zinc": 1.9,
+      "chromium": 0.1,
+      "copper": 45,
+      "iodine": 2,
+      "molybdenum": 1.5,
+      "selenium": 8.5
     },
     "other": {
       "fiber": 0,
@@ -736,17 +769,30 @@ Return valid JSON with this EXACT structure:
   }
 }
 
+CRITICAL UNIT REQUIREMENTS - MUST MATCH NUTRITION.DART EXACTLY:
+
+VITAMINS:
+- vitamin_a, vitamin_d, vitamin_k, vitamin_b7, vitamin_b9, vitamin_b12: VALUES IN MCG (micrograms)
+- vitamin_c, vitamin_e, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6: VALUES IN MG (milligrams)
+
+MINERALS:
+- calcium, iron, magnesium, potassium, sodium, zinc: VALUES IN MG (milligrams)
+- chromium, copper, iodine, molybdenum, selenium: VALUES IN MCG (micrograms)
+
+OTHER NUTRIENTS:
+- fiber, sugar, saturated_fats, omega_6: VALUES IN G (grams)
+- cholesterol, omega_3: VALUES IN MG (milligrams)
+
 IMPORTANT NUTRITION GUIDELINES:
 - Identify 2-4 specific food items visible in the image
 - Use realistic nutrition values based on actual USDA food data
 - Be specific with food names (not just "meat" but "grilled chicken breast")
 - Calculate accurate portion sizes and nutrition values
 - Include ALL vitamins, minerals, and other nutrients with realistic values
-- Vitamin units: A,D,K,B7,B9,B12 in μg; C,E,B1,B2,B3,B5,B6 in mg
-- Mineral units: All in mg (calcium, iron, magnesium, potassium, sodium, zinc)
-- Other nutrient units: fiber,sugar,saturated_fats,omega_6 in g; cholesterol,omega_3 in mg
+- CRITICAL: Return values in the EXACT units specified above - do NOT convert units
 - Use 0 for nutrients not present in the food (e.g., cholesterol in vegetables)
-- Provide realistic values based on standard nutrition databases`;
+- Provide realistic values based on standard nutrition databases
+- For vitamin_a: typical values 0-900 mcg, for vitamin_c: 0-90 mg, etc.`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
