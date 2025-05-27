@@ -63,100 +63,13 @@ class FoodAnalyzerApi {
     'omega_6': 'g',
   };
 
-  // Emergency hardcoded response
-  static Map<String, dynamic> _getEmergencyResponse() {
-    // Return a guaranteed valid response with reasonable nutritional data
-    return {
-      "meal_name": "Analyzed Meal",
-      "ingredients": [
-        {
-          "name": "Protein",
-          "weight_g": 100.0,
-          "calories": 250.0,
-          "protein_g": 15.0,
-          "fat_g": 10.0,
-          "carbs_g": 30.0
-        },
-        {
-          "name": "Carbs",
-          "weight_g": 100.0,
-          "calories": 250.0,
-          "protein_g": 15.0,
-          "fat_g": 10.0,
-          "carbs_g": 30.0
-        }
-      ],
-      "ingredient_nutrients": [
-        {
-          "name": "Protein",
-          "protein": 15.0,
-          "fat": 10.0,
-          "carbs": 30.0,
-          "vitamins": {"vitamin_a": 150.0, "vitamin_c": 10.0, "vitamin_d": 2.0},
-          "minerals": {"calcium": 120.0, "iron": 3.5, "potassium": 350.0},
-          "other": {
-            "fiber": 3.0,
-            "sugar": 5.0,
-            "cholesterol": 25.0,
-            "saturated_fats": 3.5,
-            "omega_3": 0.5,
-            "omega_6": 1.0
-          }
-        },
-        {
-          "name": "Carbs",
-          "protein": 15.0,
-          "fat": 10.0,
-          "carbs": 30.0,
-          "vitamins": {"vitamin_a": 50.0, "vitamin_b1": 0.3, "vitamin_e": 1.5},
-          "minerals": {"magnesium": 80.0, "zinc": 2.0, "sodium": 200.0},
-          "other": {
-            "fiber": 4.0,
-            "sugar": 8.0,
-            "cholesterol": 0.0,
-            "saturated_fats": 1.0,
-            "omega_3": 0.2,
-            "omega_6": 0.5
-          }
-        }
-      ],
-      "health_score": "7/10",
-      "vitamins": {
-        "vitamin_a": 200.0,
-        "vitamin_c": 12.0,
-        "vitamin_d": 2.5,
-        "vitamin_e": 3.0,
-        "vitamin_b1": 0.5,
-        "vitamin_b2": 0.4
-      },
-      "minerals": {
-        "calcium": 150.0,
-        "iron": 4.0,
-        "magnesium": 100.0,
-        "zinc": 3.0,
-        "potassium": 400.0,
-        "sodium": 250.0
-      },
-      "other": {
-        "fiber": 7.0,
-        "sugar": 13.0,
-        "cholesterol": 25.0,
-        "saturated_fats": 4.5,
-        "omega_3": 0.7,
-        "omega_6": 1.5
-      }
-    };
-  }
-
   // New method to analyze a food image using job queue
   static Future<Map<String, dynamic>> analyzeFoodImage(
       Uint8List imageBytes) async {
     // EMERGENCY CLIENT-SIDE MODE: Return hardcoded data immediately
     if (EMERGENCY_CLIENT_MODE) {
-      print('⚠️ EMERGENCY CLIENT MODE ACTIVE - Using hardcoded data ⚠️');
-      // Simulate a brief delay to make it feel like processing happened
-      await Future.delayed(const Duration(milliseconds: 1500));
-      return _getEmergencyResponse();
+      throw Exception(
+          'Emergency client mode is disabled - API analysis required');
     }
 
     try {
@@ -213,8 +126,9 @@ class FoodAnalyzerApi {
           }
         }
 
-        // Return hardcoded data on error
-        return _getEmergencyResponse();
+        // Throw error instead of returning emergency response
+        throw Exception(
+            'Failed to submit analysis job: ${submitResponse.statusCode}');
       }
 
       // Parse the job response
@@ -223,15 +137,15 @@ class FoodAnalyzerApi {
         jobData = jsonDecode(submitResponse.body);
       } catch (e) {
         print('JSON decode error: $e');
-        // Return hardcoded data on JSON error
-        return _getEmergencyResponse();
+        // Throw error instead of returning emergency response
+        throw Exception('Invalid response format from server');
       }
 
       // Check for API-level errors
       if (jobData['success'] != true) {
         print('API reported error: ${jobData['error']}');
-        // Return hardcoded data on API error
-        return _getEmergencyResponse();
+        // Throw error instead of returning emergency response
+        throw Exception('API error: ${jobData['error']}');
       }
 
       // Get the jobId
@@ -243,13 +157,13 @@ class FoodAnalyzerApi {
         return await _pollForJobCompletion(jobId);
       } catch (e) {
         print('Error during job polling: $e');
-        // Return hardcoded data if polling fails
-        return _getEmergencyResponse();
+        // Re-throw the error instead of returning emergency response
+        throw Exception('Analysis failed: $e');
       }
     } catch (e) {
       print('Error analyzing food image: $e');
-      // Return hardcoded data on any error
-      return _getEmergencyResponse();
+      // Re-throw the error instead of returning emergency response
+      rethrow;
     }
   }
 
@@ -285,26 +199,25 @@ class FoodAnalyzerApi {
             try {
               final errorData = jsonDecode(statusResponse.body);
               print('Job failed: ${errorData['error'] ?? "Unknown error"}');
+              throw Exception(
+                  'Analysis failed: ${errorData['error'] ?? "Unknown error"}');
             } catch (e) {
               print('Job failed but could not parse error response');
+              throw Exception('Analysis failed with unknown error');
             }
-
-            if (!completer.isCompleted) {
-              completer.complete(_getEmergencyResponse());
-            }
-            return;
           }
 
           print(
               'Job status check failed: ${statusResponse.statusCode}, ${statusResponse.body}');
 
-          // If we've exceeded max attempts, stop and return emergency response
+          // If we've exceeded max attempts, stop and throw error
           if (attempts >= maxAttempts) {
             timer.cancel();
             print(
                 "Stopped polling after $attempts attempts; status check failed");
             if (!completer.isCompleted) {
-              completer.complete(_getEmergencyResponse());
+              completer.completeError(
+                  Exception('Analysis timeout - status check failed'));
             }
           }
           return;
@@ -316,13 +229,14 @@ class FoodAnalyzerApi {
         } catch (e) {
           print('JSON decode error in status check: $e');
 
-          // If we've exceeded max attempts, stop and return emergency response
+          // If we've exceeded max attempts, stop and throw error
           if (attempts >= maxAttempts) {
             timer.cancel();
             print(
                 "Stopped polling after $attempts attempts; JSON decode error");
             if (!completer.isCompleted) {
-              completer.complete(_getEmergencyResponse());
+              completer.completeError(
+                  Exception('Analysis timeout - JSON decode error'));
             }
           }
           return;
@@ -347,7 +261,8 @@ class FoodAnalyzerApi {
                   !resultData.containsKey('ingredients')) {
                 print('Invalid data format, missing required fields');
                 if (!completer.isCompleted) {
-                  completer.complete(_getEmergencyResponse());
+                  completer.completeError(Exception(
+                      'Invalid data format - missing required fields'));
                 }
                 return;
               }
@@ -357,7 +272,8 @@ class FoodAnalyzerApi {
                   (resultData['ingredients'] as List).isEmpty) {
                 print('Empty ingredients list, using emergency data');
                 if (!completer.isCompleted) {
-                  completer.complete(_getEmergencyResponse());
+                  completer.completeError(Exception(
+                      'Empty ingredients list - using emergency data'));
                 }
                 return;
               }
@@ -369,14 +285,15 @@ class FoodAnalyzerApi {
             } catch (e) {
               print('Data validation failed: $e');
               if (!completer.isCompleted) {
-                completer.complete(_getEmergencyResponse());
+                completer.completeError(Exception('Data validation failed'));
               }
               return;
             }
           } else {
             print('No data in completed job, using emergency response');
             if (!completer.isCompleted) {
-              completer.complete(_getEmergencyResponse());
+              completer.completeError(Exception(
+                  'No data in completed job - using emergency response'));
             }
             return;
           }
@@ -390,7 +307,8 @@ class FoodAnalyzerApi {
           print('Job failed: ${statusData['error'] ?? "Unknown error"}');
 
           if (!completer.isCompleted) {
-            completer.complete(_getEmergencyResponse());
+            completer.completeError(Exception(
+                'Job failed - ${statusData['error'] ?? "Unknown error"}'));
           }
           return;
         }
@@ -402,26 +320,26 @@ class FoodAnalyzerApi {
         print(
             'Job in progress: $progress% - $message (attempt $attempts/$maxAttempts)');
 
-        // If we've exceeded max attempts, stop and return emergency response
+        // If we've exceeded max attempts, stop and throw error
         if (attempts >= maxAttempts) {
           timer.cancel();
           print("Stopped polling after $attempts attempts; analysis timeout");
           if (!completer.isCompleted) {
-            completer.complete(_getEmergencyResponse());
+            completer.completeError(
+                Exception('Analysis timeout - max attempts reached'));
           }
-          return;
         }
       } catch (e) {
         print('Error checking job status: $e');
 
-        // If we've exceeded max attempts, stop and return emergency response
+        // If we've exceeded max attempts, stop and throw error
         if (attempts >= maxAttempts) {
           timer.cancel();
           print("Stopped polling after $attempts attempts; polling error");
           if (!completer.isCompleted) {
-            completer.complete(_getEmergencyResponse());
+            completer
+                .completeError(Exception('Analysis failed - polling error'));
           }
-          return;
         }
       }
     });
@@ -491,11 +409,6 @@ class FoodAnalyzerApi {
 
   // Check if the API is available
   static Future<bool> checkApiAvailability() async {
-    // In emergency client mode, always report API as available
-    if (EMERGENCY_CLIENT_MODE) {
-      return true;
-    }
-
     try {
       final response = await http
           .get(Uri.parse(baseUrl))

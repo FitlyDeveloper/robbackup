@@ -280,117 +280,35 @@ class _SnapFoodState extends State<SnapFood> {
 
         print("API error in _analyzeImage: $e");
 
-        // Create a fallback analysis result
-        Map<String, dynamic> fallbackResult = {
-          'meal_name': 'Analyzed Meal',
-          'ingredients': ['Mixed ingredients'],
-          'ingredient_nutrients': [
-            {
-              'ingredient_name_ref': 'Mixed ingredients',
-              'calories': 250.0,
-              'protein': 15.0,
-              'fat': 10.0,
-              'carbs': 30.0,
-              'fiber': 2.0,
-              'vitamins': {
-                'vitamin_a': 100.0,
-                'vitamin_c': 10.0,
-                'vitamin_d': 5.0,
-                'vitamin_e': 2.0,
-                'vitamin_k': 2.0,
-                'vitamin_b1': 0.2,
-                'vitamin_b2': 0.3,
-                'vitamin_b3': 3.0,
-                'vitamin_b5': 1.0,
-                'vitamin_b6': 0.3,
-                'vitamin_b7': 5.0,
-                'vitamin_b9': 20.0,
-                'vitamin_b12': 0.5,
-              },
-              'minerals': {
-                'calcium': 50.0,
-                'iron': 2.0,
-                'magnesium': 30.0,
-                'phosphorus': 100.0,
-                'potassium': 300.0,
-                'sodium': 50.0,
-                'zinc': 1.0,
-                'copper': 0.2,
-                'manganese': 0.5,
-                'selenium': 10.0,
-                'iodine': 5.0,
-                'chromium': 2.0,
-                'molybdenum': 5.0,
-                'fluoride': 0.1,
-                'chloride': 50.0,
-              },
-              'other': {
-                'fiber': 2.0,
-                'cholesterol': 10.0,
-                'sugar': 5.0,
-                'saturated_fats': 1.0,
-                'omega_3': 0.2,
-                'omega_6': 0.5
-              }
-            }
-          ],
-          'health_score': '5/10'
-        };
-
-        // Show an error dialog and go back to codia_page
+        // Show error and redirect to codia_page - NO FALLBACK DATA
         if (mounted) {
-          // Check if this is a rate limit error
-          if (e.toString().contains("too large") ||
-              e.toString().contains("tokens per min") ||
-              e.toString().contains("429") ||
-              e.toString().contains("rate limit")) {
-            print("Rate limit error detected, using fallback data");
+          setState(() {
+            _isAnalyzing = false;
+          });
 
-            // Use the fallback data instead of showing an error
-            setState(() {
-              _analysisResult = fallbackResult;
-              _isAnalyzing = false;
-            });
-
-            // Generate a scanId
-            String scanId = _generateScanId('Analyzed Meal');
-
-            // Show toast message
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                    "Using default nutrition values due to server rate limits. Try again later with a simpler image."),
-                duration: Duration(seconds: 5),
-              ),
-            );
-
-            // Display results with fallback data
-            _displayAnalysisResults(fallbackResult, scanId);
-            return;
+          // Show a helpful error message based on the error type
+          String errorMessage;
+          if (e.toString().contains("TimeoutException") ||
+              e.toString().contains("timeout")) {
+            errorMessage =
+                "The analysis timed out. This might be due to high server load. Please try again in a few minutes.";
+          } else if (e.toString().contains("Analysis failed")) {
+            errorMessage =
+                "We couldn't analyze your food image. Please try again with a clearer photo showing the food clearly.";
+          } else if (e.toString().contains("Invalid response") ||
+              e.toString().contains("JSON")) {
+            errorMessage =
+                "There was an issue processing the analysis results. Please try again.";
           } else {
-            setState(() {
-              _isAnalyzing = false;
-            });
-
-            // Show a more helpful error message based on the error type
-            String errorMessage;
-            if (e.toString().contains("TimeoutException")) {
-              errorMessage =
-                  "The server is taking longer than expected to respond. This usually happens when the server is starting up after being idle. Please try again in a few minutes when the server is ready.";
-            } else if (e.toString().contains("Analysis timed out")) {
-              errorMessage =
-                  "The analysis took too long to complete. This might be due to high server load. Please try again in a few minutes.";
-            } else {
-              errorMessage =
-                  "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection.";
-            }
-
-            // Show error dialog
-            _showCustomDialog("Analysis Taking Too Long", errorMessage);
-
-            // Pop back to codia_page
-            Navigator.of(context).pop();
+            errorMessage =
+                "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection.";
           }
+
+          // Show error dialog
+          _showCustomDialog("Analysis Failed", errorMessage);
+
+          // Pop back to codia_page
+          Navigator.of(context).pop();
         }
       }
     } catch (e) {
