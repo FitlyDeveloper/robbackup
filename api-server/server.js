@@ -140,7 +140,8 @@ Return valid JSON with this EXACT structure:
       },
       "minerals": {
         "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
+        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
+        "fluoride": 0, "manganese": 0.1, "phosphorus": 200
       },
       "other": {
         "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
@@ -156,7 +157,8 @@ Return valid JSON with this EXACT structure:
     },
     "minerals": {
       "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
+      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
+      "fluoride": 0, "manganese": 0.1, "phosphorus": 200
     },
     "other": {
       "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
@@ -166,8 +168,14 @@ Return valid JSON with this EXACT structure:
 
 UNITS (CRITICAL - DO NOT CONVERT):
 Vitamins: A,D,K,B7,B9,B12=mcg | C,E,B1,B2,B3,B5,B6=mg
-Minerals: Ca,Fe,Mg,K,Na,Zn=mg | Cr,Cu,I,Mo,Se=mcg  
+Minerals: Ca,Fe,Mg,K,Na,Zn,Fluoride,Manganese,Phosphorus=mg | Cr,Cu,I,Mo,Se=mcg  
 Other: fiber,sugar,saturated_fats,omega_6=g | cholesterol,omega_3=mg
+
+CRITICAL REQUIREMENTS:
+- ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
+- NEVER omit any nutrient - use 0 if not present
+- Include fluoride, manganese, phosphorus in minerals (all in mg)
+- Use exact units specified above
 
 GUIDELINES:
 - Identify 2-4 specific food items visible
@@ -288,7 +296,7 @@ GUIDELINES:
                 if (repairedContent === content && content.includes('"minerals":{')) {
                   const lastBrace = content.lastIndexOf('}');
                   if (lastBrace > 0) {
-                    repairedContent = content.substring(0, lastBrace + 1) + ',"other":{"fiber":0,"cholesterol":0,"sugar":0,"saturated_fats":0,"omega_3":0,"omega_6":0}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
+                    repairedContent = content.substring(0, lastBrace + 1) + ',"other":{"fiber":0,"cholesterol":0,"sugar":0,"saturated_fats":0,"omega_3":0,"omega_6":0}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0,"vitamins":{"vitamin_a":0,"vitamin_c":0,"vitamin_d":0,"vitamin_e":0,"vitamin_k":0,"vitamin_b1":0,"vitamin_b2":0,"vitamin_b3":0,"vitamin_b5":0,"vitamin_b6":0,"vitamin_b7":0,"vitamin_b9":0,"vitamin_b12":0},"minerals":{"calcium":0,"iron":0,"magnesium":0,"potassium":0,"sodium":0,"zinc":0,"chromium":0,"copper":0,"iodine":0,"molybdenum":0,"selenium":0,"fluoride":0,"manganese":0,"phosphorus":0},"other":{"fiber":0,"cholesterol":0,"sugar":0,"saturated_fats":0,"omega_3":0,"omega_6":0}}}';
                   }
                 }
               }
@@ -650,7 +658,8 @@ Return valid JSON with this EXACT structure:
       },
       "minerals": {
         "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
+        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
+        "fluoride": 0, "manganese": 0.1, "phosphorus": 200
       },
       "other": {
         "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
@@ -666,7 +675,8 @@ Return valid JSON with this EXACT structure:
     },
     "minerals": {
       "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
+      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
+      "fluoride": 0, "manganese": 0.1, "phosphorus": 200
     },
     "other": {
       "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
@@ -676,8 +686,14 @@ Return valid JSON with this EXACT structure:
 
 UNITS (CRITICAL - DO NOT CONVERT):
 Vitamins: A,D,K,B7,B9,B12=mcg | C,E,B1,B2,B3,B5,B6=mg
-Minerals: Ca,Fe,Mg,K,Na,Zn=mg | Cr,Cu,I,Mo,Se=mcg  
+Minerals: Ca,Fe,Mg,K,Na,Zn,Fluoride,Manganese,Phosphorus=mg | Cr,Cu,I,Mo,Se=mcg  
 Other: fiber,sugar,saturated_fats,omega_6=g | cholesterol,omega_3=mg
+
+CRITICAL REQUIREMENTS:
+- ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
+- NEVER omit any nutrient - use 0 if not present
+- Include fluoride, manganese, phosphorus in minerals (all in mg)
+- Use exact units specified above
 
 GUIDELINES:
 - Identify 2-4 specific food items visible
