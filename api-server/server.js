@@ -134,111 +134,46 @@ Return valid JSON with this EXACT structure:
       "fat_g": 4, 
       "carbs_g": 0,
       "vitamins": {
-        "vitamin_a": 0,
-        "vitamin_c": 0,
-        "vitamin_d": 0,
-        "vitamin_e": 1.2,
-        "vitamin_k": 0.3,
-        "vitamin_b1": 0.1,
-        "vitamin_b2": 0.2,
-        "vitamin_b3": 12.5,
-        "vitamin_b5": 1.8,
-        "vitamin_b6": 0.6,
-        "vitamin_b7": 3.2,
-        "vitamin_b9": 8,
-        "vitamin_b12": 0.3
+        "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
+        "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
+        "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
       },
       "minerals": {
-        "calcium": 15,
-        "iron": 1.0,
-        "magnesium": 29,
-        "potassium": 256,
-        "sodium": 74,
-        "zinc": 1.9,
-        "chromium": 0.1,
-        "copper": 45,
-        "iodine": 2,
-        "molybdenum": 1.5,
-        "selenium": 8.5
+        "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
+        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
       },
       "other": {
-        "fiber": 0,
-        "cholesterol": 85,
-        "sugar": 0,
-        "saturated_fats": 1.1,
-        "omega_3": 74,
-        "omega_6": 0.6
+        "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
       }
     }
   ],
   "total": { 
-    "calories": 165,
-    "protein_g": 31,
-    "fat_g": 4,
-    "carbs_g": 0,
+    "calories": 165, "protein_g": 31, "fat_g": 4, "carbs_g": 0,
     "vitamins": {
-      "vitamin_a": 0,
-      "vitamin_c": 0,
-      "vitamin_d": 0,
-      "vitamin_e": 1.2,
-      "vitamin_k": 0.3,
-      "vitamin_b1": 0.1,
-      "vitamin_b2": 0.2,
-      "vitamin_b3": 12.5,
-      "vitamin_b5": 1.8,
-      "vitamin_b6": 0.6,
-      "vitamin_b7": 3.2,
-      "vitamin_b9": 8,
-      "vitamin_b12": 0.3
+      "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
+      "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
+      "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
     },
     "minerals": {
-      "calcium": 15,
-      "iron": 1.0,
-      "magnesium": 29,
-      "potassium": 256,
-      "sodium": 74,
-      "zinc": 1.9,
-      "chromium": 0.1,
-      "copper": 45,
-      "iodine": 2,
-      "molybdenum": 1.5,
-      "selenium": 8.5
+      "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
+      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
     },
     "other": {
-      "fiber": 0,
-      "cholesterol": 85,
-      "sugar": 0,
-      "saturated_fats": 1.1,
-      "omega_3": 74,
-      "omega_6": 0.6
+      "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
     }
   }
 }
 
-CRITICAL UNIT REQUIREMENTS - MUST MATCH NUTRITION.DART EXACTLY:
+UNITS (CRITICAL - DO NOT CONVERT):
+Vitamins: A,D,K,B7,B9,B12=mcg | C,E,B1,B2,B3,B5,B6=mg
+Minerals: Ca,Fe,Mg,K,Na,Zn=mg | Cr,Cu,I,Mo,Se=mcg  
+Other: fiber,sugar,saturated_fats,omega_6=g | cholesterol,omega_3=mg
 
-VITAMINS:
-- vitamin_a, vitamin_d, vitamin_k, vitamin_b7, vitamin_b9, vitamin_b12: VALUES IN MCG (micrograms)
-- vitamin_c, vitamin_e, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6: VALUES IN MG (milligrams)
-
-MINERALS:
-- calcium, iron, magnesium, potassium, sodium, zinc: VALUES IN MG (milligrams)
-- chromium, copper, iodine, molybdenum, selenium: VALUES IN MCG (micrograms)
-
-OTHER NUTRIENTS:
-- fiber, sugar, saturated_fats, omega_6: VALUES IN G (grams)
-- cholesterol, omega_3: VALUES IN MG (milligrams)
-
-IMPORTANT NUTRITION GUIDELINES:
-- Identify 2-4 specific food items visible in the image
-- Use realistic nutrition values based on actual USDA food data
-- Be specific with food names (not just "meat" but "grilled chicken breast")
-- Calculate accurate portion sizes and nutrition values
-- Include ALL vitamins, minerals, and other nutrients with realistic values
-- CRITICAL: Return values in the EXACT units specified above - do NOT convert units
-- Use 0 for nutrients not present in the food (e.g., cholesterol in vegetables)
-- Provide realistic values based on standard nutrition databases
-- For vitamin_a: typical values 0-900 mcg, for vitamin_c: 0-90 mg, etc.`;
+GUIDELINES:
+- Identify 2-4 specific food items visible
+- Use realistic USDA nutrition values
+- Include ALL nutrients with correct units
+- Use 0 for absent nutrients (e.g. cholesterol in vegetables)`;
 
     let finalResponse = null;
     
@@ -276,7 +211,7 @@ IMPORTANT NUTRITION GUIDELINES:
                 ]
           }
         ],
-            max_tokens: 1000  // Increased for comprehensive nutrition analysis with vitamins/minerals
+            max_tokens: 1500  // Increased for comprehensive nutrition analysis with all vitamins/minerals
       })
     });
 
@@ -323,17 +258,38 @@ IMPORTANT NUTRITION GUIDELINES:
           } catch (parseError) {
             console.error(`Error parsing API response: ${parseError}`);
             
-            // Try to repair truncated JSON
+            // Try to repair truncated JSON - improved for comprehensive nutrition data
             let repairedContent = content;
             
-            // Common truncation fixes
+            // Enhanced truncation fixes for complex nutrition structure
             if (!content.endsWith('}') && !content.endsWith(']')) {
-              // Try to close the JSON properly
+              console.log('Attempting to repair truncated JSON...');
+              
+              // Try multiple repair strategies
               if (content.includes('"ingredients":[')) {
-                // Find the last complete ingredient and close the array/object
-                const lastBrace = content.lastIndexOf('}');
-                if (lastBrace > 0) {
-                  repairedContent = content.substring(0, lastBrace + 1) + ']}';
+                // Strategy 1: Find the last complete ingredient and close properly
+                const lastCompleteIngredient = content.lastIndexOf('"}');
+                if (lastCompleteIngredient > 0) {
+                  // Close the ingredient object, ingredients array, and main object
+                  repairedContent = content.substring(0, lastCompleteIngredient + 2) + '}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
+                }
+                
+                // Strategy 2: If we have partial nutrition data, try to close it
+                if (repairedContent === content && content.includes('"vitamins":{')) {
+                  const lastBrace = content.lastIndexOf('}');
+                  const lastComma = content.lastIndexOf(',');
+                  if (lastBrace > 0) {
+                    // Close vitamins, minerals, other, ingredient, ingredients array, and main object
+                    repairedContent = content.substring(0, Math.max(lastBrace, lastComma)) + '}}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
+                  }
+                }
+                
+                // Strategy 3: If we have partial minerals data
+                if (repairedContent === content && content.includes('"minerals":{')) {
+                  const lastBrace = content.lastIndexOf('}');
+                  if (lastBrace > 0) {
+                    repairedContent = content.substring(0, lastBrace + 1) + ',"other":{"fiber":0,"cholesterol":0,"sugar":0,"saturated_fats":0,"omega_3":0,"omega_6":0}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
+                  }
                 }
               }
             }
@@ -341,7 +297,7 @@ IMPORTANT NUTRITION GUIDELINES:
             // Try parsing the repaired content
             if (repairedContent !== content) {
               try {
-                console.log('Attempting to repair truncated JSON...');
+                console.log('Attempting to parse repaired JSON...');
                 const repairedResponse = JSON.parse(repairedContent);
                 if (repairedResponse.ingredients && repairedResponse.ingredients.length > 0) {
                   console.log('Successfully repaired truncated JSON');
@@ -359,7 +315,7 @@ IMPORTANT NUTRITION GUIDELINES:
                   return; // Exit early on success
                 }
               } catch (repairError) {
-                console.log('JSON repair attempt failed');
+                console.log('JSON repair attempt failed:', repairError.message);
               }
             }
             
@@ -688,111 +644,46 @@ Return valid JSON with this EXACT structure:
       "fat_g": 4, 
       "carbs_g": 0,
       "vitamins": {
-        "vitamin_a": 0,
-        "vitamin_c": 0,
-        "vitamin_d": 0,
-        "vitamin_e": 1.2,
-        "vitamin_k": 0.3,
-        "vitamin_b1": 0.1,
-        "vitamin_b2": 0.2,
-        "vitamin_b3": 12.5,
-        "vitamin_b5": 1.8,
-        "vitamin_b6": 0.6,
-        "vitamin_b7": 3.2,
-        "vitamin_b9": 8,
-        "vitamin_b12": 0.3
+        "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
+        "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
+        "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
       },
       "minerals": {
-        "calcium": 15,
-        "iron": 1.0,
-        "magnesium": 29,
-        "potassium": 256,
-        "sodium": 74,
-        "zinc": 1.9,
-        "chromium": 0.1,
-        "copper": 45,
-        "iodine": 2,
-        "molybdenum": 1.5,
-        "selenium": 8.5
+        "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
+        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
       },
       "other": {
-        "fiber": 0,
-        "cholesterol": 85,
-        "sugar": 0,
-        "saturated_fats": 1.1,
-        "omega_3": 74,
-        "omega_6": 0.6
+        "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
       }
     }
   ],
   "total": { 
-    "calories": 165,
-    "protein_g": 31,
-    "fat_g": 4,
-    "carbs_g": 0,
+    "calories": 165, "protein_g": 31, "fat_g": 4, "carbs_g": 0,
     "vitamins": {
-      "vitamin_a": 0,
-      "vitamin_c": 0,
-      "vitamin_d": 0,
-      "vitamin_e": 1.2,
-      "vitamin_k": 0.3,
-      "vitamin_b1": 0.1,
-      "vitamin_b2": 0.2,
-      "vitamin_b3": 12.5,
-      "vitamin_b5": 1.8,
-      "vitamin_b6": 0.6,
-      "vitamin_b7": 3.2,
-      "vitamin_b9": 8,
-      "vitamin_b12": 0.3
+      "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
+      "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
+      "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
     },
     "minerals": {
-      "calcium": 15,
-      "iron": 1.0,
-      "magnesium": 29,
-      "potassium": 256,
-      "sodium": 74,
-      "zinc": 1.9,
-      "chromium": 0.1,
-      "copper": 45,
-      "iodine": 2,
-      "molybdenum": 1.5,
-      "selenium": 8.5
+      "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
+      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5
     },
     "other": {
-      "fiber": 0,
-      "cholesterol": 85,
-      "sugar": 0,
-      "saturated_fats": 1.1,
-      "omega_3": 74,
-      "omega_6": 0.6
+      "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
     }
   }
 }
 
-CRITICAL UNIT REQUIREMENTS - MUST MATCH NUTRITION.DART EXACTLY:
+UNITS (CRITICAL - DO NOT CONVERT):
+Vitamins: A,D,K,B7,B9,B12=mcg | C,E,B1,B2,B3,B5,B6=mg
+Minerals: Ca,Fe,Mg,K,Na,Zn=mg | Cr,Cu,I,Mo,Se=mcg  
+Other: fiber,sugar,saturated_fats,omega_6=g | cholesterol,omega_3=mg
 
-VITAMINS:
-- vitamin_a, vitamin_d, vitamin_k, vitamin_b7, vitamin_b9, vitamin_b12: VALUES IN MCG (micrograms)
-- vitamin_c, vitamin_e, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6: VALUES IN MG (milligrams)
-
-MINERALS:
-- calcium, iron, magnesium, potassium, sodium, zinc: VALUES IN MG (milligrams)
-- chromium, copper, iodine, molybdenum, selenium: VALUES IN MCG (micrograms)
-
-OTHER NUTRIENTS:
-- fiber, sugar, saturated_fats, omega_6: VALUES IN G (grams)
-- cholesterol, omega_3: VALUES IN MG (milligrams)
-
-IMPORTANT NUTRITION GUIDELINES:
-- Identify 2-4 specific food items visible in the image
-- Use realistic nutrition values based on actual USDA food data
-- Be specific with food names (not just "meat" but "grilled chicken breast")
-- Calculate accurate portion sizes and nutrition values
-- Include ALL vitamins, minerals, and other nutrients with realistic values
-- CRITICAL: Return values in the EXACT units specified above - do NOT convert units
-- Use 0 for nutrients not present in the food (e.g., cholesterol in vegetables)
-- Provide realistic values based on standard nutrition databases
-- For vitamin_a: typical values 0-900 mcg, for vitamin_c: 0-90 mg, etc.`;
+GUIDELINES:
+- Identify 2-4 specific food items visible
+- Use realistic USDA nutrition values
+- Include ALL nutrients with correct units
+- Use 0 for absent nutrients (e.g. cholesterol in vegetables)`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -819,7 +710,7 @@ IMPORTANT NUTRITION GUIDELINES:
             ]
           }
         ],
-          max_tokens: 1000
+          max_tokens: 1500
       })
     });
 
