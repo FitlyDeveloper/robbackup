@@ -204,7 +204,7 @@ GUIDELINES:
           signal: controller.signal,
       body: JSON.stringify({
             model: "gpt-4o", // Using gpt-4o which can handle images
-            temperature: 0.0,
+            temperature: 0.1,  // Slight variation for better JSON generation
             response_format: { type: "json_object" },
         messages: [
           {
@@ -219,7 +219,7 @@ GUIDELINES:
                 ]
           }
         ],
-            max_tokens: 1500  // Increased for comprehensive nutrition analysis with all vitamins/minerals
+            max_tokens: 2000  // Increased significantly for comprehensive nutrition analysis with all 33 nutrients
       })
     });
 
@@ -273,8 +273,18 @@ GUIDELINES:
             if (!content.endsWith('}') && !content.endsWith(']')) {
               console.log('Attempting to repair truncated JSON...');
               
-              // Try multiple repair strategies
-              if (content.includes('"ingredients":[')) {
+              // Strategy 0: Handle truncated decimal numbers
+              if (parseError.message.includes('Unterminated fractional number') || 
+                  parseError.message.includes('fractional number')) {
+                // Find the last complete number and truncate there
+                const lastCompleteNumber = content.lastIndexOf(',');
+                if (lastCompleteNumber > 0) {
+                  repairedContent = content.substring(0, lastCompleteNumber) + '}}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
+                }
+              }
+              
+              // Try multiple repair strategies if decimal fix didn't work
+              if (repairedContent === content && content.includes('"ingredients":[')) {
                 // Strategy 1: Find the last complete ingredient and close properly
                 const lastCompleteIngredient = content.lastIndexOf('"}');
                 if (lastCompleteIngredient > 0) {
@@ -711,7 +721,7 @@ GUIDELINES:
         timeout: 90000, // 90 second timeout for legacy endpoint to match main endpoint
       body: JSON.stringify({
           model: "gpt-4o", // Using gpt-4o which can handle images
-          temperature: 0.0,
+          temperature: 0.1,  // Slight variation for better JSON generation
           response_format: { type: "json_object" },
         messages: [
           {
@@ -726,7 +736,7 @@ GUIDELINES:
             ]
           }
         ],
-          max_tokens: 1500
+          max_tokens: 2000
       })
     });
 
