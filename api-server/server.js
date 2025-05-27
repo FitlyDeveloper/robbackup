@@ -198,7 +198,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
         const timeoutId = setTimeout(() => {
           console.log(`OpenAI API call timeout for job ${jobId}`);
           controller.abort();
-        }, 30000); // 30 second timeout instead of 60
+        }, 90000); // 90 second timeout for large uncompressed images
         
         // Use GPT-4o with image analysis capability
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -783,7 +783,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
         },
-        timeout: 60000, // 60 second timeout for legacy endpoint
+        timeout: 90000, // 90 second timeout for legacy endpoint to match main endpoint
         body: JSON.stringify({
           model: "gpt-4o", // Using gpt-4o which can handle images
           temperature: 0.0,
