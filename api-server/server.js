@@ -404,31 +404,75 @@ IMPORTANT NUTRITION GUIDELINES:
 function processVisionResponse(visionResponse) {
   const { ingredients, total } = visionResponse;
   
-  // Map ingredients to our format
-  const mappedIngredients = ingredients.map(item => ({
-    name: item.name,
-    weight_g: item.weight_g || 100.0,
-    calories: item.calories || 0,
-    protein_g: item.protein_g || 0,
-    fat_g: item.fat_g || 0,
-    carbs_g: item.carbs_g || 0
-  }));
+  // Map ingredients to our format with comprehensive nutrition data
+  const mappedIngredients = ingredients.map(item => {
+    const ingredient = {
+      name: item.name,
+      weight_g: item.weight_g || 100.0,
+      calories: item.calories || 0,
+      protein_g: item.protein_g || 0,
+      fat_g: item.fat_g || 0,
+      carbs_g: item.carbs_g || 0
+    };
+
+    // Add vitamins if present
+    if (item.vitamins) {
+      ingredient.vitamins = item.vitamins;
+    }
+
+    // Add minerals if present
+    if (item.minerals) {
+      ingredient.minerals = item.minerals;
+    }
+
+    // Add other nutrients if present
+    if (item.other) {
+      ingredient.other = item.other;
+    }
+
+    return ingredient;
+  });
   
   // Create a meal name from the ingredients
   const foodNames = mappedIngredients.map(item => item.name);
   const mealName = foodNames.length > 0 ? foodNames.join(' with ') : "Analyzed Meal";
   
-  // Return simple response with only real data from OpenAI
-  return {
+  // Build comprehensive response with all nutrition data
+  const response = {
     meal_name: mealName,
     ingredients: mappedIngredients,
     health_score: calculateHealthScore(mappedIngredients),
-    // Only include totals if provided by OpenAI
+    // Basic macronutrients
     calories: total?.calories || mappedIngredients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
     protein: total?.protein_g || mappedIngredients.reduce((sum, ing) => sum + (ing.protein_g || 0), 0),
     fat: total?.fat_g || mappedIngredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0),
     carbs: total?.carbs_g || mappedIngredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0)
   };
+
+  // Add comprehensive nutrition data if available in totals
+  if (total?.vitamins) {
+    response.vitamins = total.vitamins;
+  }
+
+  if (total?.minerals) {
+    response.minerals = total.minerals;
+  }
+
+  if (total?.other) {
+    response.other = total.other;
+  }
+
+  // Also include ingredient_nutrients array for detailed per-ingredient nutrition
+  if (mappedIngredients.length > 0) {
+    response.ingredient_nutrients = mappedIngredients.map(ingredient => ({
+      name: ingredient.name,
+      vitamins: ingredient.vitamins || {},
+      minerals: ingredient.minerals || {},
+      other: ingredient.other || {}
+    }));
+  }
+
+  return response;
 }
 
 // Calculate health score
