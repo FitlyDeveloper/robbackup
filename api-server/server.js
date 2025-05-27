@@ -121,7 +121,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
     // Detailed system prompt for accurate nutrition analysis
-    const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with accurate nutrition data.
+    const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with comprehensive nutrition data.
 
 Return valid JSON with this EXACT structure:
 {
@@ -132,22 +132,90 @@ Return valid JSON with this EXACT structure:
       "calories": 165,
       "protein_g": 31, 
       "fat_g": 4, 
-      "carbs_g": 0
+      "carbs_g": 0,
+      "vitamins": {
+        "vitamin_a": 0,
+        "vitamin_c": 0,
+        "vitamin_d": 0,
+        "vitamin_e": 1.2,
+        "vitamin_k": 0.3,
+        "vitamin_b1": 0.1,
+        "vitamin_b2": 0.2,
+        "vitamin_b3": 12.5,
+        "vitamin_b5": 1.8,
+        "vitamin_b6": 0.6,
+        "vitamin_b7": 3.2,
+        "vitamin_b9": 8,
+        "vitamin_b12": 0.3
+      },
+      "minerals": {
+        "calcium": 15,
+        "iron": 1.0,
+        "magnesium": 29,
+        "potassium": 256,
+        "sodium": 74,
+        "zinc": 1.9
+      },
+      "other": {
+        "fiber": 0,
+        "cholesterol": 85,
+        "sugar": 0,
+        "saturated_fats": 1.1,
+        "omega_3": 74,
+        "omega_6": 0.6
+      }
     }
   ],
   "total": { 
     "calories": 165,
     "protein_g": 31,
     "fat_g": 4,
-    "carbs_g": 0
+    "carbs_g": 0,
+    "vitamins": {
+      "vitamin_a": 0,
+      "vitamin_c": 0,
+      "vitamin_d": 0,
+      "vitamin_e": 1.2,
+      "vitamin_k": 0.3,
+      "vitamin_b1": 0.1,
+      "vitamin_b2": 0.2,
+      "vitamin_b3": 12.5,
+      "vitamin_b5": 1.8,
+      "vitamin_b6": 0.6,
+      "vitamin_b7": 3.2,
+      "vitamin_b9": 8,
+      "vitamin_b12": 0.3
+    },
+    "minerals": {
+      "calcium": 15,
+      "iron": 1.0,
+      "magnesium": 29,
+      "potassium": 256,
+      "sodium": 74,
+      "zinc": 1.9
+    },
+    "other": {
+      "fiber": 0,
+      "cholesterol": 85,
+      "sugar": 0,
+      "saturated_fats": 1.1,
+      "omega_3": 74,
+      "omega_6": 0.6
+    }
   }
 }
 
-IMPORTANT: 
+IMPORTANT NUTRITION GUIDELINES:
 - Identify 2-4 specific food items visible in the image
-- Use realistic nutrition values based on actual food data
+- Use realistic nutrition values based on actual USDA food data
 - Be specific with food names (not just "meat" but "grilled chicken breast")
-- Calculate accurate portion sizes and nutrition values`;
+- Calculate accurate portion sizes and nutrition values
+- Include ALL vitamins, minerals, and other nutrients with realistic values
+- Vitamin units: A,D,K,B7,B9,B12 in μg; C,E,B1,B2,B3,B5,B6 in mg
+- Mineral units: All in mg (calcium, iron, magnesium, potassium, sodium, zinc)
+- Other nutrient units: fiber,sugar,saturated_fats,omega_6 in g; cholesterol,omega_3 in mg
+- Use 0 for nutrients not present in the food (e.g., cholesterol in vegetables)
+- Provide realistic values based on standard nutrition databases`;
 
     let finalResponse = null;
     
@@ -185,7 +253,7 @@ IMPORTANT:
                 ]
           }
         ],
-            max_tokens: 500  // Increased for detailed food analysis
+            max_tokens: 1000  // Increased for comprehensive nutrition analysis with vitamins/minerals
       })
     });
 
@@ -540,7 +608,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // System prompt for accurate food recognition
-      const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with accurate nutrition data.
+      const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with comprehensive nutrition data.
 
 Return valid JSON with this EXACT structure:
 {
@@ -551,22 +619,90 @@ Return valid JSON with this EXACT structure:
       "calories": 165,
       "protein_g": 31, 
       "fat_g": 4, 
-      "carbs_g": 0
+      "carbs_g": 0,
+      "vitamins": {
+        "vitamin_a": 0,
+        "vitamin_c": 0,
+        "vitamin_d": 0,
+        "vitamin_e": 1.2,
+        "vitamin_k": 0.3,
+        "vitamin_b1": 0.1,
+        "vitamin_b2": 0.2,
+        "vitamin_b3": 12.5,
+        "vitamin_b5": 1.8,
+        "vitamin_b6": 0.6,
+        "vitamin_b7": 3.2,
+        "vitamin_b9": 8,
+        "vitamin_b12": 0.3
+      },
+      "minerals": {
+        "calcium": 15,
+        "iron": 1.0,
+        "magnesium": 29,
+        "potassium": 256,
+        "sodium": 74,
+        "zinc": 1.9
+      },
+      "other": {
+        "fiber": 0,
+        "cholesterol": 85,
+        "sugar": 0,
+        "saturated_fats": 1.1,
+        "omega_3": 74,
+        "omega_6": 0.6
+      }
     }
   ],
   "total": { 
     "calories": 165,
     "protein_g": 31,
     "fat_g": 4,
-    "carbs_g": 0
+    "carbs_g": 0,
+    "vitamins": {
+      "vitamin_a": 0,
+      "vitamin_c": 0,
+      "vitamin_d": 0,
+      "vitamin_e": 1.2,
+      "vitamin_k": 0.3,
+      "vitamin_b1": 0.1,
+      "vitamin_b2": 0.2,
+      "vitamin_b3": 12.5,
+      "vitamin_b5": 1.8,
+      "vitamin_b6": 0.6,
+      "vitamin_b7": 3.2,
+      "vitamin_b9": 8,
+      "vitamin_b12": 0.3
+    },
+    "minerals": {
+      "calcium": 15,
+      "iron": 1.0,
+      "magnesium": 29,
+      "potassium": 256,
+      "sodium": 74,
+      "zinc": 1.9
+    },
+    "other": {
+      "fiber": 0,
+      "cholesterol": 85,
+      "sugar": 0,
+      "saturated_fats": 1.1,
+      "omega_3": 74,
+      "omega_6": 0.6
+    }
   }
 }
 
-IMPORTANT: 
+IMPORTANT NUTRITION GUIDELINES:
 - Identify 2-4 specific food items visible in the image
-- Use realistic nutrition values based on actual food data
+- Use realistic nutrition values based on actual USDA food data
 - Be specific with food names (not just "meat" but "grilled chicken breast")
-- Calculate accurate portion sizes and nutrition values`;
+- Calculate accurate portion sizes and nutrition values
+- Include ALL vitamins, minerals, and other nutrients with realistic values
+- Vitamin units: A,D,K,B7,B9,B12 in μg; C,E,B1,B2,B3,B5,B6 in mg
+- Mineral units: All in mg (calcium, iron, magnesium, potassium, sodium, zinc)
+- Other nutrient units: fiber,sugar,saturated_fats,omega_6 in g; cholesterol,omega_3 in mg
+- Use 0 for nutrients not present in the food (e.g., cholesterol in vegetables)
+- Provide realistic values based on standard nutrition databases`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -593,7 +729,7 @@ IMPORTANT:
             ]
           }
         ],
-          max_tokens: 500
+          max_tokens: 1000
       })
     });
 
