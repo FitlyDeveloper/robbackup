@@ -119,75 +119,29 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI Vision API...'
     });
 
-    // Comprehensive prompt to get all nutrition data from OpenAI
-    const systemPrompt = `You are a precise food-image analyzer.  
-- Only identify items you can visually confirm in the image.  
-- Do NOT guess or hallucinate extra foods.  
-- If uncertain of an ingredient, label it "unknown".
-- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
-- DO NOT use IU (International Units) for any nutrient values.
-- Return strictly valid JSON with exactly these keys:
+    // Simplified system prompt to avoid JSON parsing errors
+    const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY basic nutrition info.
+Return valid JSON with this EXACT structure (no extra fields):
 {
   "ingredients": [
     { 
-      "name": String, 
-      "weight_g": Number, 
-      "calories": Number,
-      "protein_g": Number, 
-      "fat_g": Number, 
-      "carbs_g": Number,
-      "vitamins": {
-        "vitamin_a": Number, // in mcg (NOT IU)
-        "vitamin_c": Number, // in mg
-        "vitamin_d": Number, // in mcg (NOT IU)
-        "vitamin_e": Number, // in mg (NOT IU)
-        "vitamin_k": Number, // in mcg
-        "vitamin_b1": Number, // in mg
-        "vitamin_b2": Number, // in mg
-        "vitamin_b3": Number, // in mg
-        "vitamin_b5": Number, // in mg
-        "vitamin_b6": Number, // in mg
-        "vitamin_b7": Number, // in mcg
-        "vitamin_b9": Number, // in mcg
-        "vitamin_b12": Number // in mcg
-      },
-      "minerals": {
-        "calcium": Number, // in mg
-        "chloride": Number, // in mg
-        "chromium": Number, // in mcg
-        "copper": Number, // in mcg
-        "fluoride": Number, // in mg
-        "iodine": Number, // in mcg
-        "iron": Number, // in mg
-        "magnesium": Number, // in mg
-        "manganese": Number, // in mg
-        "molybdenum": Number, // in mcg
-        "phosphorus": Number, // in mg
-        "potassium": Number, // in mg
-        "selenium": Number, // in mcg
-        "sodium": Number, // in mg
-        "zinc": Number // in mg
-      },
-      "other": {
-        "fiber": Number, // in g
-        "sugar": Number, // in g
-        "cholesterol": Number, // in mg
-        "saturated_fats": Number, // in g
-        "omega_3": Number, // in mg
-        "omega_6": Number // in g
-      }
+      "name": "ingredient name", 
+      "weight_g": 100, 
+      "calories": 250,
+      "protein_g": 15, 
+      "fat_g": 10, 
+      "carbs_g": 30
     }
   ],
   "total": { 
-    "calories": Number,
-    "protein_g": Number,
-    "fat_g": Number,
-    "carbs_g": Number,
-    "vitamins": { /* same structure as above */ },
-    "minerals": { /* same structure as above */ },
-    "other": { /* same structure as above */ }
+    "calories": 250,
+    "protein_g": 15,
+    "fat_g": 10,
+    "carbs_g": 30
   }
-}`;
+}
+
+Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition values.`;
 
     let finalResponse = null;
     
@@ -225,7 +179,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
                 ]
               }
             ],
-            max_tokens: 1000  // Increased to handle full nutrition data
+            max_tokens: 300  // Reduced since we're asking for simpler data
       })
     });
 
@@ -707,74 +661,28 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // System prompt for accurate food recognition
-      const systemPrompt = `You are a precise food-image analyzer.  
-- Only identify items you can visually confirm in the image.  
-- Do NOT guess or hallucinate extra foods.  
-- If uncertain of an ingredient, label it "unknown".
-- Use ONLY the following units for all nutrients: mcg (micrograms), mg (milligrams), and g (grams). 
-- DO NOT use IU (International Units) for any nutrient values.
-- Return strictly valid JSON with exactly these keys:
+      const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY basic nutrition info.
+Return valid JSON with this EXACT structure (no extra fields):
 {
   "ingredients": [
     { 
-      "name": String, 
-      "weight_g": Number, 
-      "calories": Number,
-      "protein_g": Number, 
-      "fat_g": Number, 
-      "carbs_g": Number,
-      "vitamins": {
-        "vitamin_a": Number, // in mcg (NOT IU)
-        "vitamin_c": Number, // in mg
-        "vitamin_d": Number, // in mcg (NOT IU)
-        "vitamin_e": Number, // in mg (NOT IU)
-        "vitamin_k": Number, // in mcg
-        "vitamin_b1": Number, // in mg
-        "vitamin_b2": Number, // in mg
-        "vitamin_b3": Number, // in mg
-        "vitamin_b5": Number, // in mg
-        "vitamin_b6": Number, // in mg
-        "vitamin_b7": Number, // in mcg
-        "vitamin_b9": Number, // in mcg
-        "vitamin_b12": Number // in mcg
-      },
-      "minerals": {
-        "calcium": Number, // in mg
-        "chloride": Number, // in mg
-        "chromium": Number, // in mcg
-        "copper": Number, // in mcg
-        "fluoride": Number, // in mg
-        "iodine": Number, // in mcg
-        "iron": Number, // in mg
-        "magnesium": Number, // in mg
-        "manganese": Number, // in mg
-        "molybdenum": Number, // in mcg
-        "phosphorus": Number, // in mg
-        "potassium": Number, // in mg
-        "selenium": Number, // in mcg
-        "sodium": Number, // in mg
-        "zinc": Number // in mg
-      },
-      "other": {
-        "fiber": Number, // in g
-        "sugar": Number, // in g
-        "cholesterol": Number, // in mg
-        "saturated_fats": Number, // in g
-        "omega_3": Number, // in mg
-        "omega_6": Number // in g
-      }
+      "name": "ingredient name", 
+      "weight_g": 100, 
+      "calories": 250,
+      "protein_g": 15, 
+      "fat_g": 10, 
+      "carbs_g": 30
     }
   ],
   "total": { 
-    "calories": Number,
-    "protein_g": Number,
-    "fat_g": Number,
-    "carbs_g": Number,
-    "vitamins": { /* same structure as above */ },
-    "minerals": { /* same structure as above */ },
-    "other": { /* same structure as above */ }
+    "calories": 250,
+    "protein_g": 15,
+    "fat_g": 10,
+    "carbs_g": 30
   }
-}`;
+}
+
+Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition values.`;
 
       // Make OpenAI API call
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -801,7 +709,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
               ]
             }
           ],
-          max_tokens: 1000
+          max_tokens: 300
         })
       });
       
