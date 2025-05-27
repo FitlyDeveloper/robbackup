@@ -104,8 +104,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       status: 'processing',
       progress: 10,
       message: 'Processing image...'
-    });
-    
+});
+
     // Extract base64 data for vision API - needs special handling
     let processedImage = image;
     if (image.startsWith('data:')) {
@@ -120,29 +120,34 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI Vision API...'
     });
 
-    // Simplified system prompt to avoid JSON parsing errors
-    const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY basic nutrition info.
-Return valid JSON with this EXACT structure (no extra fields):
+    // Detailed system prompt for accurate nutrition analysis
+    const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with accurate nutrition data.
+
+Return valid JSON with this EXACT structure:
 {
   "ingredients": [
     { 
-      "name": "ingredient name", 
+      "name": "specific food name (e.g. grilled chicken breast, white rice, broccoli)", 
       "weight_g": 100, 
-      "calories": 250,
-      "protein_g": 15, 
-      "fat_g": 10, 
-      "carbs_g": 30
+      "calories": 165,
+      "protein_g": 31, 
+      "fat_g": 4, 
+      "carbs_g": 0
     }
   ],
   "total": { 
-    "calories": 250,
-    "protein_g": 15,
-    "fat_g": 10,
-    "carbs_g": 30
+    "calories": 165,
+    "protein_g": 31,
+    "fat_g": 4,
+    "carbs_g": 0
   }
 }
 
-Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition values.`;
+IMPORTANT: 
+- Identify 2-4 specific food items visible in the image
+- Use realistic nutrition values based on actual food data
+- Be specific with food names (not just "meat" but "grilled chicken breast")
+- Calculate accurate portion sizes and nutrition values`;
 
     let finalResponse = null;
     
@@ -178,9 +183,9 @@ Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition valu
                   { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
-              }
-            ],
-            max_tokens: 300  // Reduced since we're asking for simpler data
+          }
+        ],
+            max_tokens: 500  // Increased for detailed food analysis
       })
     });
 
@@ -279,8 +284,8 @@ Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition valu
             console.log(`Job ${jobId} marked failed (JSON parse error) at ${new Date().toISOString()}`);
           }
           } else {
-          const errorData = await response.text();
-          console.error('OpenAI API error:', response.status, errorData);
+      const errorData = await response.text();
+      console.error('OpenAI API error:', response.status, errorData);
           await updateJobStatus(jobId, {
             status: 'failed',
             progress: 100,
@@ -300,7 +305,7 @@ Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition valu
         });
         
         console.log(`Job ${jobId} marked failed (API call error) at ${new Date().toISOString()}`);
-      }
+    }
     } else {
       console.log('No OpenAI API key available');
       await updateJobStatus(jobId, {
@@ -345,144 +350,17 @@ function processVisionResponse(visionResponse) {
   const foodNames = mappedIngredients.map(item => item.name);
   const mealName = foodNames.length > 0 ? foodNames.join(' with ') : "Analyzed Meal";
   
-  // Use the actual nutrition data from OpenAI if available, otherwise generate fallback
-  const ingredientNutrients = ingredients.map(ingredient => {
-    return {
-      name: ingredient.name,
-      protein: ingredient.protein_g || 0,
-      fat: ingredient.fat_g || 0,
-      carbs: ingredient.carbs_g || 0,
-      vitamins: ingredient.vitamins || generateNutritionData('vitamins', ingredient),
-      minerals: ingredient.minerals || generateNutritionData('minerals', ingredient),
-      other: ingredient.other || generateNutritionData('other', ingredient)
-    };
-  });
-  
-  // Return structured response - use the actual totals from OpenAI if available
+  // Return simple response with only real data from OpenAI
   return {
     meal_name: mealName,
     ingredients: mappedIngredients,
-    ingredient_nutrients: ingredientNutrients,
     health_score: calculateHealthScore(mappedIngredients),
-    vitamins: total?.vitamins || generateNutritionData('vitamins'),
-    minerals: total?.minerals || generateNutritionData('minerals'),
-    other: total?.other || generateNutritionData('other')
+    // Only include totals if provided by OpenAI
+    calories: total?.calories || mappedIngredients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
+    protein: total?.protein_g || mappedIngredients.reduce((sum, ing) => sum + (ing.protein_g || 0), 0),
+    fat: total?.fat_g || mappedIngredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0),
+    carbs: total?.carbs_g || mappedIngredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0)
   };
-}
-
-// Generate nutritional data based on category
-function generateNutritionData(category, ingredient) {
-  // Base multiplier based on ingredient weight (default 100g)
-  const weight = ingredient?.weight_g || 100;
-  const multiplier = weight / 100;
-  
-  // Generate realistic values based on ingredient name
-  const ingredientName = ingredient?.name?.toLowerCase() || '';
-  
-  if (category === 'vitamins') {
-    // Base vitamin values (per 100g) - adjust based on ingredient type
-    let baseValues = {
-      vitamin_a: 50,    // mcg
-      vitamin_c: 5,     // mg  
-      vitamin_d: 0.5,   // mcg
-      vitamin_e: 1,     // mg
-      vitamin_k: 5,     // mcg
-      vitamin_b1: 0.1,  // mg
-      vitamin_b2: 0.1,  // mg
-      vitamin_b3: 1,    // mg
-      vitamin_b5: 0.5,  // mg
-      vitamin_b6: 0.1,  // mg
-      vitamin_b7: 2,    // mcg
-      vitamin_b9: 10,   // mcg
-      vitamin_b12: 0.1  // mcg
-    };
-    
-    // Adjust based on ingredient type
-    if (ingredientName.includes('fruit') || ingredientName.includes('orange') || ingredientName.includes('berry')) {
-      baseValues.vitamin_c *= 10; // Fruits high in vitamin C
-      baseValues.vitamin_a *= 2;
-    } else if (ingredientName.includes('meat') || ingredientName.includes('chicken') || ingredientName.includes('beef')) {
-      baseValues.vitamin_b12 *= 20; // Meat high in B12
-      baseValues.vitamin_b3 *= 5;
-    } else if (ingredientName.includes('vegetable') || ingredientName.includes('green')) {
-      baseValues.vitamin_k *= 10; // Greens high in vitamin K
-      baseValues.vitamin_a *= 5;
-    }
-    
-    // Apply weight multiplier and round to reasonable precision
-    Object.keys(baseValues).forEach(vitamin => {
-      baseValues[vitamin] = Math.round(baseValues[vitamin] * multiplier * 10) / 10;
-    });
-    
-    return baseValues;
-  } else if (category === 'minerals') {
-    let baseValues = {
-      calcium: 50,      // mg
-      chloride: 10,     // mg
-      chromium: 1,      // mcg
-      copper: 100,      // mcg
-      fluoride: 0.1,    // mg
-      iodine: 5,        // mcg
-      iron: 2,          // mg
-      magnesium: 25,    // mg
-      manganese: 0.5,   // mg
-      molybdenum: 5,    // mcg
-      phosphorus: 50,   // mg
-      potassium: 200,   // mg
-      selenium: 5,      // mcg
-      sodium: 100,      // mg
-      zinc: 1           // mg
-    };
-    
-    // Adjust based on ingredient type
-    if (ingredientName.includes('dairy') || ingredientName.includes('milk') || ingredientName.includes('cheese')) {
-      baseValues.calcium *= 10; // Dairy high in calcium
-      baseValues.phosphorus *= 3;
-    } else if (ingredientName.includes('meat') || ingredientName.includes('red')) {
-      baseValues.iron *= 5; // Red meat high in iron
-      baseValues.zinc *= 3;
-    } else if (ingredientName.includes('banana') || ingredientName.includes('potato')) {
-      baseValues.potassium *= 5; // High potassium foods
-    }
-    
-    // Apply weight multiplier and round
-    Object.keys(baseValues).forEach(mineral => {
-      baseValues[mineral] = Math.round(baseValues[mineral] * multiplier * 10) / 10;
-    });
-    
-    return baseValues;
-        } else {
-    let baseValues = {
-      fiber: 2,           // g
-      sugar: 5,           // g
-      cholesterol: 10,    // mg
-      saturated_fats: 1,  // g
-      omega_3: 0.1,       // mg
-      omega_6: 0.5        // g
-    };
-    
-    // Adjust based on ingredient type
-    if (ingredientName.includes('fruit')) {
-      baseValues.sugar *= 3; // Fruits higher in sugar
-      baseValues.fiber *= 2;
-      baseValues.cholesterol = 0; // Fruits have no cholesterol
-    } else if (ingredientName.includes('vegetable')) {
-      baseValues.fiber *= 3; // Vegetables high in fiber
-      baseValues.sugar *= 0.5; // Lower sugar
-      baseValues.cholesterol = 0;
-    } else if (ingredientName.includes('meat')) {
-      baseValues.cholesterol *= 5; // Meat has cholesterol
-      baseValues.saturated_fats *= 3;
-      baseValues.fiber = 0; // Meat has no fiber
-    }
-    
-    // Apply weight multiplier and round
-    Object.keys(baseValues).forEach(nutrient => {
-      baseValues[nutrient] = Math.round(baseValues[nutrient] * multiplier * 10) / 10;
-    });
-    
-    return baseValues;
-  }
 }
 
 // Calculate health score
@@ -548,14 +426,14 @@ app.post('/api/jobs', limiter, async (req, res) => {
 
     // Return job ID immediately
     return res.status(201).json({
-      success: true,
+        success: true,
       jobId,
       status: 'pending'
-    });
+      });
   } catch (error) {
     console.error('Job submission error:', error.message);
     return res.status(500).json({
-        success: false,
+      success: false,
       error: `Job submission failed: ${error.message}`
     });
   }
@@ -662,58 +540,63 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // System prompt for accurate food recognition
-      const systemPrompt = `You are a food analyzer. Analyze the image and return ONLY basic nutrition info.
-Return valid JSON with this EXACT structure (no extra fields):
+      const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with accurate nutrition data.
+
+Return valid JSON with this EXACT structure:
 {
   "ingredients": [
     { 
-      "name": "ingredient name", 
+      "name": "specific food name (e.g. grilled chicken breast, white rice, broccoli)", 
       "weight_g": 100, 
-      "calories": 250,
-      "protein_g": 15, 
-      "fat_g": 10, 
-      "carbs_g": 30
+      "calories": 165,
+      "protein_g": 31, 
+      "fat_g": 4, 
+      "carbs_g": 0
     }
   ],
   "total": { 
-    "calories": 250,
-    "protein_g": 15,
-    "fat_g": 10,
-    "carbs_g": 30
+    "calories": 165,
+    "protein_g": 31,
+    "fat_g": 4,
+    "carbs_g": 0
   }
 }
 
-Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition values.`;
+IMPORTANT: 
+- Identify 2-4 specific food items visible in the image
+- Use realistic nutrition values based on actual food data
+- Be specific with food names (not just "meat" but "grilled chicken breast")
+- Calculate accurate portion sizes and nutrition values`;
 
       // Make OpenAI API call
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-        },
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
         timeout: 90000, // 90 second timeout for legacy endpoint to match main endpoint
-        body: JSON.stringify({
+      body: JSON.stringify({
           model: "gpt-4o", // Using gpt-4o which can handle images
           temperature: 0.0,
           response_format: { type: "json_object" },
-          messages: [
-            {
+        messages: [
+          {
               role: "system",
               content: systemPrompt
-            },
-            {
+          },
+          {
               role: "user",
-              content: [
+            content: [
                 { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
                 { type: "image_url", image_url: { url: processedImage } }
-              ]
-            }
-          ],
-          max_tokens: 300
-        })
-      });
-      
+            ]
+          }
+        ],
+          max_tokens: 500
+      })
+    });
+
       if (response.ok) {
         const responseData = await response.json();
         const content = responseData.choices[0].message.content.trim();
@@ -722,7 +605,7 @@ Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition valu
           // Parse JSON response first before logging
           const jsonResponse = JSON.parse(content);
           console.log('Legacy endpoint API response successfully parsed');
-          
+      
           // Check if we have valid ingredients
           if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
             // Convert OpenAI's response to our expected format
@@ -761,7 +644,7 @@ Keep it simple. Only identify 1-3 main ingredients. Use realistic nutrition valu
       return res.status(500).json({
         success: false,
         error: `API call error: ${error.message}`
-      });
+        });
     }
   } catch (error) {
     console.error('Server error:', error.message);
