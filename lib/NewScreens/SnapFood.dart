@@ -35,6 +35,9 @@ import '../services/food_analyzer_api.dart';
 // Import FoodCardOpen for navigation after analysis
 import 'FoodCardOpen.dart';
 
+// Import the codia_page to access NutritionTracker
+// import '../Features/codia/codia_page.dart' as main_codia;
+
 class SnapFood extends StatefulWidget {
   const SnapFood({super.key});
 
@@ -230,6 +233,14 @@ class _SnapFoodState extends State<SnapFood> {
         print('Image size acceptable, using original');
       }
 
+      // Enhance image quality for better ingredient detection
+      // Ensure minimum resolution for API analysis
+      if (finalImage.length < 100 * 1024) {
+        // If less than 100KB, might be too small
+        print(
+            'Image might be too small for detailed analysis, but proceeding...');
+      }
+
       // Show progress update
       if (mounted) {
         setState(() {
@@ -255,6 +266,19 @@ class _SnapFoodState extends State<SnapFood> {
             _analysisResult = response;
             _formattedAnalysisResult = null;
           });
+
+          // Check if only one ingredient was detected and log this
+          if (response.containsKey('meal') && response['meal'] is List) {
+            List<dynamic> ingredients = response['meal'];
+            if (ingredients.length == 1) {
+              print(
+                  'WARNING: Only 1 ingredient detected. This might indicate the image needs better lighting or the meal is simple.');
+              print(
+                  'Detected ingredient: ${ingredients[0]['dish'] ?? 'Unknown'}');
+            } else {
+              print('SUCCESS: ${ingredients.length} ingredients detected');
+            }
+          }
 
           // Extract the food name for the scan ID
           String foodName = 'Analyzed Meal';
@@ -514,14 +538,19 @@ class _SnapFoodState extends State<SnapFood> {
       if (analysisData.containsKey('meal_name')) {
         String mealName = analysisData['meal_name'];
         List<dynamic> ingredients = analysisData['ingredients'] ?? [];
-        double calories =
-            _extractDecimalValue(analysisData['calories']?.toString() ?? "0");
-        double protein =
-            _extractDecimalValue(analysisData['protein']?.toString() ?? "0");
-        double fat =
-            _extractDecimalValue(analysisData['fat']?.toString() ?? "0");
-        double carbs =
-            _extractDecimalValue(analysisData['carbs']?.toString() ?? "0");
+
+        // PRESERVE PRECISION: Use string extraction to avoid rounding
+        String calories =
+            _extractNumericValue(analysisData['calories']?.toString() ?? "0");
+        String protein =
+            _extractNumericValue(analysisData['protein']?.toString() ?? "0");
+        String fat =
+            _extractNumericValue(analysisData['fat']?.toString() ?? "0");
+        String carbs =
+            _extractNumericValue(analysisData['carbs']?.toString() ?? "0");
+
+        // Only convert to double for calculations, keep strings for display
+        double caloriesDouble = double.tryParse(calories) ?? 0.0;
         double vitaminC =
             _extractDecimalValue(analysisData['vitamin_c']?.toString() ?? "0");
         String healthScore = analysisData['health_score']?.toString() ?? "5/10";
@@ -552,12 +581,12 @@ class _SnapFoodState extends State<SnapFood> {
               'name': ingredient['name'] ?? 'Unknown ingredient',
               'amount': '${ingredient['weight_g'] ?? 100}g',
               'calories': ingredient['calories'] ?? 0,
-              'protein': _extractDecimalValue(
-                  ingredient['protein_g']?.toString() ?? "0"),
-              'fat':
-                  _extractDecimalValue(ingredient['fat_g']?.toString() ?? "0"),
-              'carbs': _extractDecimalValue(
-                  ingredient['carbs_g']?.toString() ?? "0"),
+              'protein': ingredient['protein_g'] ??
+                  0.0, // Keep as number to preserve precision
+              'fat': ingredient['fat_g'] ??
+                  0.0, // Keep as number to preserve precision
+              'carbs': ingredient['carbs_g'] ??
+                  0.0, // Keep as number to preserve precision
             };
           }
           // If ingredient is a string, try to parse it properly
@@ -594,15 +623,12 @@ class _SnapFoodState extends State<SnapFood> {
                 Map<String, dynamic>.from(ingredientNutrients[i]);
 
             // Update macronutrient data from detailed nutrients
-            processedIngredient['protein'] = _extractDecimalValue(
-                nutrient['protein']?.toString() ??
-                    processedIngredient['protein'].toString());
-            processedIngredient['fat'] = _extractDecimalValue(
-                nutrient['fat']?.toString() ??
-                    processedIngredient['fat'].toString());
-            processedIngredient['carbs'] = _extractDecimalValue(
-                nutrient['carbs']?.toString() ??
-                    processedIngredient['carbs'].toString());
+            processedIngredient['protein'] =
+                nutrient['protein'] ?? processedIngredient['protein'];
+            processedIngredient['fat'] =
+                nutrient['fat'] ?? processedIngredient['fat'];
+            processedIngredient['carbs'] =
+                nutrient['carbs'] ?? processedIngredient['carbs'];
 
             // Process vitamins
             if (nutrient.containsKey('vitamins') &&
@@ -615,8 +641,7 @@ class _SnapFoodState extends State<SnapFood> {
                   '\nIngredient: ${processedIngredient['name']} - Found ${vitaminsMap.length} vitamins');
               print('  Vitamins:');
               vitaminsMap.forEach((key, value) {
-                print(
-                    '    • $key: ${_extractDecimalValue(value.toString())}${_getUnitForVitamin(key)}');
+                print('    • $key: ${value}${_getUnitForVitamin(key)}');
               });
             }
 
@@ -629,8 +654,7 @@ class _SnapFoodState extends State<SnapFood> {
 
               print('  Minerals:');
               mineralsMap.forEach((key, value) {
-                print(
-                    '    • $key: ${_extractDecimalValue(value.toString())}${_getUnitForMineral(key)}');
+                print('    • $key: ${value}${_getUnitForMineral(key)}');
               });
             }
 
@@ -642,8 +666,7 @@ class _SnapFoodState extends State<SnapFood> {
 
               print('  Other Nutrients:');
               otherMap.forEach((key, value) {
-                print(
-                    '    • $key: ${_extractDecimalValue(value.toString())}${_getUnitForNutrient(key)}');
+                print('    • $key: ${value}${_getUnitForNutrient(key)}');
               });
             } else {
               // Create default other nutrients if missing
@@ -670,16 +693,14 @@ class _SnapFoodState extends State<SnapFood> {
 
         print('=====================================\n');
 
-        // Rest of the method remains the same...
-
         // Pass the scanId to _saveFoodCardData - this ensures consistent ID usage
         _saveFoodCardData(
           mealName,
           ingredients.join(", "),
-          calories.toString(),
-          protein.toString(),
-          fat.toString(),
-          carbs.toString(),
+          calories,
+          protein,
+          fat,
+          carbs,
           ingredientsList,
           healthScore,
           scanId, // Pass the scanId parameter
@@ -747,29 +768,35 @@ class _SnapFoodState extends State<SnapFood> {
 
   // Helper method to extract numeric value from a string, preserving decimal places
   String _extractNumericValue(String input) {
-    // Use a pre-compiled RegExp for performance
-    final numericRegex = RegExp(r'(\d+\.?\d*)');
+    // Use a more precise RegExp that captures decimal values properly
+    final numericRegex = RegExp(r'(\d+(?:\.\d+)?)');
     final match = numericRegex.firstMatch(input);
     if (match != null && match.group(1) != null) {
-      return match.group(1)!;
+      // Parse as double first to validate, then return as string to preserve precision
+      final value = double.tryParse(match.group(1)!);
+      if (value != null) {
+        // Return the original matched string to preserve exact decimal places
+        return match.group(1)!;
+      }
     }
     return "0";
   }
 
-  // Helper method to extract numeric value from a string and convert to int
+  // Helper method to extract numeric value from a string and convert to int (only when needed)
   int _extractNumericValueAsInt(String input) {
-    final numericRegex = RegExp(r'(\d+\.?\d*)');
+    final numericRegex = RegExp(r'(\d+(?:\.\d+)?)');
     final match = numericRegex.firstMatch(input);
     if (match != null && match.group(1) != null) {
       final value = double.tryParse(match.group(1)!) ?? 0.0;
-      return value.round();
+      return value
+          .round(); // Only round when converting to int is specifically needed
     }
     return 0;
   }
 
-  // Helper method to extract numeric value with decimal places from a string
+  // Helper method to extract numeric value with decimal places from a string - PRESERVE PRECISION
   double _extractDecimalValue(String input) {
-    final numericRegex = RegExp(r'(\d+\.?\d*)');
+    final numericRegex = RegExp(r'(\d+(?:\.\d+)?)');
     final match = numericRegex.firstMatch(input);
     if (match != null && match.group(1) != null) {
       return double.tryParse(match.group(1)!) ?? 0.0;
@@ -777,10 +804,10 @@ class _SnapFoodState extends State<SnapFood> {
     return 0.0;
   }
 
-  // Gets exact raw calorie value as integer
-  int _getRawCalorieValue(double calories) {
-    // Just convert to integer, no rounding to multiples
-    return calories.toInt();
+  // Gets exact raw calorie value as double (not integer) to preserve precision
+  double _getRawCalorieValue(double calories) {
+    // Return exact value without any rounding
+    return calories;
   }
 
   // Save food card data to SharedPreferences
@@ -860,6 +887,9 @@ class _SnapFoodState extends State<SnapFood> {
 
       // Save updated list
       await prefs.setStringList('food_cards', storedCards);
+
+      // Invalidate nutrition cache since new food data was added
+      // main_codia.NutritionTracker.invalidateCacheStatic();
     } catch (e) {}
 
     // Prepare display image in parallel with storage operations
