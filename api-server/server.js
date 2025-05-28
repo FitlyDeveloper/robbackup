@@ -121,7 +121,21 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
     // Detailed system prompt for accurate nutrition analysis
-    const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with comprehensive nutrition data.
+    const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify ALL visible food items with comprehensive nutrition data.
+
+CRITICAL: ALWAYS DETECT MULTIPLE INGREDIENTS
+- Look carefully at EVERY part of the plate/image
+- Identify EACH separate food component (proteins, vegetables, sides, garnishes)
+- For complex meals, you should typically find 3-6 distinct ingredients
+- Do NOT combine multiple foods into one ingredient
+- Treat each distinct food item as a separate ingredient
+
+EXAMPLES OF WHAT TO DETECT SEPARATELY:
+- Meat items: chicken, beef, sausage, fish (each type separately)
+- Vegetables: broccoli, carrots, tomatoes, cucumbers, lettuce (each separately)
+- Starches: rice, pasta, bread, potatoes (each separately)
+- Sides: coleslaw, salad, sauce, dressing (each separately)
+- Garnishes: herbs, spices, small vegetables (include these too)
 
 Return valid JSON with this EXACT structure:
 {
@@ -176,10 +190,23 @@ CRITICAL REQUIREMENTS:
 - NEVER omit any nutrient - use 0 if not present
 - Include fluoride, manganese, phosphorus in minerals (all in mg)
 - Use exact units specified above
+- MINIMUM 2 ingredients for any meal (unless truly single item)
+- SCAN SYSTEMATICALLY: Look at all areas of the plate/image
+- IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
 
-GUIDELINES:
-- Identify 2-4 specific food items visible
-- Use realistic USDA nutrition values
+DETECTION STRATEGY:
+1. Scan the entire image systematically (left to right, top to bottom)
+2. Identify the main protein(s) - meat, fish, eggs, dairy
+3. Identify all vegetables - even small garnishes count
+4. Identify starches/grains - rice, bread, pasta, potatoes
+5. Identify sides/salads - coleslaw, mixed salads, etc.
+6. Identify sauces/condiments - dressings, oils, etc.
+7. Double-check: Have I found at least 2-3 distinct items?
+
+QUALITY CHECK:
+- If you only detect 1 ingredient, look again more carefully
+- Complex plated meals should have 3-6 ingredients typically
+- Use realistic USDA nutrition values with precise decimal places
 - Include ALL nutrients with correct units
 - Use 0 for absent nutrients (e.g. cholesterol in vegetables)`;
 
@@ -214,7 +241,7 @@ GUIDELINES:
           {
                 role: "user",
             content: [
-                  { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
+                  { type: "text", text: "Analyze this meal image and identify ALL separate food components. Look carefully at every part of the plate - identify each distinct ingredient separately (proteins, vegetables, sides, garnishes). For complex meals, you should typically find 3-6 distinct ingredients. Return comprehensive nutrition data in JSON format exactly as specified." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
           }
@@ -251,7 +278,7 @@ GUIDELINES:
               });
               
               console.log(`Job ${jobId} marked completed at ${new Date().toISOString()}`);
-            } else {
+      } else {
               // No ingredients found - return error
               console.log('No ingredients detected by API');
               await updateJobStatus(jobId, {
@@ -347,8 +374,8 @@ GUIDELINES:
             });
             
             console.log(`Job ${jobId} marked failed (JSON parse error) at ${new Date().toISOString()}`);
-          }
-          } else {
+        }
+      } else {
       const errorData = await response.text();
       console.error('OpenAI API error:', response.status, errorData);
           await updateJobStatus(jobId, {
@@ -359,8 +386,8 @@ GUIDELINES:
           });
           
           console.log(`Job ${jobId} marked failed (API error ${response.status}) at ${new Date().toISOString()}`);
-        }
-      } catch (error) {
+    }
+  } catch (error) {
         console.error(`API call failed for job ${jobId}:`, error);
         await updateJobStatus(jobId, {
           status: 'failed',
@@ -649,7 +676,21 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // System prompt for accurate food recognition
-      const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify all visible food items with comprehensive nutrition data.
+      const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify ALL visible food items with comprehensive nutrition data.
+
+CRITICAL: ALWAYS DETECT MULTIPLE INGREDIENTS
+- Look carefully at EVERY part of the plate/image
+- Identify EACH separate food component (proteins, vegetables, sides, garnishes)
+- For complex meals, you should typically find 3-6 distinct ingredients
+- Do NOT combine multiple foods into one ingredient
+- Treat each distinct food item as a separate ingredient
+
+EXAMPLES OF WHAT TO DETECT SEPARATELY:
+- Meat items: chicken, beef, sausage, fish (each type separately)
+- Vegetables: broccoli, carrots, tomatoes, cucumbers, lettuce (each separately)
+- Starches: rice, pasta, bread, potatoes (each separately)
+- Sides: coleslaw, salad, sauce, dressing (each separately)
+- Garnishes: herbs, spices, small vegetables (include these too)
 
 Return valid JSON with this EXACT structure:
 {
@@ -704,10 +745,23 @@ CRITICAL REQUIREMENTS:
 - NEVER omit any nutrient - use 0 if not present
 - Include fluoride, manganese, phosphorus in minerals (all in mg)
 - Use exact units specified above
+- MINIMUM 2 ingredients for any meal (unless truly single item)
+- SCAN SYSTEMATICALLY: Look at all areas of the plate/image
+- IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
 
-GUIDELINES:
-- Identify 2-4 specific food items visible
-- Use realistic USDA nutrition values
+DETECTION STRATEGY:
+1. Scan the entire image systematically (left to right, top to bottom)
+2. Identify the main protein(s) - meat, fish, eggs, dairy
+3. Identify all vegetables - even small garnishes count
+4. Identify starches/grains - rice, bread, pasta, potatoes
+5. Identify sides/salads - coleslaw, mixed salads, etc.
+6. Identify sauces/condiments - dressings, oils, etc.
+7. Double-check: Have I found at least 2-3 distinct items?
+
+QUALITY CHECK:
+- If you only detect 1 ingredient, look again more carefully
+- Complex plated meals should have 3-6 ingredients typically
+- Use realistic USDA nutrition values with precise decimal places
 - Include ALL nutrients with correct units
 - Use 0 for absent nutrients (e.g. cholesterol in vegetables)`;
 
@@ -731,7 +785,7 @@ GUIDELINES:
           {
               role: "user",
             content: [
-                { type: "text", text: "Analyze this meal image and return JSON exactly as specified." },
+                { type: "text", text: "Analyze this meal image and identify ALL separate food components. Look carefully at every part of the plate - identify each distinct ingredient separately (proteins, vegetables, sides, garnishes). For complex meals, you should typically find 3-6 distinct ingredients. Return comprehensive nutrition data in JSON format exactly as specified." },
                 { type: "image_url", image_url: { url: processedImage } }
             ]
           }
