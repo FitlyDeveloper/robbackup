@@ -7080,6 +7080,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       });
     }
 
+    // Convert flat nutrition data to the format expected by Nutrition screen
+    Map<String, dynamic> formattedNutritionData =
+        _formatNutritionDataForScreen(nutritionData);
+
     // Create a truly consistent ID for this specific food that will never change
     // This ensures we always update and display the same persisted data for this food
     String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
@@ -7087,7 +7091,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     // Construct a simple deterministic ID that will be the same every time for this food
     String foodSpecificScanId = "food_nutrition_${foodName}_${caloriesId}";
 
-    print("Passing nutrition data to Nutrition.dart: $nutritionData");
+    print(
+        "Passing formatted nutrition data to Nutrition.dart: $formattedNutritionData");
     print("Using PERSISTENT food-specific scan ID: $foodSpecificScanId");
 
     // Pre-save the nutrition data with this ID to ensure it's never lost
@@ -7099,7 +7104,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       Map<String, dynamic> allData = {
         'scanId': foodSpecificScanId,
         'lastSaved': DateTime.now().millisecondsSinceEpoch,
-        'nutritionData': nutritionData
+        'nutritionData': formattedNutritionData
       };
 
       // Convert to JSON and save in a single operation
@@ -7127,13 +7132,123 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       context,
       MaterialPageRoute(
         builder: (context) => nutrition_page.CodiaPage(
-          nutritionData: nutritionData,
+          nutritionData: formattedNutritionData,
           scanId: foodSpecificScanId, // Pass the unique scan ID
         ),
       ),
     ).then((_) {
       print("Returned from Nutrition.dart");
     });
+  }
+
+  // Helper method to format nutrition data for the Nutrition screen
+  Map<String, dynamic> _formatNutritionDataForScreen(
+      Map<String, dynamic> flatData) {
+    Map<String, dynamic> vitamins = {};
+    Map<String, dynamic> minerals = {};
+    Map<String, dynamic> other = {};
+
+    // Define vitamin mappings with their daily values and units
+    Map<String, Map<String, dynamic>> vitaminInfo = {
+      'vitamin_a': {'dailyValue': 900.0, 'unit': 'mcg', 'name': 'Vitamin A'},
+      'vitamin_c': {'dailyValue': 75.0, 'unit': 'mg', 'name': 'Vitamin C'},
+      'vitamin_d': {'dailyValue': 15.0, 'unit': 'mcg', 'name': 'Vitamin D'},
+      'vitamin_e': {'dailyValue': 15.0, 'unit': 'mg', 'name': 'Vitamin E'},
+      'vitamin_k': {'dailyValue': 90.0, 'unit': 'mcg', 'name': 'Vitamin K'},
+      'vitamin_b1': {'dailyValue': 1.1, 'unit': 'mg', 'name': 'Vitamin B1'},
+      'vitamin_b2': {'dailyValue': 1.1, 'unit': 'mg', 'name': 'Vitamin B2'},
+      'vitamin_b3': {'dailyValue': 14.0, 'unit': 'mg', 'name': 'Vitamin B3'},
+      'vitamin_b5': {'dailyValue': 5.0, 'unit': 'mg', 'name': 'Vitamin B5'},
+      'vitamin_b6': {'dailyValue': 1.3, 'unit': 'mg', 'name': 'Vitamin B6'},
+      'vitamin_b7': {'dailyValue': 30.0, 'unit': 'mcg', 'name': 'Vitamin B7'},
+      'vitamin_b9': {'dailyValue': 400.0, 'unit': 'mcg', 'name': 'Vitamin B9'},
+      'vitamin_b12': {'dailyValue': 2.4, 'unit': 'mcg', 'name': 'Vitamin B12'},
+    };
+
+    // Define mineral mappings
+    Map<String, Map<String, dynamic>> mineralInfo = {
+      'calcium': {'dailyValue': 1000.0, 'unit': 'mg', 'name': 'Calcium'},
+      'iron': {'dailyValue': 8.0, 'unit': 'mg', 'name': 'Iron'},
+      'magnesium': {'dailyValue': 320.0, 'unit': 'mg', 'name': 'Magnesium'},
+      'potassium': {'dailyValue': 3500.0, 'unit': 'mg', 'name': 'Potassium'},
+      'sodium': {'dailyValue': 2300.0, 'unit': 'mg', 'name': 'Sodium'},
+      'zinc': {'dailyValue': 8.0, 'unit': 'mg', 'name': 'Zinc'},
+      'phosphorus': {'dailyValue': 700.0, 'unit': 'mg', 'name': 'Phosphorus'},
+      'copper': {'dailyValue': 0.9, 'unit': 'mg', 'name': 'Copper'},
+      'manganese': {'dailyValue': 1.8, 'unit': 'mg', 'name': 'Manganese'},
+      'selenium': {'dailyValue': 55.0, 'unit': 'mcg', 'name': 'Selenium'},
+      'chromium': {'dailyValue': 35.0, 'unit': 'mcg', 'name': 'Chromium'},
+      'iodine': {'dailyValue': 150.0, 'unit': 'mcg', 'name': 'Iodine'},
+      'molybdenum': {'dailyValue': 45.0, 'unit': 'mcg', 'name': 'Molybdenum'},
+      'fluoride': {'dailyValue': 3.0, 'unit': 'mg', 'name': 'Fluoride'},
+    };
+
+    // Process each nutrient in the flat data
+    flatData.forEach((key, value) {
+      String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+      double numericValue = _parseNutritionValue(value);
+
+      if (vitaminInfo.containsKey(normalizedKey)) {
+        // It's a vitamin
+        var info = vitaminInfo[normalizedKey]!;
+        double dailyValue = info['dailyValue'];
+        String unit = info['unit'];
+        String name = info['name'];
+
+        double progress = numericValue / dailyValue;
+        int percentage = (progress * 100).round();
+
+        vitamins[normalizedKey] = {
+          'name': name,
+          'value':
+              '${numericValue.toStringAsFixed(1)}/${dailyValue.toStringAsFixed(1)} $unit',
+          'percent': '$percentage%',
+          'progress': progress.clamp(0.0, 1.0),
+          'hasInfo': false,
+        };
+      } else if (mineralInfo.containsKey(normalizedKey)) {
+        // It's a mineral
+        var info = mineralInfo[normalizedKey]!;
+        double dailyValue = info['dailyValue'];
+        String unit = info['unit'];
+        String name = info['name'];
+
+        double progress = numericValue / dailyValue;
+        int percentage = (progress * 100).round();
+
+        minerals[normalizedKey] = {
+          'name': name,
+          'value':
+              '${numericValue.toStringAsFixed(1)}/${dailyValue.toStringAsFixed(1)} $unit',
+          'percent': '$percentage%',
+          'progress': progress.clamp(0.0, 1.0),
+          'hasInfo': false,
+        };
+      } else if (!['protein', 'fat', 'carbs'].contains(normalizedKey)) {
+        // It's other nutrients (fiber, cholesterol, etc.)
+        other[normalizedKey] = {
+          'name': _formatNutrientName(normalizedKey),
+          'value': '${numericValue.toStringAsFixed(1)} g',
+          'percent': '0%',
+          'progress': 0.0,
+          'hasInfo': false,
+        };
+      }
+    });
+
+    return {
+      'vitamins': vitamins,
+      'minerals': minerals,
+      'other': other,
+    };
+  }
+
+  // Helper method to format nutrient names for display
+  String _formatNutrientName(String key) {
+    return key
+        .split('_')
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
   }
 
   // Helper method to generate a scanId specific to this food
