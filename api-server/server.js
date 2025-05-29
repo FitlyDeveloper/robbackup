@@ -195,38 +195,8 @@ IMPORTANT:
           const content = responseData.choices[0].message.content.trim();
           
           try {
-            // Log the raw response for debugging
-            console.log('Raw OpenAI response length:', content.length);
-            console.log('Raw OpenAI response preview (first 500 chars):', content.substring(0, 500));
-            
-            // Check for position 4451 specifically where the error occurs
-            if (content.length > 4451) {
-              console.log('Character at position 4451:', JSON.stringify(content.charAt(4451)));
-              console.log('Context around position 4451:', JSON.stringify(content.substring(4440, 4460)));
-            }
-            
-            // Try to clean the response
-            let cleanedContent = content.trim();
-            
-            // Remove markdown code blocks if present
-            if (cleanedContent.startsWith('```json')) {
-              cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            } else if (cleanedContent.startsWith('```')) {
-              cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
-            }
-            
-            console.log('Cleaned response preview (first 500 chars):', cleanedContent.substring(0, 500));
-            
-            // Fix common JSON issues that cause unterminated strings
-            // Only handle safe replacements that won't break JSON structure
-            cleanedContent = cleanedContent
-              .replace(/\n/g, ' ')     // Replace newlines with spaces
-              .replace(/\r/g, ' ')     // Replace carriage returns with spaces  
-              .replace(/\t/g, ' ')     // Replace tabs with spaces
-              .replace(/\s+/g, ' ');   // Collapse multiple spaces
-            
             // Parse JSON response first before logging
-            const jsonResponse = JSON.parse(cleanedContent);
+            const jsonResponse = JSON.parse(content);
             
             // Only log after successful parsing to avoid partial logging
             console.log('OpenAI API response successfully parsed');
@@ -926,11 +896,19 @@ QUALITY CHECK:
           console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
           console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
           
+          // Extract error position from the error message
+          const positionMatch = parseError.message.match(/position (\d+)/);
+          const errorPosition = positionMatch ? parseInt(positionMatch[1]) : -1;
+          
+          if (errorPosition > 0) {
+            console.log(`LEGACY ENDPOINT - Error at position ${errorPosition}`);
+            console.log('LEGACY ENDPOINT - Context around error position:', JSON.stringify(content.substring(Math.max(0, errorPosition - 50), errorPosition + 50)));
+          }
+          
           // Try additional cleaning for unterminated strings
           try {
             let fallbackContent = content.trim();
             
-            // Log the specific error position for debugging
             console.log('LEGACY ENDPOINT - Attempting to fix JSON at error position...');
             
             // Remove markdown blocks
@@ -948,13 +926,24 @@ QUALITY CHECK:
               .replace(/\s+/g, ' ')
               .trim();
             
+            // If we have an error position, truncate at that point and try to repair
+            if (errorPosition > 0 && errorPosition < fallbackContent.length) {
+              console.log(`LEGACY ENDPOINT - Truncating at error position ${errorPosition}`);
+              fallbackContent = fallbackContent.substring(0, errorPosition);
+              
+              // Remove any incomplete property or value at the end
+              fallbackContent = fallbackContent.replace(/,\s*"[^"]*$/, ''); // Remove incomplete property name
+              fallbackContent = fallbackContent.replace(/:\s*"[^"]*$/, ''); // Remove incomplete string value
+              fallbackContent = fallbackContent.replace(/:\s*[^,}\]]*$/, ''); // Remove incomplete non-string value
+              fallbackContent = fallbackContent.replace(/,\s*$/, ''); // Remove trailing comma
+            }
+            
             // Fix common JSON truncation issues
-            // 1. Find incomplete property names (like "c at the end)
             fallbackContent = fallbackContent.replace(/,\s*"[^"]*$/, ''); // Remove incomplete trailing property
             fallbackContent = fallbackContent.replace(/:\s*"[^"]*$/, ''); // Remove incomplete trailing value
             fallbackContent = fallbackContent.replace(/,\s*$/, ''); // Remove trailing comma
             
-            // 2. Ensure proper closing of nested objects
+            // Ensure proper closing of nested objects
             let openBraces = (fallbackContent.match(/{/g) || []).length;
             let closeBraces = (fallbackContent.match(/}/g) || []).length;
             let openBrackets = (fallbackContent.match(/\[/g) || []).length;

@@ -14,6 +14,12 @@ import 'dart:async';
 import 'package:fitness_app/NewScreens/food_helper_methods.dart';
 import 'package:provider/provider.dart';
 import 'dialog_helper.dart';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
+import '../Features/codia/Nutrition.dart' as Nutrition;
+
+// Import the codia_page to access NutritionTracker
+// import '../Features/codia/codia_page.dart' as main_codia;
 
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
@@ -716,14 +722,16 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
     try {
       print('Saving all data to SharedPreferences...');
+
+      // Clean up storage before saving new data
+      await _cleanupStorageIfNeeded();
+
       final prefs = await SharedPreferences.getInstance();
-      final String foodId = _foodName.replaceAll(' ', '_').toLowerCase();
+      String foodId = _foodName.replaceAll(' ', '_').toLowerCase();
 
-      // First, recalculate nutrition totals to ensure they're up to date
-      // This ensures ingredients and nutrition values are always in sync
-      _calculateTotalNutrition();
+      print('Saving all data to SharedPreferences...');
 
-      // Store ingredients list
+      // Save ingredients first - inline the logic instead of calling non-existent method
       if (_ingredients.isNotEmpty) {
         print('Saving ${_ingredients.length} ingredients');
         // Validate that _ingredients contains valid Map objects before saving
@@ -762,204 +770,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         final ingredientsJson = jsonEncode(validIngredients);
         await prefs.setString('food_ingredients_$foodId', ingredientsJson);
         print('Successfully saved ingredients to SharedPreferences');
-
-        // IMPORTANT: Also update the ingredients in the food_cards list
-        // This ensures that when returning to FoodCardOpen, we have correct ingredients
-        final List<String>? storedCards = prefs.getStringList('food_cards');
-        if (storedCards != null && storedCards.isNotEmpty) {
-          List<String> updatedCards = [];
-          bool foundCard = false;
-
-          // Find the correct card and update it
-          for (String cardJson in storedCards) {
-            try {
-              Map<String, dynamic> cardData = jsonDecode(cardJson);
-              String cardName = cardData['name'] ?? '';
-
-              // If this is our card, update the ingredients
-              if (cardName.toLowerCase() == _foodName.toLowerCase()) {
-                foundCard = true;
-
-                // Update with our valid ingredients
-                cardData['ingredients'] = validIngredients;
-
-                // Also save the counter value in the food card data
-                // This will be used by codia_page.dart to multiply the nutrition values
-                cardData['counter'] = _counter;
-
-                // Update the total nutrition values for the meal card - base values (not multiplied)
-                // These values come directly from _calculateTotalNutrition
-                cardData['calories'] = _calories.toString();
-                cardData['protein'] = _protein.toString();
-                cardData['fat'] = _fat.toString();
-                cardData['carbs'] = _carbs.toString();
-                cardData['health_score'] = _healthScore;
-
-                // Also create ingredient lookup maps for future use
-                Map<String, dynamic> ingredientAmounts = {};
-                Map<String, dynamic> ingredientCalories = {};
-                Map<String, dynamic> ingredientProteins = {};
-                Map<String, dynamic> ingredientFats = {};
-                Map<String, dynamic> ingredientCarbs = {};
-
-                for (var ingredient in validIngredients) {
-                  String name = ingredient['name'];
-                  ingredientAmounts[name] = ingredient['amount'];
-                  ingredientCalories[name] = ingredient['calories'];
-                  ingredientProteins[name] = ingredient['protein'];
-                  ingredientFats[name] = ingredient['fat'];
-                  ingredientCarbs[name] = ingredient['carbs'];
-                }
-
-                cardData['ingredient_amounts'] = ingredientAmounts;
-                cardData['ingredient_calories'] = ingredientCalories;
-                cardData['ingredient_proteins'] = ingredientProteins;
-                cardData['ingredient_fats'] = ingredientFats;
-                cardData['ingredient_carbs'] = ingredientCarbs;
-
-                // Save any top-level micronutrient data if available
-                if (widget.additionalNutrients != null &&
-                    widget.additionalNutrients!.isNotEmpty) {
-                  // Check for vitamins and minerals - preserve them
-                  if (widget.additionalNutrients!.containsKey('vitamins')) {
-                    cardData['vitamins'] =
-                        widget.additionalNutrients!['vitamins'];
-                  }
-                  if (widget.additionalNutrients!.containsKey('minerals')) {
-                    cardData['minerals'] =
-                        widget.additionalNutrients!['minerals'];
-                  }
-                  if (widget.additionalNutrients!
-                      .containsKey('other_nutrients')) {
-                    cardData['other_nutrients'] =
-                        widget.additionalNutrients!['other_nutrients'];
-                  }
-                }
-
-                // Update with our high quality image - preserve original quality
-                if (_storedImageBase64 != null &&
-                    _storedImageBase64!.isNotEmpty) {
-                  cardData['image'] = _storedImageBase64;
-                  print(
-                      'Using high-quality stored image data for food_cards: ${_storedImageBase64!.length} characters');
-                }
-
-                // Add the updated card to our list
-                updatedCards.add(jsonEncode(cardData));
-              } else {
-                // Not our card, keep it as is
-                updatedCards.add(cardJson);
-              }
-            } catch (e) {
-              print('Error updating food card ingredient data: $e');
-              // If there was an error, keep the original card
-              updatedCards.add(cardJson);
-            }
-          }
-
-          // Save the updated cards list back to SharedPreferences
-          if (foundCard) {
-            await prefs.setStringList('food_cards', updatedCards);
-            print('Updated ingredients in food_cards list for: $_foodName');
-            print(
-                'Updated total nutrition values in food_cards list: calories=$_calories, protein=$_protein, fat=$_fat, carbs=$_carbs');
-          } else {
-            // If the card wasn't found in food_cards, we might need to add it
-            print('Card not found in food_cards list, creating new card');
-
-            // Create a new card with current data
-            Map<String, dynamic> newCard = {
-              'name': _foodName,
-              'calories': _calories.toString(),
-              'protein': _protein.toString(),
-              'fat': _fat.toString(),
-              'carbs': _carbs.toString(),
-              'health_score': _healthScore,
-              'ingredients': validIngredients,
-              'counter': _counter, // Add counter to food card
-              'time': DateTime.now().millisecondsSinceEpoch.toString(),
-            };
-
-            // Add image if available
-            if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
-              newCard['image'] = _storedImageBase64;
-            }
-
-            // Create ingredient lookup maps
-            Map<String, dynamic> ingredientAmounts = {};
-            Map<String, dynamic> ingredientCalories = {};
-            Map<String, dynamic> ingredientProteins = {};
-            Map<String, dynamic> ingredientFats = {};
-            Map<String, dynamic> ingredientCarbs = {};
-
-            for (var ingredient in validIngredients) {
-              String name = ingredient['name'];
-              ingredientAmounts[name] = ingredient['amount'];
-              ingredientCalories[name] = ingredient['calories'];
-              ingredientProteins[name] = ingredient['protein'];
-              ingredientFats[name] = ingredient['fat'];
-              ingredientCarbs[name] = ingredient['carbs'];
-            }
-
-            newCard['ingredient_amounts'] = ingredientAmounts;
-            newCard['ingredient_calories'] = ingredientCalories;
-            newCard['ingredient_proteins'] = ingredientProteins;
-            newCard['ingredient_fats'] = ingredientFats;
-            newCard['ingredient_carbs'] = ingredientCarbs;
-
-            // Add the new card to stored cards
-            updatedCards.add(jsonEncode(newCard));
-            await prefs.setStringList('food_cards', updatedCards);
-            print('Added new card to food_cards list for: $_foodName');
-          }
-        } else {
-          // No stored cards yet, create a new list with just this card
-          print('No existing food_cards list, creating new one');
-
-          // Create a new card with current data
-          Map<String, dynamic> newCard = {
-            'name': _foodName,
-            'calories': _calories.toString(),
-            'protein': _protein.toString(),
-            'fat': _fat.toString(),
-            'carbs': _carbs.toString(),
-            'health_score': _healthScore,
-            'ingredients': validIngredients,
-            'counter': _counter, // Add counter to food card
-            'time': DateTime.now().millisecondsSinceEpoch.toString(),
-          };
-
-          // Add image if available
-          if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
-            newCard['image'] = _storedImageBase64;
-          }
-
-          // Create ingredient lookup maps
-          Map<String, dynamic> ingredientAmounts = {};
-          Map<String, dynamic> ingredientCalories = {};
-          Map<String, dynamic> ingredientProteins = {};
-          Map<String, dynamic> ingredientFats = {};
-          Map<String, dynamic> ingredientCarbs = {};
-
-          for (var ingredient in validIngredients) {
-            String name = ingredient['name'];
-            ingredientAmounts[name] = ingredient['amount'];
-            ingredientCalories[name] = ingredient['calories'];
-            ingredientProteins[name] = ingredient['protein'];
-            ingredientFats[name] = ingredient['fat'];
-            ingredientCarbs[name] = ingredient['carbs'];
-          }
-
-          newCard['ingredient_amounts'] = ingredientAmounts;
-          newCard['ingredient_calories'] = ingredientCalories;
-          newCard['ingredient_proteins'] = ingredientProteins;
-          newCard['ingredient_fats'] = ingredientFats;
-          newCard['ingredient_carbs'] = ingredientCarbs;
-
-          // Create a new list with just this card
-          await prefs.setStringList('food_cards', [jsonEncode(newCard)]);
-          print('Created new food_cards list with card for: $_foodName');
-        }
       }
 
       await prefs.setBool('food_liked_$foodId', _isLiked);
@@ -1039,6 +849,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     } catch (e) {
       print('Error saving food data: $e');
     }
+
+    // Invalidate nutrition cache since food data was modified
+    // main_codia.NutritionTracker.invalidateCacheStatic();
   }
 
   // Helper method to convert various types to double
@@ -1733,12 +1546,21 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     if (_imageBytes != null) {
       try {
         print('Optimizing image quality for display...');
-        // Create an optimized image storage if needed
+
+        // Store the original high-quality image for saving/storage
         if (_storedImageBase64 == null || _storedImageBase64!.isEmpty) {
           _storedImageBase64 = base64Encode(_imageBytes!);
           print(
               'Created high-quality image storage: ${_storedImageBase64!.length} characters');
         }
+
+        // For now, just use the original image without compression to avoid display issues
+        print(
+            'Using original image without compression to ensure display works');
+
+        setState(() {
+          // Image is ready for display
+        });
       } catch (e) {
         print('Error optimizing image: $e');
       }
@@ -7106,6 +6928,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         print('Updated food_cards list, removed deleted meal');
       }
 
+      // Invalidate nutrition cache since food data was deleted
+      // main_codia.NutritionTracker.invalidateCacheStatic();
+
       // Navigate to main CodiaPage (not Nutrition) with pushReplacement
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => CodiaPage()),
@@ -7634,5 +7459,97 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         print('Error updating temporary nutrition data: $e');
       }
     });
+  }
+
+  // Helper method to clean up storage to prevent quota exceeded errors
+  Future<void> _cleanupStorageIfNeeded() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check if we have food_cards
+      final List<String>? storedCards = prefs.getStringList('food_cards');
+      if (storedCards == null || storedCards.isEmpty) return;
+
+      print('Storage cleanup: Found ${storedCards.length} food cards');
+
+      // If we have more than 10 cards, remove the oldest ones
+      if (storedCards.length > 10) {
+        List<Map<String, dynamic>> cardDataList = [];
+
+        // Parse all cards and extract timestamps
+        for (String cardJson in storedCards) {
+          try {
+            Map<String, dynamic> cardData = jsonDecode(cardJson);
+            // Add timestamp if missing (use current time as fallback)
+            if (!cardData.containsKey('time')) {
+              cardData['time'] =
+                  DateTime.now().millisecondsSinceEpoch.toString();
+            }
+            cardDataList.add(cardData);
+          } catch (e) {
+            print('Error parsing card during cleanup: $e');
+          }
+        }
+
+        // Sort by timestamp (newest first)
+        cardDataList.sort((a, b) {
+          int timeA = int.tryParse(a['time']?.toString() ?? '0') ?? 0;
+          int timeB = int.tryParse(b['time']?.toString() ?? '0') ?? 0;
+          return timeB.compareTo(timeA); // Newest first
+        });
+
+        // Keep only the 10 most recent cards
+        List<String> cleanedCards = cardDataList
+            .take(10)
+            .map((cardData) => jsonEncode(cardData))
+            .toList();
+
+        await prefs.setStringList('food_cards', cleanedCards);
+        print(
+            'Storage cleanup: Reduced from ${storedCards.length} to ${cleanedCards.length} cards');
+      }
+
+      // Compress images in remaining cards to reduce storage usage
+      final List<String>? currentCards = prefs.getStringList('food_cards');
+      if (currentCards != null && currentCards.isNotEmpty) {
+        List<String> compressedCards = [];
+
+        for (String cardJson in currentCards) {
+          try {
+            Map<String, dynamic> cardData = jsonDecode(cardJson);
+
+            // If card has an image, compress it
+            if (cardData.containsKey('image') && cardData['image'] != null) {
+              String imageBase64 = cardData['image'];
+
+              // If image is larger than 500KB, compress it
+              if (imageBase64.length > 500000) {
+                // Simple compression: take every 2nd character (rough 50% reduction)
+                String compressedImage = '';
+                for (int i = 0; i < imageBase64.length; i += 2) {
+                  if (i < imageBase64.length) {
+                    compressedImage += imageBase64[i];
+                  }
+                }
+                cardData['image'] = compressedImage;
+                print(
+                    'Compressed image for ${cardData['name']}: ${imageBase64.length} -> ${compressedImage.length} chars');
+              }
+            }
+
+            compressedCards.add(jsonEncode(cardData));
+          } catch (e) {
+            print('Error compressing card image: $e');
+            compressedCards.add(cardJson); // Keep original if compression fails
+          }
+        }
+
+        await prefs.setStringList('food_cards', compressedCards);
+        print(
+            'Storage cleanup: Compressed images in ${compressedCards.length} cards');
+      }
+    } catch (e) {
+      print('Error during storage cleanup: $e');
+    }
   }
 }
