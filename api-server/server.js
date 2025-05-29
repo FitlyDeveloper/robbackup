@@ -217,6 +217,14 @@ IMPORTANT:
             
             console.log('Cleaned response preview (first 500 chars):', cleanedContent.substring(0, 500));
             
+            // Fix common JSON issues that cause unterminated strings
+            // Only handle safe replacements that won't break JSON structure
+            cleanedContent = cleanedContent
+              .replace(/\n/g, ' ')     // Replace newlines with spaces
+              .replace(/\r/g, ' ')     // Replace carriage returns with spaces  
+              .replace(/\t/g, ' ')     // Replace tabs with spaces
+              .replace(/\s+/g, ' ');   // Collapse multiple spaces
+            
             // Parse JSON response first before logging
             const jsonResponse = JSON.parse(cleanedContent);
             
@@ -866,10 +874,38 @@ QUALITY CHECK:
         const content = responseData.choices[0].message.content.trim();
         
         try {
-          // Parse JSON response first before logging
-          const jsonResponse = JSON.parse(content);
-          console.log('Legacy endpoint API response successfully parsed');
-      
+          // Log the raw response for debugging
+          console.log('LEGACY ENDPOINT - Raw OpenAI response length:', content.length);
+          console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
+          
+          // Check for position 4443 specifically where the error occurs
+          if (content.length > 4443) {
+            console.log('LEGACY ENDPOINT - Character at position 4443:', JSON.stringify(content.charAt(4443)));
+            console.log('LEGACY ENDPOINT - Context around position 4443:', JSON.stringify(content.substring(4430, 4450)));
+          }
+          
+          // Try to clean the response
+          let cleanedContent = content.trim();
+          
+          // Remove markdown code blocks if present
+          if (cleanedContent.startsWith('```json')) {
+            cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          } else if (cleanedContent.startsWith('```')) {
+            cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          }
+          
+          // Fix common JSON issues that cause unterminated strings
+          cleanedContent = cleanedContent
+            .replace(/\n/g, ' ')     // Replace newlines with spaces
+            .replace(/\r/g, ' ')     // Replace carriage returns with spaces  
+            .replace(/\t/g, ' ')     // Replace tabs with spaces
+            .replace(/\s+/g, ' ');   // Collapse multiple spaces
+          
+          console.log('LEGACY ENDPOINT - Cleaned response preview (first 500 chars):', cleanedContent.substring(0, 500));
+          
+          // Parse JSON response
+          const jsonResponse = JSON.parse(cleanedContent);
+          
           // Check if we have valid ingredients
           if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
             // Convert OpenAI's response to our expected format
@@ -885,7 +921,52 @@ QUALITY CHECK:
             });
           }
         } catch (parseError) {
-          console.error(`Error parsing API response: ${parseError}`);
+          console.error(`LEGACY ENDPOINT - Error parsing API response: ${parseError}`);
+          console.log('LEGACY ENDPOINT - Raw response length:', content.length);
+          console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
+          console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
+          
+          // Try additional cleaning for unterminated strings
+          try {
+            let fallbackContent = content.trim();
+            
+            // Remove markdown blocks
+            if (fallbackContent.startsWith('```json')) {
+              fallbackContent = fallbackContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            } else if (fallbackContent.startsWith('```')) {
+              fallbackContent = fallbackContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            }
+            
+            // Clean whitespace and control characters
+            fallbackContent = fallbackContent
+              .replace(/\n/g, ' ')
+              .replace(/\r/g, ' ')
+              .replace(/\t/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            
+            // Try to find incomplete JSON and truncate at last complete object
+            const lastBrace = fallbackContent.lastIndexOf('}');
+            if (lastBrace > 0 && lastBrace < fallbackContent.length - 1) {
+              fallbackContent = fallbackContent.substring(0, lastBrace + 1);
+              console.log('LEGACY ENDPOINT - Truncated to last complete brace');
+            }
+            
+            console.log('LEGACY ENDPOINT - Attempting fallback parse...');
+            const jsonResponse = JSON.parse(fallbackContent);
+            console.log('LEGACY ENDPOINT - Fallback parse successful!');
+            
+            if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
+              const result = processVisionResponse(jsonResponse);
+              return res.json({
+                success: true,
+                data: result
+              });
+            }
+          } catch (fallbackError) {
+            console.log('LEGACY ENDPOINT - Fallback parse also failed:', fallbackError.message);
+          }
+          
           return res.status(500).json({
             success: false,
             error: 'Invalid response format from image analysis'
