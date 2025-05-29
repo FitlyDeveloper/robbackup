@@ -200,6 +200,11 @@ IMPORTANT:
             
             // Only log after successful parsing to avoid partial logging
             console.log('OpenAI API response successfully parsed');
+            console.log('Response structure:', {
+              hasIngredients: !!jsonResponse.ingredients,
+              ingredientCount: jsonResponse.ingredients?.length || 0,
+              hasMealName: !!jsonResponse.meal_name
+            });
             
             // Check if we have valid ingredients
             if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
@@ -364,67 +369,34 @@ Return JSON format with meal_name and ingredients array. Each ingredient needs n
               console.log(`Job ${jobId} marked failed at ${new Date().toISOString()}`);
             }
           } catch (parseError) {
-            console.error(`Error parsing API response: ${parseError}`);
+            console.error(`JSON parse error for job ${jobId}:`, parseError.message);
+            console.log('Raw OpenAI response length:', content.length);
+            console.log('Raw OpenAI response preview (first 500 chars):', content.substring(0, 500));
+            console.log('Raw OpenAI response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
             
-            // Try to repair truncated JSON - improved for comprehensive nutrition data
+            // Try to find and fix common JSON issues
             let repairedContent = content;
             
-            // Enhanced truncation fixes for complex nutrition structure
-            if (!content.endsWith('}') && !content.endsWith(']')) {
-              console.log('Attempting to repair truncated JSON...');
-              
-              // Strategy 0: Handle truncated decimal numbers
-              if (parseError.message.includes('Unterminated fractional number') || 
-                  parseError.message.includes('fractional number')) {
-                // Find the last complete number and truncate there
-                const lastCompleteNumber = content.lastIndexOf(',');
-                if (lastCompleteNumber > 0) {
-                  repairedContent = content.substring(0, lastCompleteNumber) + '}}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
-                }
-              }
-              
-              // Try multiple repair strategies if decimal fix didn't work
-              if (repairedContent === content && content.includes('"ingredients":[')) {
-                // Strategy 1: Find the last complete ingredient and close properly
-                const lastCompleteIngredient = content.lastIndexOf('"}');
-                if (lastCompleteIngredient > 0) {
-                  // Close the ingredient object, ingredients array, and main object
-                  repairedContent = content.substring(0, lastCompleteIngredient + 2) + '}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
-                }
-                
-                // Strategy 2: If we have partial nutrition data, try to close it
-                if (repairedContent === content && content.includes('"vitamins":{')) {
-                  const lastBrace = content.lastIndexOf('}');
-                  const lastComma = content.lastIndexOf(',');
-                  if (lastBrace > 0) {
-                    // Close vitamins, minerals, other, ingredient, ingredients array, and main object
-                    repairedContent = content.substring(0, Math.max(lastBrace, lastComma)) + '}}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0}}';
-                  }
-                }
-                
-                // Strategy 3: If we have partial minerals data
-                if (repairedContent === content && content.includes('"minerals":{')) {
-                  const lastBrace = content.lastIndexOf('}');
-                  if (lastBrace > 0) {
-                    repairedContent = content.substring(0, lastBrace + 1) + ',"other":{"fiber":0,"cholesterol":0,"sugar":0,"saturated_fats":0,"omega_3":0,"omega_6":0}}],"total":{"calories":0,"protein_g":0,"fat_g":0,"carbs_g":0,"vitamins":{"vitamin_a":0,"vitamin_c":0,"vitamin_d":0,"vitamin_e":0,"vitamin_k":0,"vitamin_b1":0,"vitamin_b2":0,"vitamin_b3":0,"vitamin_b5":0,"vitamin_b6":0,"vitamin_b7":0,"vitamin_b9":0,"vitamin_b12":0},"minerals":{"calcium":0,"iron":0,"magnesium":0,"potassium":0,"sodium":0,"zinc":0,"chromium":0,"copper":0,"iodine":0,"molybdenum":0,"selenium":0,"fluoride":0,"manganese":0,"phosphorus":0},"other":{"fiber":0,"cholesterol":0,"sugar":0,"saturated_fats":0,"omega_3":0,"omega_6":0}}}';
-                  }
-                }
-              }
-            }
+            // Remove any markdown code blocks
+            repairedContent = repairedContent.replace(/```json\s*/g, '').replace(/```\s*/g, '');
             
-            // Try parsing the repaired content
+            // Remove any leading/trailing whitespace
+            repairedContent = repairedContent.trim();
+            
+            // Try to parse the repaired content
             if (repairedContent !== content) {
               try {
                 console.log('Attempting to parse repaired JSON...');
-                const repairedResponse = JSON.parse(repairedContent);
-                if (repairedResponse.ingredients && repairedResponse.ingredients.length > 0) {
-                  console.log('Successfully repaired truncated JSON');
-                  finalResponse = processVisionResponse(repairedResponse);
+                const repairedJson = JSON.parse(repairedContent);
+                console.log('Repaired JSON parsed successfully!');
+                
+                if (repairedJson.ingredients && repairedJson.ingredients.length > 0) {
+                  finalResponse = processVisionResponse(repairedJson);
                   
                   await updateJobStatus(jobId, {
                     status: 'completed',
                     progress: 100,
-                    message: 'Analysis complete (repaired)',
+                    message: 'Analysis complete (repaired JSON)',
                     completedAt: Date.now(),
                     result: finalResponse
                   });
