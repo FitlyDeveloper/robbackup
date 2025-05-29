@@ -128,7 +128,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     // Create a mutable copy of the image data that we can modify
     let processedImage = image;
 
-    // ULTRA-AGGRESSIVE compression to prevent token limit errors
+    // IMPROVED compression - balance between quality and size
     try {
       // Extract the MIME type and base64 data
       const parts = processedImage.split(',');
@@ -139,33 +139,38 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       const estimatedTokens = Math.ceil(processedImage.length / 3.5);
       console.log(`Estimated tokens from raw image: ~${estimatedTokens}`);
       
-      // Use a tiny fixed size for ALL images to guarantee we stay under token limits
-      // This is EXTREMELY aggressive but will prevent token limit errors
-      const targetSizeBytes = 20000; // Ultra minimal 20KB for any image
-      console.log(`Target size for compressed image: ${targetSizeBytes} bytes (fixed limit)`);
+      // Use a more reasonable size that preserves ingredient detection quality
+      // Increased from 20KB to 150KB for better ingredient detection
+      const targetSizeBytes = 150000; // 150KB - much better for ingredient detection
+      console.log(`Target size for compressed image: ${targetSizeBytes} bytes`);
       
-      // Calculate how much to keep
-      const keepRatio = targetSizeBytes / processedImage.length;
-      const keepLength = Math.floor(base64Data.length * keepRatio);
-      
-      console.log(`Will keep ${keepLength} characters of base64 data (ratio: ${keepRatio.toFixed(4)})`);
-      
-      // Build a compressed image with truncated data
-      const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
-      console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes (${(compressedImage.length / processedImage.length * 100).toFixed(1)}%)`);
-      
-      // Replace the image data with the compressed version
-      processedImage = compressedImage;
+      // Only compress if image is larger than target
+      if (processedImage.length > targetSizeBytes) {
+        // Calculate how much to keep
+        const keepRatio = targetSizeBytes / processedImage.length;
+        const keepLength = Math.floor(base64Data.length * keepRatio);
+        
+        console.log(`Will keep ${keepLength} characters of base64 data (ratio: ${keepRatio.toFixed(4)})`);
+        
+        // Build a compressed image with truncated data
+        const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
+        console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes (${(compressedImage.length / processedImage.length * 100).toFixed(1)}%)`);
+        
+        // Replace the image data with the compressed version
+        processedImage = compressedImage;
+      } else {
+        console.log('Image size acceptable, using original');
+      }
     } catch (error) {
       console.error('Error during compression:', error);
-      // Extreme emergency fallback - just take a tiny slice of the image
+      // Less aggressive emergency fallback - 50KB instead of 10KB
       try {
         const parts = processedImage.split(',');
         if (parts.length >= 2) {
           const mimeType = parts[0];
           const base64Data = parts[1];
-          processedImage = `${mimeType},${base64Data.substring(0, 10000)}`; // ~10KB absolute maximum
-          console.log('EMERGENCY FALLBACK: Image truncated to 10KB');
+          processedImage = `${mimeType},${base64Data.substring(0, 50000)}`; // 50KB emergency fallback
+          console.log('EMERGENCY FALLBACK: Image truncated to 50KB');
         }
       } catch (e) {
         console.error('Even emergency fallback failed:', e);
@@ -178,24 +183,47 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // Simplified prompt to reduce complexity of response and potential for JSON errors
-    const simplifiedPrompt = `[JSON ONLY] Create a simple food analysis with minimal data:
+    // ENHANCED prompt for better ingredient detection
+    const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
 
-1. meal_name: Give a simple short name (max 5 words)
-2. ingredients: ARRAY of SIMPLE objects containing ONLY:
-   - name: Short name (1-2 words only)
-   - weight_g: Number with one decimal (example: 100.0)
-   - calories: Number with one decimal (example: 250.0)
-   - protein_g: Number with one decimal (example: 15.0)
-   - fat_g: Number with one decimal (example: 10.0)
-   - carbs_g: Number with one decimal (example: 30.0)
+CRITICAL REQUIREMENTS:
+1. **Multiple Ingredient Detection**: For complex meals, identify EACH separate ingredient/component
+2. **Precise Values**: Provide exact decimal values (e.g., 23.7g, not 24g)
+3. **Comprehensive Analysis**: Include all visible food components
 
-EXTREMELY IMPORTANT:
+INGREDIENT CATEGORIES TO DETECT:
+- **Proteins**: meat, fish, eggs, dairy, legumes, nuts
+- **Vegetables**: all visible vegetables, garnishes, herbs
+- **Grains/Starches**: rice, bread, pasta, potatoes
+- **Sauces/Condiments**: dressings, sauces, oils
+- **Fruits**: any visible fruits or fruit components
+
+MULTI-INGREDIENT DETECTION RULES:
+1. **Scan systematically**: Look at all areas of the plate/image
+2. **Identify layers**: Check for ingredients that might be layered or mixed
+3. **Consider garnishes**: Include herbs, spices, small vegetables
+4. **Separate components**: Treat each distinct food item as separate ingredient
+5. **Minimum threshold**: Always try to identify at least 2-3 ingredients unless it's genuinely a single-ingredient meal
+
+RESPONSE FORMAT (JSON ONLY):
+{
+  "meal_name": "Descriptive meal name",
+  "ingredients": [
+    {
+      "name": "Ingredient Name",
+      "weight_g": 100.0,
+      "calories": 250.0,
+      "protein_g": 15.0,
+      "fat_g": 10.0,
+      "carbs_g": 30.0
+    }
+  ]
+}
+
+IMPORTANT:
 - EVERY number MUST end with .0 even for whole numbers
-- Keep ALL text short and simple
-- NO special characters in strings
-- No complex structures
-- Limit to max 3 ingredients total`;
+- Always try to detect multiple ingredients when visible
+- If only 1 ingredient detected, double-check the image for missed components`;
 
     // Call OpenAI API with timeout and enhanced error handling
     console.log('Calling OpenAI API for job', jobId);
@@ -203,7 +231,7 @@ EXTREMELY IMPORTANT:
     try {
       // Implement timeout for the fetch call
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // Increased to 60 seconds
       
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -218,14 +246,14 @@ EXTREMELY IMPORTANT:
           messages: [
             {
               role: 'system',
-              content: simplifiedPrompt
+              content: enhancedPrompt
             },
             {
               role: 'user',
               content: `What is in this food image? ${processedImage}`
             }
           ],
-          max_tokens: 800, // Reduced even further for simpler responses
+          max_tokens: 1500, // Increased from 800 to allow for more detailed analysis
           response_format: { type: 'json_object' }
         })
       });
@@ -237,7 +265,7 @@ EXTREMELY IMPORTANT:
       await updateJobStatus(jobId, {
         status: 'failed',
         error: fetchError.name === 'AbortError' 
-          ? 'API request timed out after 45 seconds' 
+          ? 'API request timed out after 60 seconds' 
           : `API request failed: ${fetchError.message}`,
         failedAt: Date.now()
       });
@@ -270,7 +298,7 @@ EXTREMELY IMPORTANT:
     const responseData = await response.json();
     const content = responseData.choices[0].message.content;
     
-    console.log(`Raw response content for job ${jobId}:`, content.substring(0, 100) + "...");
+    console.log(`Raw response content for job ${jobId}:`, content.substring(0, 200) + "...");
     
     // Validate and fix JSON if needed
     let result;
@@ -278,6 +306,14 @@ EXTREMELY IMPORTANT:
       // First attempt: direct parsing
       result = JSON.parse(content);
       console.log(`Successfully parsed JSON for job ${jobId}`);
+      
+      // Check if only one ingredient was detected and log warning
+      if (result.ingredients && Array.isArray(result.ingredients)) {
+        console.log(`Detected ${result.ingredients.length} ingredients for job ${jobId}`);
+        if (result.ingredients.length === 1) {
+          console.warn(`WARNING: Only 1 ingredient detected for job ${jobId}. This might indicate the image needs better analysis or the meal is genuinely simple.`);
+        }
+      }
     } catch (jsonError) {
       console.error(`JSON parse error for job ${jobId}: ${jsonError.message}. Attempting to fix.`);
       
