@@ -109,50 +109,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     // Create a mutable copy of the image data that we can modify
     let processedImage = image;
 
-    // PROPER image compression - maintain image integrity
-    try {
-      console.log(`Original image size: ${processedImage.length} bytes (${(processedImage.length / 1024 / 1024).toFixed(1)}MB)`);
-      
-      // Target size for good ingredient detection - 1MB should be plenty
-      const targetSizeBytes = 1000000; // 1MB
-      
-      // Only compress if image is larger than target
-      if (processedImage.length > targetSizeBytes) {
-        console.log(`Image too large, compressing from ${(processedImage.length / 1024 / 1024).toFixed(1)}MB to ~${(targetSizeBytes / 1024 / 1024).toFixed(1)}MB...`);
-        
-        // Extract the MIME type and base64 data
-        const parts = processedImage.split(',');
-        const mimeType = parts[0];
-        const base64Data = parts[1] || '';
-        
-        // Calculate compression ratio
-        const compressionRatio = targetSizeBytes / processedImage.length;
-        
-        // Use sampling compression - keep every nth character to maintain image structure
-        const sampleRate = Math.ceil(1 / compressionRatio);
-        let compressedData = '';
-        
-        // Sample the base64 data to reduce size while maintaining structure
-        for (let i = 0; i < base64Data.length; i += sampleRate) {
-          compressedData += base64Data[i];
-        }
-        
-        // Ensure the result is valid base64 (multiple of 4 characters)
-        const paddingNeeded = (4 - (compressedData.length % 4)) % 4;
-        compressedData += '='.repeat(paddingNeeded);
-        
-        processedImage = `${mimeType},${compressedData}`;
-        console.log(`Compressed to ${processedImage.length} bytes (${(processedImage.length / 1024 / 1024).toFixed(1)}MB)`);
-        
-      } else {
-        console.log('Image size acceptable, using original');
-      }
-      
-    } catch (error) {
-      console.error('Error during compression:', error);
-      console.log('Using original image due to compression failure');
-      // Keep original image if compression fails
-    }
+    // Client already compresses to 700KB properly - no need for server compression
+    console.log(`Received image size: ${processedImage.length} bytes (${(processedImage.length / 1024 / 1024).toFixed(1)}MB)`);
     
     // Update progress
     await updateJobStatus(jobId, {

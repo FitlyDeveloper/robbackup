@@ -77,19 +77,19 @@ Future<Uint8List> compressImage(
 Future<Uint8List> _compressWebImageToTargetSize(
     Uint8List imageBytes, int targetSizeBytes, int targetWidth,
     {int? targetHeight}) async {
-  int minQuality = 10; // Lowest acceptable quality
-  int maxQuality = 90; // Highest quality
-  int currentQuality = 70; // Start with a reasonable default
+  int minQuality = 30; // Higher minimum quality
+  int maxQuality = 95; // Higher maximum quality
+  int currentQuality = 80; // Start with higher quality
 
   Uint8List result = imageBytes;
   int attempts = 0;
-  final int maxAttempts = 8; // Limit attempts to prevent infinite loops
+  final int maxAttempts = 10; // More attempts for better results
 
-  // First apply a size reduction regardless of quality
+  // Don't reduce width as aggressively - we want 700KB, not 69KB!
   int initialWidth = targetWidth;
-  if (imageBytes.length > 1 * 1024 * 1024) {
-    // > 1MB
-    initialWidth = (targetWidth * 0.6).toInt(); // 60% of original target width
+  if (imageBytes.length > 5 * 1024 * 1024) {
+    // Only reduce width for very large images (>5MB)
+    initialWidth = (targetWidth * 0.8).toInt(); // 80% instead of 60%
   }
 
   // Binary search for the right quality level
@@ -107,8 +107,8 @@ Future<Uint8List> _compressWebImageToTargetSize(
     print(
         'Web compression attempt $attempts: Quality=$currentQuality, Size=${sizeMB.toStringAsFixed(2)}MB, Target=${(targetSizeBytes / 1024 / 1024).toStringAsFixed(2)}MB, Diff=${(sizeDiff / 1024 / 1024).toStringAsFixed(2)}MB');
 
-    // If we're within 5% of target size or have reached max attempts, return this result
-    if (attempts >= maxAttempts || (sizeDiff.abs() < 0.05 * targetSizeBytes)) {
+    // If we're within 10% of target size or have reached max attempts, return this result
+    if (attempts >= maxAttempts || (sizeDiff.abs() < 0.1 * targetSizeBytes)) {
       result = compressed;
       break;
     }
@@ -122,6 +122,13 @@ Future<Uint8List> _compressWebImageToTargetSize(
       // Too small, increase quality
       minQuality = currentQuality;
       currentQuality = (minQuality + maxQuality) ~/ 2;
+    }
+
+    // If we're stuck at minimum quality and still too small, try increasing width
+    if (currentQuality <= minQuality + 5 &&
+        compressed.length < targetSizeBytes * 0.5) {
+      initialWidth = (initialWidth * 1.2).toInt(); // Increase width by 20%
+      print('Increasing width to $initialWidth to reach target size');
     }
   }
 
