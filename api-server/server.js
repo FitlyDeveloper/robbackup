@@ -183,19 +183,7 @@ MULTI-INGREDIENT DETECTION RULES:
 5. **Minimum threshold**: Always try to identify at least 2-3 ingredients unless it's genuinely a single-ingredient meal
 
 RESPONSE FORMAT (JSON ONLY):
-{
-  "meal_name": "Descriptive meal name",
-  "ingredients": [
-    {
-      "name": "Ingredient Name",
-      "weight_g": 100.0,
-      "calories": 250.0,
-      "protein_g": 15.0,
-      "fat_g": 10.0,
-      "carbs_g": 30.0
-    }
-  ]
-}
+Return a JSON object with meal_name and ingredients array. Each ingredient should have name, weight_g, calories, protein_g, fat_g, and carbs_g properties.
 
 IMPORTANT:
 - EVERY number MUST end with .0 even for whole numbers
@@ -318,14 +306,7 @@ Look at this image again and identify EVERY SINGLE ingredient, component, and fo
 
 You MUST return at least 2-3 ingredients unless this is genuinely a single food item (which is rare).
 
-Return JSON format:
-{
-  "meal_name": "Complete meal description",
-  "ingredients": [
-    {"name": "ingredient1", "weight_g": 100.0, "calories": 200.0, "protein_g": 10.0, "fat_g": 5.0, "carbs_g": 15.0},
-    {"name": "ingredient2", "weight_g": 50.0, "calories": 100.0, "protein_g": 5.0, "fat_g": 3.0, "carbs_g": 8.0}
-  ]
-}`;
+Return JSON format with meal_name and ingredients array. Each ingredient needs name, weight_g, calories, protein_g, fat_g, carbs_g properties.`;
 
                 try {
                   const fallbackController = new AbortController();
