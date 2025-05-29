@@ -7396,6 +7396,56 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         });
       }
 
+      // NEW: Check for nested "vitamins" structure from API response
+      if (ingredient.containsKey('vitamins') && ingredient['vitamins'] is Map) {
+        Map<String, dynamic> vitamins =
+            Map<String, dynamic>.from(ingredient['vitamins']);
+        print(
+            "Found 'vitamins' object in ingredient ${ingredient['name']}: $vitamins");
+
+        vitamins.forEach((key, value) {
+          if (value != null) {
+            String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+
+            // If the vitamin exists in the result, add the values
+            if (result.containsKey(normalizedKey)) {
+              double existingValue =
+                  _parseNutritionValue(result[normalizedKey]);
+              double newValue = _parseNutritionValue(value);
+              result[normalizedKey] = (existingValue + newValue).toString();
+            } else {
+              // Just add the vitamin directly
+              result[normalizedKey] = value.toString();
+            }
+          }
+        });
+      }
+
+      // NEW: Check for nested "minerals" structure from API response
+      if (ingredient.containsKey('minerals') && ingredient['minerals'] is Map) {
+        Map<String, dynamic> minerals =
+            Map<String, dynamic>.from(ingredient['minerals']);
+        print(
+            "Found 'minerals' object in ingredient ${ingredient['name']}: $minerals");
+
+        minerals.forEach((key, value) {
+          if (value != null) {
+            String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+
+            // If the mineral exists in the result, add the values
+            if (result.containsKey(normalizedKey)) {
+              double existingValue =
+                  _parseNutritionValue(result[normalizedKey]);
+              double newValue = _parseNutritionValue(value);
+              result[normalizedKey] = (existingValue + newValue).toString();
+            } else {
+              // Just add the mineral directly
+              result[normalizedKey] = value.toString();
+            }
+          }
+        });
+      }
+
       // SECOND: Check for common nutrient fields at the root level - use direct indexing
       for (int j = 0; j < commonNutrients.length; j++) {
         final String field = commonNutrients[j];
