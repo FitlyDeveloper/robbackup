@@ -237,7 +237,7 @@ IMPORTANT:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "What is in this food image? Identify ALL separate ingredients and components." },
+                  { type: "text", text: "This plate contains MULTIPLE different food items. I can see at least 3-5 separate ingredients including proteins, vegetables, and side dishes. Identify each one separately. Do NOT return just one ingredient - that is incorrect." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
