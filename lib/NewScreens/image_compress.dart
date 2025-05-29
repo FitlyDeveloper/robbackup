@@ -8,8 +8,8 @@ import 'web_impl.dart' if (dart.library.io) 'web_impl_stub.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart'
     if (dart.library.html) 'web_image_compress_stub.dart';
 
-/// Compress an image to a target file size of 0.3MB (307,200 bytes)
-/// Images smaller than 0.3MB will be left untouched
+/// Compress an image to a target file size (default 0.7MB)
+/// Images smaller than target will be left untouched
 /// For web, this uses canvas resize
 /// For mobile, this uses flutter_image_compress with quality adjustments
 Future<Uint8List> compressImage(
@@ -17,18 +17,19 @@ Future<Uint8List> compressImage(
   int quality = 70,
   int targetWidth = 800,
   int? targetHeight,
+  int? targetSizeBytes, // New parameter for custom target size
 }) async {
   if (imageBytes.isEmpty) {
     return Uint8List(0);
   }
 
-  // Exact target size in bytes (0.3MB)
-  final int targetSizeBytes = 307200; // 0.3 * 1024 * 1024 = 307,200 bytes
+  // Use custom target size or default to 0.7MB (700KB)
+  final int finalTargetSize = targetSizeBytes ?? (700 * 1024); // 700KB default
 
-  // If image is already smaller than 0.3MB, return it unchanged
-  if (imageBytes.length <= targetSizeBytes) {
+  // If image is already smaller than target, return it unchanged
+  if (imageBytes.length <= finalTargetSize) {
     print(
-        'Image already below 0.3MB (${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)}MB), skipping compression');
+        'Image already below ${(finalTargetSize / 1024 / 1024).toStringAsFixed(2)}MB (${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)}MB), skipping compression');
     return imageBytes;
   }
 
@@ -37,7 +38,7 @@ Future<Uint8List> compressImage(
       // Web implementation - use binary search to reach target size
       return await _compressWebImageToTargetSize(
         imageBytes,
-        targetSizeBytes,
+        finalTargetSize,
         targetWidth,
         targetHeight: targetHeight,
       );
@@ -45,7 +46,7 @@ Future<Uint8List> compressImage(
       // Mobile implementation - use binary search to reach target size
       return await _compressMobileImageToTargetSize(
         imageBytes,
-        targetSizeBytes,
+        finalTargetSize,
         targetWidth,
         targetHeight: targetHeight,
       );

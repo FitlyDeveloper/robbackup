@@ -448,9 +448,9 @@ class _SnapFoodState extends State<SnapFood> {
       final XFile? photo = await picker.pickImage(
         source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.rear,
-        maxHeight: 1000,
-        maxWidth: 1000,
-        imageQuality: 85, // Improved compression to ensure smaller file sizes
+        maxHeight: 2000, // Increased from 1000 for better ingredient detection
+        maxWidth: 2000, // Increased from 1000 for better ingredient detection
+        imageQuality: 95, // Increased from 85 for better ingredient detection
       );
 
       if (photo != null) {
@@ -1980,66 +1980,32 @@ class _SnapFoodState extends State<SnapFood> {
   // Proper image compression for large images to meet server limits
   Future<Uint8List> _lightCompressImage(Uint8List imageBytes) async {
     try {
-      // Target: reduce to under 2MB to minimize API costs while maintaining quality
-      const int maxSizeBytes =
-          2 * 1024 * 1024; // 2MB target (increased from 1MB)
+      // Target: compress to 0.7MB for optimal API performance
+      const int maxSizeBytes = 700 * 1024; // 0.7MB (700KB)
 
       if (imageBytes.length <= maxSizeBytes) {
+        print(
+            'Image already below 0.7MB (${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)}MB), no compression needed');
         return imageBytes; // Already small enough
       }
 
       print(
           'Image too large (${(imageBytes.length / 1024 / 1024).toStringAsFixed(1)}MB), compressing...');
 
-      try {
-        // For web platform, try to use proper compression
-        if (kIsWeb) {
-          // Convert to base64 and back with quality reduction
-          String base64String = base64Encode(imageBytes);
+      // Use the proper compression function that already exists
+      // This uses proper image compression algorithms instead of corrupting the data
+      Uint8List compressed = await compressImage(
+        imageBytes,
+        quality: 70,
+        targetWidth: 800,
+        targetSizeBytes: 716800, // 700KB target
+      );
 
-          // Calculate compression ratio needed
-          double compressionRatio = maxSizeBytes / imageBytes.length;
-
-          // If we need significant compression, reduce the base64 string more intelligently
-          if (compressionRatio < 0.7) {
-            // Take a larger portion but still compress
-            int targetLength = (base64String.length * 0.7).round();
-            base64String = base64String.substring(0, targetLength);
-
-            // Ensure valid base64 ending
-            while (base64String.length % 4 != 0) {
-              base64String += '=';
-            }
-          }
-
-          try {
-            Uint8List compressed = base64Decode(base64String);
-            print(
-                'Compressed to ${(compressed.length / 1024 / 1024).toStringAsFixed(1)}MB');
-            return compressed;
-          } catch (e) {
-            print('Base64 compression failed, using fallback');
-          }
-        }
-
-        // Fallback: intelligent truncation that preserves more image data
-        // Take 70% of the image data instead of just cutting at 2MB
-        int targetSize = (imageBytes.length * 0.7).round();
-        if (targetSize > maxSizeBytes) {
-          targetSize = maxSizeBytes;
-        }
-
-        Uint8List compressed =
-            Uint8List.fromList(imageBytes.take(targetSize).toList());
-        print(
-            'Compressed to ${(compressed.length / 1024 / 1024).toStringAsFixed(1)}MB');
-        return compressed;
-      } catch (e) {
-        print('Compression failed: $e, using original');
-        return imageBytes;
-      }
+      print(
+          'Compressed to ${(compressed.length / 1024 / 1024).toStringAsFixed(1)}MB');
+      return compressed;
     } catch (e) {
-      print('Error in compression: $e');
+      print('Compression failed: $e, using original');
       return imageBytes; // Return original on error
     }
   }
