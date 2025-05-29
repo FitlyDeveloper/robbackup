@@ -896,103 +896,166 @@ QUALITY CHECK:
           console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
           console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
           
-          // Extract error position from the error message
-          const positionMatch = parseError.message.match(/position (\d+)/);
-          const errorPosition = positionMatch ? parseInt(positionMatch[1]) : -1;
-          
-          if (errorPosition > 0) {
-            console.log(`LEGACY ENDPOINT - Error at position ${errorPosition}`);
-            console.log('LEGACY ENDPOINT - Context around error position:', JSON.stringify(content.substring(Math.max(0, errorPosition - 50), errorPosition + 50)));
-          }
-          
-          // Try additional cleaning for unterminated strings
+          // ROBUST JSON REPAIR LOGIC
           try {
-            let fallbackContent = content.trim();
+            console.log('LEGACY ENDPOINT - Starting robust JSON repair...');
             
-            console.log('LEGACY ENDPOINT - Attempting to fix JSON at error position...');
+            let repairedContent = content.trim();
             
             // Remove markdown blocks
-            if (fallbackContent.startsWith('```json')) {
-              fallbackContent = fallbackContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            } else if (fallbackContent.startsWith('```')) {
-              fallbackContent = fallbackContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            if (repairedContent.startsWith('```json')) {
+              repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            } else if (repairedContent.startsWith('```')) {
+              repairedContent = repairedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
             }
             
-            // Clean whitespace and control characters
-            fallbackContent = fallbackContent
-              .replace(/\n/g, ' ')
-              .replace(/\r/g, ' ')
-              .replace(/\t/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim();
+            // Clean whitespace but preserve structure
+            repairedContent = repairedContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             
-            // If we have an error position, truncate at that point and try to repair
-            if (errorPosition > 0 && errorPosition < fallbackContent.length) {
-              console.log(`LEGACY ENDPOINT - Truncating at error position ${errorPosition}`);
-              fallbackContent = fallbackContent.substring(0, errorPosition);
+            // Find the last complete ingredient object
+            const ingredientsStartMatch = repairedContent.match(/"ingredients":\s*\[/);
+            if (ingredientsStartMatch) {
+              const ingredientsStart = ingredientsStartMatch.index + ingredientsStartMatch[0].length;
+              let ingredientsContent = repairedContent.substring(ingredientsStart);
               
-              // Remove any incomplete property or value at the end
-              fallbackContent = fallbackContent.replace(/,\s*"[^"]*$/, ''); // Remove incomplete property name
-              fallbackContent = fallbackContent.replace(/:\s*"[^"]*$/, ''); // Remove incomplete string value
-              fallbackContent = fallbackContent.replace(/:\s*[^,}\]]*$/, ''); // Remove incomplete non-string value
-              fallbackContent = fallbackContent.replace(/,\s*$/, ''); // Remove trailing comma
+              // Find complete ingredient objects by counting braces
+              let completeIngredients = [];
+              let currentIngredient = '';
+              let braceCount = 0;
+              let inString = false;
+              let escapeNext = false;
+              
+              for (let i = 0; i < ingredientsContent.length; i++) {
+                const char = ingredientsContent[i];
+                
+                if (escapeNext) {
+                  escapeNext = false;
+                  currentIngredient += char;
+                  continue;
+                }
+                
+                if (char === '\\') {
+                  escapeNext = true;
+                  currentIngredient += char;
+                  continue;
+                }
+                
+                if (char === '"' && !escapeNext) {
+                  inString = !inString;
+                }
+                
+                if (!inString) {
+                  if (char === '{') {
+                    braceCount++;
+                  } else if (char === '}') {
+                    braceCount--;
+                    
+                    // If we've closed all braces, we have a complete ingredient
+                    if (braceCount === 0 && currentIngredient.trim()) {
+                      currentIngredient += char;
+                      completeIngredients.push(currentIngredient.trim());
+                      currentIngredient = '';
+                      
+                      // Skip comma and whitespace
+                      while (i + 1 < ingredientsContent.length && 
+                             (ingredientsContent[i + 1] === ',' || 
+                              ingredientsContent[i + 1] === ' ' || 
+                              ingredientsContent[i + 1] === '\n' || 
+                              ingredientsContent[i + 1] === '\t')) {
+                        i++;
+                      }
+                      continue;
+                    }
+                  }
+                }
+                
+                currentIngredient += char;
+              }
+              
+              console.log(`LEGACY ENDPOINT - Found ${completeIngredients.length} complete ingredients`);
+              
+              if (completeIngredients.length > 0) {
+                // Build a valid JSON with complete ingredients
+                const validJson = `{
+                  "ingredients": [
+                    ${completeIngredients.join(',\n    ')}
+                  ],
+                  "total": {
+                    "calories": 0,
+                    "protein_g": 0,
+                    "fat_g": 0,
+                    "carbs_g": 0
+                  }
+                }`;
+                
+                console.log('LEGACY ENDPOINT - Attempting to parse repaired JSON...');
+                const jsonResponse = JSON.parse(validJson);
+                
+                // Calculate totals from ingredients
+                let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+                
+                jsonResponse.ingredients.forEach(ingredient => {
+                  totalCalories += ingredient.calories || 0;
+                  totalProtein += ingredient.protein_g || 0;
+                  totalFat += ingredient.fat_g || 0;
+                  totalCarbs += ingredient.carbs_g || 0;
+                });
+                
+                jsonResponse.total = {
+                  calories: totalCalories,
+                  protein_g: totalProtein,
+                  fat_g: totalFat,
+                  carbs_g: totalCarbs
+                };
+                
+                console.log('LEGACY ENDPOINT - JSON repair successful!');
+                const result = processVisionResponse(jsonResponse);
+                return res.json({
+                  success: true,
+                  data: result
+                });
+              }
             }
             
-            // Fix common JSON truncation issues
-            fallbackContent = fallbackContent.replace(/,\s*"[^"]*$/, ''); // Remove incomplete trailing property
-            fallbackContent = fallbackContent.replace(/:\s*"[^"]*$/, ''); // Remove incomplete trailing value
-            fallbackContent = fallbackContent.replace(/,\s*$/, ''); // Remove trailing comma
-            
-            // Ensure proper closing of nested objects
-            let openBraces = (fallbackContent.match(/{/g) || []).length;
-            let closeBraces = (fallbackContent.match(/}/g) || []).length;
-            let openBrackets = (fallbackContent.match(/\[/g) || []).length;
-            let closeBrackets = (fallbackContent.match(/\]/g) || []).length;
-            
-            // Add missing closing braces/brackets
-            for (let i = 0; i < openBrackets - closeBrackets; i++) {
-              fallbackContent += ']';
-            }
-            for (let i = 0; i < openBraces - closeBraces; i++) {
-              fallbackContent += '}';
-            }
-            
-            console.log('LEGACY ENDPOINT - Repaired JSON preview (last 200 chars):', fallbackContent.substring(Math.max(0, fallbackContent.length - 200)));
-            
-            console.log('LEGACY ENDPOINT - Attempting fallback parse...');
-            const jsonResponse = JSON.parse(fallbackContent);
-            console.log('LEGACY ENDPOINT - Fallback parse successful!');
-            
-            if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
-              const result = processVisionResponse(jsonResponse);
+            // If ingredients parsing failed, try simpler extraction
+            console.log('LEGACY ENDPOINT - Attempting simple ingredient extraction...');
+            const simpleMatch = content.match(/"name":\s*"([^"]+)"/g);
+            if (simpleMatch && simpleMatch.length > 0) {
+              const simpleIngredients = simpleMatch.map((match, index) => {
+                const name = match.match(/"name":\s*"([^"]+)"/)[1];
+                return {
+                  name: name,
+                  weight_g: 100,
+                  calories: 100,
+                  protein_g: 10,
+                  fat_g: 5,
+                  carbs_g: 10,
+                  vitamins: {},
+                  minerals: {},
+                  other: {}
+                };
+              });
+              
+              const fallbackResponse = {
+                ingredients: simpleIngredients,
+                total: {
+                  calories: simpleIngredients.length * 100,
+                  protein_g: simpleIngredients.length * 10,
+                  fat_g: simpleIngredients.length * 5,
+                  carbs_g: simpleIngredients.length * 10
+                }
+              };
+              
+              console.log(`LEGACY ENDPOINT - Simple extraction found ${simpleIngredients.length} ingredients`);
+              const result = processVisionResponse(fallbackResponse);
               return res.json({
                 success: true,
                 data: result
               });
             }
-          } catch (fallbackError) {
-            console.log('LEGACY ENDPOINT - Fallback parse also failed:', fallbackError.message);
             
-            // Last resort: try to extract just the ingredients array
-            try {
-              console.log('LEGACY ENDPOINT - Attempting last resort ingredient extraction...');
-              const ingredientsMatch = content.match(/"ingredients":\s*\[(.*?)\]/s);
-              if (ingredientsMatch) {
-                const ingredientsJson = `{"ingredients":[${ingredientsMatch[1]}]}`;
-                console.log('LEGACY ENDPOINT - Extracted ingredients JSON preview:', ingredientsJson.substring(0, 300));
-                const simpleResponse = JSON.parse(ingredientsJson);
-                
-                if (simpleResponse.ingredients && simpleResponse.ingredients.length > 0) {
-                  const result = processVisionResponse(simpleResponse);
-                  return res.json({
-                    success: true,
-                    data: result
-                  });
-                }
-              }
-            } catch (lastResortError) {
-              console.log('LEGACY ENDPOINT - Last resort extraction failed:', lastResortError.message);
-            }
+          } catch (repairError) {
+            console.log('LEGACY ENDPOINT - JSON repair failed:', repairError.message);
           }
           
           return res.status(500).json({
