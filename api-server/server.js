@@ -195,8 +195,30 @@ IMPORTANT:
           const content = responseData.choices[0].message.content.trim();
           
           try {
+            // Log the raw response for debugging
+            console.log('Raw OpenAI response length:', content.length);
+            console.log('Raw OpenAI response preview (first 500 chars):', content.substring(0, 500));
+            
+            // Check for position 4451 specifically where the error occurs
+            if (content.length > 4451) {
+              console.log('Character at position 4451:', JSON.stringify(content.charAt(4451)));
+              console.log('Context around position 4451:', JSON.stringify(content.substring(4440, 4460)));
+            }
+            
+            // Try to clean the response
+            let cleanedContent = content.trim();
+            
+            // Remove markdown code blocks if present
+            if (cleanedContent.startsWith('```json')) {
+              cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            } else if (cleanedContent.startsWith('```')) {
+              cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            }
+            
+            console.log('Cleaned response preview (first 500 chars):', cleanedContent.substring(0, 500));
+            
             // Parse JSON response first before logging
-            const jsonResponse = JSON.parse(content);
+            const jsonResponse = JSON.parse(cleanedContent);
             
             // Only log after successful parsing to avoid partial logging
             console.log('OpenAI API response successfully parsed');
@@ -375,41 +397,41 @@ Return JSON format with meal_name and ingredients array. Each ingredient needs n
             console.log('Raw OpenAI response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
             
             // Try to find and fix common JSON issues
-            let repairedContent = content;
+            let cleanedResponse = content.trim();
             
-            // Remove any markdown code blocks
-            repairedContent = repairedContent.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+            // Remove markdown code blocks if present
+            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
             
             // Remove any leading/trailing whitespace
-            repairedContent = repairedContent.trim();
+            cleanedResponse = cleanedResponse.trim();
             
-            // Try to parse the repaired content
-            if (repairedContent !== content) {
+            // Try to parse the cleaned response
+            if (cleanedResponse !== content) {
               try {
-                console.log('Attempting to parse repaired JSON...');
-                const repairedJson = JSON.parse(repairedContent);
-                console.log('Repaired JSON parsed successfully!');
+                console.log('Attempting to parse cleaned JSON...');
+                const jsonResponse = JSON.parse(cleanedResponse);
+                console.log('Cleaned JSON parsed successfully!');
                 
-                if (repairedJson.ingredients && repairedJson.ingredients.length > 0) {
-                  finalResponse = processVisionResponse(repairedJson);
+                if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
+                  finalResponse = processVisionResponse(jsonResponse);
                   
                   await updateJobStatus(jobId, {
                     status: 'completed',
                     progress: 100,
-                    message: 'Analysis complete (repaired JSON)',
+                    message: 'Analysis complete (cleaned JSON)',
                     completedAt: Date.now(),
                     result: finalResponse
                   });
                   
-                  console.log(`Job ${jobId} marked completed (repaired JSON) at ${new Date().toISOString()}`);
+                  console.log(`Job ${jobId} marked completed (cleaned JSON) at ${new Date().toISOString()}`);
                   return; // Exit early on success
                 }
-              } catch (repairError) {
-                console.log('JSON repair attempt failed:', repairError.message);
+              } catch (cleanError) {
+                console.log('JSON clean attempt failed:', cleanError.message);
               }
             }
             
-            // Save the raw response for debugging without logging to console
+            // Save the cleaned response for debugging without logging to console
             await updateJobStatus(jobId, {
               status: 'failed',
               progress: 100,
@@ -607,10 +629,10 @@ app.post('/api/jobs', limiter, async (req, res) => {
 
     // Return job ID immediately
     return res.status(201).json({
-        success: true,
+      success: true,
       jobId,
       status: 'pending'
-      });
+    });
   } catch (error) {
     console.error('Job submission error:', error.message);
     return res.status(500).json({
@@ -886,7 +908,7 @@ QUALITY CHECK:
       return res.status(500).json({
         success: false,
         error: `API call error: ${error.message}`
-        });
+      });
     }
   } catch (error) {
     console.error('Server error:', error.message);
