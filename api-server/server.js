@@ -268,6 +268,28 @@ IMPORTANT:
                 // FALLBACK: Try again with more aggressive prompt if only 1 ingredient detected
                 console.log(`Attempting fallback analysis for job ${jobId} to detect more ingredients...`);
                 
+                // Try with less compressed image for fallback
+                let fallbackImage = processedImage;
+                try {
+                  const parts = image.split(','); // Use original image
+                  const mimeType = parts[0];
+                  const base64Data = parts[1] || '';
+                  
+                  // Use 300KB for fallback instead of 150KB
+                  const fallbackTargetSize = 300000;
+                  if (image.length > fallbackTargetSize) {
+                    const keepRatio = fallbackTargetSize / image.length;
+                    const keepLength = Math.floor(base64Data.length * keepRatio);
+                    fallbackImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
+                    console.log(`Using less compressed image for fallback: ${fallbackImage.length} bytes`);
+                  } else {
+                    fallbackImage = image; // Use original if small enough
+                    console.log(`Using original image for fallback: ${fallbackImage.length} bytes`);
+                  }
+                } catch (e) {
+                  console.log('Failed to create less compressed fallback image, using processed version');
+                }
+                
                 const aggressivePrompt = `CRITICAL: This image contains MULTIPLE food ingredients. You MUST identify ALL separate components.
 
 Look at this image again and identify EVERY SINGLE ingredient, component, and food item visible:
@@ -312,7 +334,7 @@ Return JSON format:
                           role: "user",
                           content: [
                             { type: "text", text: "This image has multiple ingredients. Identify ALL of them - look harder and find every component, vegetable, protein, and side dish visible." },
-                            { type: "image_url", image_url: { url: processedImage } }
+                            { type: "image_url", image_url: { url: fallbackImage } }
                           ]
                         }
                       ],
@@ -326,8 +348,15 @@ Return JSON format:
                     const fallbackData = await fallbackResponse.json();
                     const fallbackContent = fallbackData.choices[0].message.content.trim();
                     
+                    console.log('=== FALLBACK RESPONSE DEBUG ===');
+                    console.log('Fallback raw content:', fallbackContent);
+                    console.log('=== END FALLBACK DEBUG ===');
+                    
                     try {
                       const fallbackJson = JSON.parse(fallbackContent);
+                      console.log('Fallback parsed JSON:', JSON.stringify(fallbackJson, null, 2));
+                      console.log('Fallback ingredients count:', fallbackJson.ingredients ? fallbackJson.ingredients.length : 0);
+                      
                       if (fallbackJson.ingredients && fallbackJson.ingredients.length > jsonResponse.ingredients.length) {
                         console.log(`Fallback detected ${fallbackJson.ingredients.length} ingredients (improved from ${jsonResponse.ingredients.length})`);
                         // Use the better result
@@ -337,7 +366,7 @@ Return JSON format:
                         finalResponse = processVisionResponse(jsonResponse);
                       }
                     } catch (fallbackParseError) {
-                      console.log(`Fallback JSON parse failed, using original result`);
+                      console.log(`Fallback JSON parse failed: ${fallbackParseError.message}, using original result`);
                       finalResponse = processVisionResponse(jsonResponse);
                     }
                   } else {
