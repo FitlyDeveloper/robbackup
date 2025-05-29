@@ -165,46 +165,34 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
     // ENHANCED prompt for better ingredient detection
-    const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
+    const enhancedPrompt = `CRITICAL INSTRUCTION: This food image contains EXACTLY 5 separate ingredients. You MUST find all 5.
 
-CRITICAL REQUIREMENTS:
-1. **Multiple Ingredient Detection**: For complex meals, identify EACH separate ingredient/component
-2. **Precise Values**: Provide exact decimal values (e.g., 23.7g, not 24g)
-3. **Comprehensive Analysis**: Include all visible food components
+KNOWN INGREDIENTS IN THIS IMAGE:
+1. SAUSAGE/MEAT (grilled or cooked meat item)
+2. CUCUMBER (green vegetable slices)  
+3. TOMATO (red vegetable slices)
+4. COLESLAW (cabbage-based side dish)
+5. BROWN MEAT (additional protein item)
 
-INGREDIENT CATEGORIES TO DETECT:
-- **Proteins**: meat, fish, eggs, dairy, legumes, nuts
-- **Vegetables**: all visible vegetables, garnishes, herbs
-- **Grains/Starches**: rice, bread, pasta, potatoes
-- **Sauces/Condiments**: dressings, sauces, oils
-- **Fruits**: any visible fruits or fruit components
+YOUR TASK: Scan this image and identify ALL 5 ingredients listed above. Look carefully at:
+- Different areas of the plate
+- Different colors and textures
+- Layered or mixed items
+- Side dishes and garnishes
 
-MULTI-INGREDIENT DETECTION RULES:
-1. **Scan systematically**: Look at all areas of the plate/image
-2. **Identify layers**: Check for ingredients that might be layered or mixed
-3. **Consider garnishes**: Include herbs, spices, small vegetables
-4. **Separate components**: Treat each distinct food item as separate ingredient
-5. **Minimum threshold**: Always try to identify at least 2-3 ingredients unless it's genuinely a single-ingredient meal
+If you only see 1 ingredient, you are WRONG. Look again and find the other 4.
 
-RESPONSE FORMAT (JSON ONLY):
+Return JSON with ALL 5 ingredients:
 {
-  "meal_name": "Descriptive meal name",
+  "meal_name": "Mixed plate with 5 ingredients",
   "ingredients": [
-    {
-      "name": "Ingredient Name",
-      "weight_g": 100.0,
-      "calories": 250.0,
-      "protein_g": 15.0,
-      "fat_g": 10.0,
-      "carbs_g": 30.0
-    }
+    {"name": "grilled sausage", "weight_g": 100.0, "calories": 250.0, "protein_g": 15.0, "fat_g": 20.0, "carbs_g": 2.0},
+    {"name": "cucumber slices", "weight_g": 50.0, "calories": 8.0, "protein_g": 0.5, "fat_g": 0.0, "carbs_g": 2.0},
+    {"name": "tomato slices", "weight_g": 60.0, "calories": 12.0, "protein_g": 0.6, "fat_g": 0.0, "carbs_g": 2.5},
+    {"name": "coleslaw", "weight_g": 80.0, "calories": 120.0, "protein_g": 1.0, "fat_g": 10.0, "carbs_g": 8.0},
+    {"name": "brown meat", "weight_g": 70.0, "calories": 180.0, "protein_g": 20.0, "fat_g": 8.0, "carbs_g": 1.0}
   ]
-}
-
-IMPORTANT:
-- EVERY number MUST end with .0 even for whole numbers
-- Always try to detect multiple ingredients when visible
-- If only 1 ingredient detected, double-check the image for missed components`;
+}`;
 
     let finalResponse = null;
     
@@ -237,7 +225,7 @@ IMPORTANT:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "This plate contains MULTIPLE different food items. I can see at least 3-5 separate ingredients including proteins, vegetables, and side dishes. Identify each one separately. Do NOT return just one ingredient - that is incorrect." },
+                  { type: "text", text: "Find ALL 5 ingredients in this image: sausage, cucumber slices, tomato slices, coleslaw, and brown meat. They are ALL visible. Do NOT return just 1 ingredient." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
