@@ -165,34 +165,46 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
     // ENHANCED prompt for better ingredient detection
-    const enhancedPrompt = `CRITICAL INSTRUCTION: This food image contains EXACTLY 5 separate ingredients. You MUST find all 5.
+    const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
 
-KNOWN INGREDIENTS IN THIS IMAGE:
-1. SAUSAGE/MEAT (grilled or cooked meat item)
-2. CUCUMBER (green vegetable slices)  
-3. TOMATO (red vegetable slices)
-4. COLESLAW (cabbage-based side dish)
-5. BROWN MEAT (additional protein item)
+CRITICAL REQUIREMENTS:
+1. **Multiple Ingredient Detection**: For complex meals, identify EACH separate ingredient/component
+2. **Precise Values**: Provide exact decimal values (e.g., 23.7g, not 24g)
+3. **Comprehensive Analysis**: Include all visible food components
 
-YOUR TASK: Scan this image and identify ALL 5 ingredients listed above. Look carefully at:
-- Different areas of the plate
-- Different colors and textures
-- Layered or mixed items
-- Side dishes and garnishes
+INGREDIENT CATEGORIES TO DETECT:
+- **Proteins**: meat, fish, eggs, dairy, legumes, nuts
+- **Vegetables**: all visible vegetables, garnishes, herbs
+- **Grains/Starches**: rice, bread, pasta, potatoes
+- **Sauces/Condiments**: dressings, sauces, oils
+- **Fruits**: any visible fruits or fruit components
 
-If you only see 1 ingredient, you are WRONG. Look again and find the other 4.
+MULTI-INGREDIENT DETECTION RULES:
+1. **Scan systematically**: Look at all areas of the plate/image
+2. **Identify layers**: Check for ingredients that might be layered or mixed
+3. **Consider garnishes**: Include herbs, spices, small vegetables
+4. **Separate components**: Treat each distinct food item as separate ingredient
+5. **Minimum threshold**: Always try to identify at least 2-3 ingredients unless it's genuinely a single-ingredient meal
 
-Return JSON with ALL 5 ingredients:
+RESPONSE FORMAT (JSON ONLY):
 {
-  "meal_name": "Mixed plate with 5 ingredients",
+  "meal_name": "Descriptive meal name",
   "ingredients": [
-    {"name": "grilled sausage", "weight_g": 100.0, "calories": 250.0, "protein_g": 15.0, "fat_g": 20.0, "carbs_g": 2.0},
-    {"name": "cucumber slices", "weight_g": 50.0, "calories": 8.0, "protein_g": 0.5, "fat_g": 0.0, "carbs_g": 2.0},
-    {"name": "tomato slices", "weight_g": 60.0, "calories": 12.0, "protein_g": 0.6, "fat_g": 0.0, "carbs_g": 2.5},
-    {"name": "coleslaw", "weight_g": 80.0, "calories": 120.0, "protein_g": 1.0, "fat_g": 10.0, "carbs_g": 8.0},
-    {"name": "brown meat", "weight_g": 70.0, "calories": 180.0, "protein_g": 20.0, "fat_g": 8.0, "carbs_g": 1.0}
+    {
+      "name": "Ingredient Name",
+      "weight_g": 100.0,
+      "calories": 250.0,
+      "protein_g": 15.0,
+      "fat_g": 10.0,
+      "carbs_g": 30.0
+    }
   ]
-}`;
+}
+
+IMPORTANT:
+- EVERY number MUST end with .0 even for whole numbers
+- Always try to detect multiple ingredients when visible
+- If only 1 ingredient detected, double-check the image for missed components`;
 
     let finalResponse = null;
     
@@ -206,33 +218,33 @@ Return JSON with ALL 5 ingredients:
         }, 60000); // Increased to 60 seconds
         
         // Use GPT-4o with image analysis capability
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-          },
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
           signal: controller.signal,
-          body: JSON.stringify({
+      body: JSON.stringify({
             model: "gpt-4o", // Using gpt-4o which can handle images
             temperature: 0.1,  // Lower temperature for more predictable outputs
             response_format: { type: "json_object" },
-            messages: [
-              {
+        messages: [
+          {
                 role: "system",
                 content: enhancedPrompt
               },
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Find ALL 5 ingredients in this image: sausage, cucumber slices, tomato slices, coleslaw, and brown meat. They are ALL visible. Do NOT return just 1 ingredient." },
+                  { type: "text", text: "This plate contains MULTIPLE different food items. I can see at least 3-5 separate ingredients including proteins, vegetables, and side dishes. Identify each one separately. Do NOT return just one ingredient - that is incorrect." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
             ],
             max_tokens: 1500  // Increased from 800 to allow for more detailed analysis
-          })
-        });
+      })
+    });
 
         clearTimeout(timeoutId);
         
@@ -303,32 +315,32 @@ Return JSON format:
                   const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 30000);
                   
                   const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-                    },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
                     signal: fallbackController.signal,
-                    body: JSON.stringify({
+      body: JSON.stringify({
                       model: "gpt-4o",
                       temperature: 0.3,  // Slightly higher temperature for more creativity
                       response_format: { type: "json_object" },
-                      messages: [
-                        {
+        messages: [
+          {
                           role: "system",
                           content: aggressivePrompt
-                        },
-                        {
+          },
+          {
                           role: "user",
-                          content: [
+            content: [
                             { type: "text", text: "This image has multiple ingredients. Identify ALL of them - look harder and find every component, vegetable, protein, and side dish visible." },
                             { type: "image_url", image_url: { url: fallbackImage } }
                           ]
                         }
                       ],
                       max_tokens: 1500
-                    })
-                  });
+      })
+    });
 
                   clearTimeout(fallbackTimeoutId);
                   
@@ -349,7 +361,7 @@ Return JSON format:
                         console.log(`Fallback detected ${fallbackJson.ingredients.length} ingredients (improved from ${jsonResponse.ingredients.length})`);
                         // Use the better result
                         finalResponse = processVisionResponse(fallbackJson);
-                      } else {
+      } else {
                         console.log(`Fallback didn't improve results, using original`);
                         finalResponse = processVisionResponse(jsonResponse);
                       }
@@ -357,15 +369,15 @@ Return JSON format:
                       console.log(`Fallback JSON parse failed: ${fallbackParseError.message}, using original result`);
                       finalResponse = processVisionResponse(jsonResponse);
                     }
-                  } else {
+          } else {
                     console.log(`Fallback API call failed, using original result`);
                     finalResponse = processVisionResponse(jsonResponse);
                   }
                 } catch (fallbackError) {
                   console.log(`Fallback attempt failed: ${fallbackError.message}, using original result`);
                   finalResponse = processVisionResponse(jsonResponse);
-                }
-              } else {
+        }
+      } else {
                 // Multiple ingredients detected, use the result
                 finalResponse = processVisionResponse(jsonResponse);
               }
@@ -503,7 +515,7 @@ Return JSON format:
         
         console.log(`Job ${jobId} marked failed (API call error) at ${new Date().toISOString()}`);
     }
-    } else {
+        } else {
       console.log('No OpenAI API key available');
       await updateJobStatus(jobId, {
         status: 'failed',
