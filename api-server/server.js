@@ -109,53 +109,49 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     // Create a mutable copy of the image data that we can modify
     let processedImage = image;
 
-    // IMPROVED compression - balance between quality and size
+    // PROPER image compression - maintain image integrity
     try {
-      // Extract the MIME type and base64 data
-      const parts = processedImage.split(',');
-      const mimeType = parts[0];
-      const base64Data = parts[1] || '';
+      console.log(`Original image size: ${processedImage.length} bytes (${(processedImage.length / 1024 / 1024).toFixed(1)}MB)`);
       
-      // Calculate approximate token count (rough estimate: 3-4 chars ≈ 1 token)
-      const estimatedTokens = Math.ceil(processedImage.length / 3.5);
-      console.log(`Estimated tokens from raw image: ~${estimatedTokens}`);
-      
-      // Use a more reasonable size that preserves ingredient detection quality
-      // Increased from 20KB to 150KB for better ingredient detection
-      const targetSizeBytes = 150000; // 150KB - much better for ingredient detection
-      console.log(`Target size for compressed image: ${targetSizeBytes} bytes`);
+      // Target size for good ingredient detection - 1MB should be plenty
+      const targetSizeBytes = 1000000; // 1MB
       
       // Only compress if image is larger than target
       if (processedImage.length > targetSizeBytes) {
-        // Calculate how much to keep
-        const keepRatio = targetSizeBytes / processedImage.length;
-        const keepLength = Math.floor(base64Data.length * keepRatio);
+        console.log(`Image too large, compressing from ${(processedImage.length / 1024 / 1024).toFixed(1)}MB to ~${(targetSizeBytes / 1024 / 1024).toFixed(1)}MB...`);
         
-        console.log(`Will keep ${keepLength} characters of base64 data (ratio: ${keepRatio.toFixed(4)})`);
+        // Extract the MIME type and base64 data
+        const parts = processedImage.split(',');
+        const mimeType = parts[0];
+        const base64Data = parts[1] || '';
         
-        // Build a compressed image with truncated data
-        const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
-        console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes (${(compressedImage.length / processedImage.length * 100).toFixed(1)}%)`);
+        // Calculate compression ratio
+        const compressionRatio = targetSizeBytes / processedImage.length;
         
-        // Replace the image data with the compressed version
-        processedImage = compressedImage;
+        // Use sampling compression - keep every nth character to maintain image structure
+        const sampleRate = Math.ceil(1 / compressionRatio);
+        let compressedData = '';
+        
+        // Sample the base64 data to reduce size while maintaining structure
+        for (let i = 0; i < base64Data.length; i += sampleRate) {
+          compressedData += base64Data[i];
+        }
+        
+        // Ensure the result is valid base64 (multiple of 4 characters)
+        const paddingNeeded = (4 - (compressedData.length % 4)) % 4;
+        compressedData += '='.repeat(paddingNeeded);
+        
+        processedImage = `${mimeType},${compressedData}`;
+        console.log(`Compressed to ${processedImage.length} bytes (${(processedImage.length / 1024 / 1024).toFixed(1)}MB)`);
+        
       } else {
         console.log('Image size acceptable, using original');
       }
+      
     } catch (error) {
       console.error('Error during compression:', error);
-      // Less aggressive emergency fallback - 50KB instead of 10KB
-      try {
-        const parts = processedImage.split(',');
-        if (parts.length >= 2) {
-          const mimeType = parts[0];
-          const base64Data = parts[1];
-          processedImage = `${mimeType},${base64Data.substring(0, 50000)}`; // 50KB emergency fallback
-          console.log('EMERGENCY FALLBACK: Image truncated to 50KB');
-        }
-      } catch (e) {
-        console.error('Even emergency fallback failed:', e);
-      }
+      console.log('Using original image due to compression failure');
+      // Keep original image if compression fails
     }
     
     // Update progress
@@ -275,19 +271,40 @@ IMPORTANT:
                   const mimeType = parts[0];
                   const base64Data = parts[1] || '';
                   
-                  // Use 300KB for fallback instead of 150KB
-                  const fallbackTargetSize = 300000;
+                  // Use 1MB for fallback instead of broken compression
+                  const fallbackTargetSize = 1000000; // 1MB - much larger for fallback
                   if (image.length > fallbackTargetSize) {
-                    const keepRatio = fallbackTargetSize / image.length;
-                    const keepLength = Math.floor(base64Data.length * keepRatio);
-                    fallbackImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
-                    console.log(`Using less compressed image for fallback: ${fallbackImage.length} bytes`);
+                    console.log('Creating fallback compressed image...');
+                    
+                    // Use proper compression for fallback too
+                    const compressionRatio = fallbackTargetSize / image.length;
+                    
+                    if (compressionRatio < 0.1) {
+                      // Aggressive compression for very large images
+                      const keepEveryN = Math.ceil(1 / compressionRatio);
+                      let compressedData = '';
+                      
+                      for (let i = 0; i < base64Data.length; i += keepEveryN) {
+                        compressedData += base64Data[i];
+                      }
+                      
+                      fallbackImage = `${mimeType},${compressedData}`;
+                      console.log(`Fallback aggressively compressed to ${fallbackImage.length} bytes`);
+                    } else {
+                      // Moderate compression with valid base64
+                      const keepLength = Math.floor(base64Data.length * compressionRatio);
+                      const validKeepLength = Math.floor(keepLength / 4) * 4;
+                      
+                      fallbackImage = `${mimeType},${base64Data.substring(0, validKeepLength)}`;
+                      console.log(`Fallback compressed to ${fallbackImage.length} bytes`);
+                    }
                   } else {
                     fallbackImage = image; // Use original if small enough
                     console.log(`Using original image for fallback: ${fallbackImage.length} bytes`);
                   }
                 } catch (e) {
-                  console.log('Failed to create less compressed fallback image, using processed version');
+                  console.log('Failed to create fallback compressed image, using processed version');
+                  fallbackImage = processedImage;
                 }
                 
                 const aggressivePrompt = `CRITICAL: This image contains MULTIPLE food ingredients. You MUST identify ALL separate components.
