@@ -930,6 +930,9 @@ QUALITY CHECK:
           try {
             let fallbackContent = content.trim();
             
+            // Log the specific error position for debugging
+            console.log('LEGACY ENDPOINT - Attempting to fix JSON at error position...');
+            
             // Remove markdown blocks
             if (fallbackContent.startsWith('```json')) {
               fallbackContent = fallbackContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
@@ -945,12 +948,27 @@ QUALITY CHECK:
               .replace(/\s+/g, ' ')
               .trim();
             
-            // Try to find incomplete JSON and truncate at last complete object
-            const lastBrace = fallbackContent.lastIndexOf('}');
-            if (lastBrace > 0 && lastBrace < fallbackContent.length - 1) {
-              fallbackContent = fallbackContent.substring(0, lastBrace + 1);
-              console.log('LEGACY ENDPOINT - Truncated to last complete brace');
+            // Fix common JSON truncation issues
+            // 1. Find incomplete property names (like "c at the end)
+            fallbackContent = fallbackContent.replace(/,\s*"[^"]*$/, ''); // Remove incomplete trailing property
+            fallbackContent = fallbackContent.replace(/:\s*"[^"]*$/, ''); // Remove incomplete trailing value
+            fallbackContent = fallbackContent.replace(/,\s*$/, ''); // Remove trailing comma
+            
+            // 2. Ensure proper closing of nested objects
+            let openBraces = (fallbackContent.match(/{/g) || []).length;
+            let closeBraces = (fallbackContent.match(/}/g) || []).length;
+            let openBrackets = (fallbackContent.match(/\[/g) || []).length;
+            let closeBrackets = (fallbackContent.match(/\]/g) || []).length;
+            
+            // Add missing closing braces/brackets
+            for (let i = 0; i < openBrackets - closeBrackets; i++) {
+              fallbackContent += ']';
             }
+            for (let i = 0; i < openBraces - closeBraces; i++) {
+              fallbackContent += '}';
+            }
+            
+            console.log('LEGACY ENDPOINT - Repaired JSON preview (last 200 chars):', fallbackContent.substring(Math.max(0, fallbackContent.length - 200)));
             
             console.log('LEGACY ENDPOINT - Attempting fallback parse...');
             const jsonResponse = JSON.parse(fallbackContent);
@@ -965,6 +983,27 @@ QUALITY CHECK:
             }
           } catch (fallbackError) {
             console.log('LEGACY ENDPOINT - Fallback parse also failed:', fallbackError.message);
+            
+            // Last resort: try to extract just the ingredients array
+            try {
+              console.log('LEGACY ENDPOINT - Attempting last resort ingredient extraction...');
+              const ingredientsMatch = content.match(/"ingredients":\s*\[(.*?)\]/s);
+              if (ingredientsMatch) {
+                const ingredientsJson = `{"ingredients":[${ingredientsMatch[1]}]}`;
+                console.log('LEGACY ENDPOINT - Extracted ingredients JSON preview:', ingredientsJson.substring(0, 300));
+                const simpleResponse = JSON.parse(ingredientsJson);
+                
+                if (simpleResponse.ingredients && simpleResponse.ingredients.length > 0) {
+                  const result = processVisionResponse(simpleResponse);
+                  return res.json({
+                    success: true,
+                    data: result
+                  });
+                }
+              }
+            } catch (lastResortError) {
+              console.log('LEGACY ENDPOINT - Last resort extraction failed:', lastResortError.message);
+            }
           }
           
           return res.status(500).json({
