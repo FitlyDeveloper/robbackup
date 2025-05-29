@@ -264,10 +264,97 @@ IMPORTANT:
               console.log(`Detected ${jsonResponse.ingredients.length} ingredients for job ${jobId}`);
               if (jsonResponse.ingredients.length === 1) {
                 console.warn(`WARNING: Only 1 ingredient detected for job ${jobId}. This might indicate the image needs better analysis or the meal is genuinely simple.`);
+                
+                // FALLBACK: Try again with more aggressive prompt if only 1 ingredient detected
+                console.log(`Attempting fallback analysis for job ${jobId} to detect more ingredients...`);
+                
+                const aggressivePrompt = `CRITICAL: This image contains MULTIPLE food ingredients. You MUST identify ALL separate components.
+
+Look at this image again and identify EVERY SINGLE ingredient, component, and food item visible:
+- Scan the ENTIRE image systematically
+- Look for vegetables, proteins, sides, garnishes, sauces
+- Identify items that might be partially hidden or mixed
+- Consider different textures and colors as separate ingredients
+- Include small items like herbs, spices, condiments
+
+You MUST return at least 2-3 ingredients unless this is genuinely a single food item (which is rare).
+
+Return JSON format:
+{
+  "meal_name": "Complete meal description",
+  "ingredients": [
+    {"name": "ingredient1", "weight_g": 100.0, "calories": 200.0, "protein_g": 10.0, "fat_g": 5.0, "carbs_g": 15.0},
+    {"name": "ingredient2", "weight_g": 50.0, "calories": 100.0, "protein_g": 5.0, "fat_g": 3.0, "carbs_g": 8.0}
+  ]
+}`;
+
+                try {
+                  const fallbackController = new AbortController();
+                  const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 30000);
+                  
+                  const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+                    },
+                    signal: fallbackController.signal,
+                    body: JSON.stringify({
+                      model: "gpt-4o",
+                      temperature: 0.3,  // Slightly higher temperature for more creativity
+                      response_format: { type: "json_object" },
+                      messages: [
+                        {
+                          role: "system",
+                          content: aggressivePrompt
+                        },
+                        {
+                          role: "user",
+                          content: [
+                            { type: "text", text: "This image has multiple ingredients. Identify ALL of them - look harder and find every component, vegetable, protein, and side dish visible." },
+                            { type: "image_url", image_url: { url: processedImage } }
+                          ]
+                        }
+                      ],
+                      max_tokens: 1500
+                    })
+                  });
+
+                  clearTimeout(fallbackTimeoutId);
+                  
+                  if (fallbackResponse.ok) {
+                    const fallbackData = await fallbackResponse.json();
+                    const fallbackContent = fallbackData.choices[0].message.content.trim();
+                    
+                    try {
+                      const fallbackJson = JSON.parse(fallbackContent);
+                      if (fallbackJson.ingredients && fallbackJson.ingredients.length > jsonResponse.ingredients.length) {
+                        console.log(`Fallback detected ${fallbackJson.ingredients.length} ingredients (improved from ${jsonResponse.ingredients.length})`);
+                        // Use the better result
+                        finalResponse = processVisionResponse(fallbackJson);
+                      } else {
+                        console.log(`Fallback didn't improve results, using original`);
+                        finalResponse = processVisionResponse(jsonResponse);
+                      }
+                    } catch (fallbackParseError) {
+                      console.log(`Fallback JSON parse failed, using original result`);
+                      finalResponse = processVisionResponse(jsonResponse);
+                    }
+                  } else {
+                    console.log(`Fallback API call failed, using original result`);
+                    finalResponse = processVisionResponse(jsonResponse);
+                  }
+                } catch (fallbackError) {
+                  console.log(`Fallback attempt failed: ${fallbackError.message}, using original result`);
+                  finalResponse = processVisionResponse(jsonResponse);
+                }
+              } else {
+                // Multiple ingredients detected, use the result
+                finalResponse = processVisionResponse(jsonResponse);
               }
               
               // Convert OpenAI's response to our expected format
-              finalResponse = processVisionResponse(jsonResponse);
+              // finalResponse = processVisionResponse(jsonResponse);
               
               // Update job status with success
               await updateJobStatus(jobId, {
