@@ -104,111 +104,107 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       status: 'processing',
       progress: 10,
       message: 'Processing image...'
-});
-
-    // Extract base64 data for vision API - needs special handling
+    });
+    
+    // Create a mutable copy of the image data that we can modify
     let processedImage = image;
-    if (image.startsWith('data:')) {
-      console.log(`Converting image from data URL to proper format for Vision API`);
-    } else {
-      console.log(`Image doesn't appear to be in data URL format, will try to process as-is`);
+
+    // IMPROVED compression - balance between quality and size
+    try {
+      // Extract the MIME type and base64 data
+      const parts = processedImage.split(',');
+      const mimeType = parts[0];
+      const base64Data = parts[1] || '';
+      
+      // Calculate approximate token count (rough estimate: 3-4 chars ≈ 1 token)
+      const estimatedTokens = Math.ceil(processedImage.length / 3.5);
+      console.log(`Estimated tokens from raw image: ~${estimatedTokens}`);
+      
+      // Use a more reasonable size that preserves ingredient detection quality
+      // Increased from 20KB to 150KB for better ingredient detection
+      const targetSizeBytes = 150000; // 150KB - much better for ingredient detection
+      console.log(`Target size for compressed image: ${targetSizeBytes} bytes`);
+      
+      // Only compress if image is larger than target
+      if (processedImage.length > targetSizeBytes) {
+        // Calculate how much to keep
+        const keepRatio = targetSizeBytes / processedImage.length;
+        const keepLength = Math.floor(base64Data.length * keepRatio);
+        
+        console.log(`Will keep ${keepLength} characters of base64 data (ratio: ${keepRatio.toFixed(4)})`);
+        
+        // Build a compressed image with truncated data
+        const compressedImage = `${mimeType},${base64Data.substring(0, keepLength)}`;
+        console.log(`Compressed image from ${processedImage.length} to ${compressedImage.length} bytes (${(compressedImage.length / processedImage.length * 100).toFixed(1)}%)`);
+        
+        // Replace the image data with the compressed version
+        processedImage = compressedImage;
+      } else {
+        console.log('Image size acceptable, using original');
+      }
+    } catch (error) {
+      console.error('Error during compression:', error);
+      // Less aggressive emergency fallback - 50KB instead of 10KB
+      try {
+        const parts = processedImage.split(',');
+        if (parts.length >= 2) {
+          const mimeType = parts[0];
+          const base64Data = parts[1];
+          processedImage = `${mimeType},${base64Data.substring(0, 50000)}`; // 50KB emergency fallback
+          console.log('EMERGENCY FALLBACK: Image truncated to 50KB');
+        }
+      } catch (e) {
+        console.error('Even emergency fallback failed:', e);
+      }
     }
     
     // Update progress
     await updateJobStatus(jobId, {
       progress: 30,
-      message: 'Image processed, calling OpenAI Vision API...'
+      message: 'Image processed, calling OpenAI API...'
     });
 
-    // Detailed system prompt for accurate nutrition analysis
-    const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify ALL visible food items with comprehensive nutrition data.
-
-CRITICAL: ALWAYS DETECT MULTIPLE INGREDIENTS
-- Look carefully at EVERY part of the plate/image
-- Identify EACH separate food component (proteins, vegetables, sides, garnishes)
-- For complex meals, you should typically find 3-6 distinct ingredients
-- Do NOT combine multiple foods into one ingredient
-- Treat each distinct food item as a separate ingredient
-
-EXAMPLES OF WHAT TO DETECT SEPARATELY:
-- Meat items: chicken, beef, sausage, fish (each type separately)
-- Vegetables: broccoli, carrots, tomatoes, cucumbers, lettuce (each separately)
-- Starches: rice, pasta, bread, potatoes (each separately)
-- Sides: coleslaw, salad, sauce, dressing (each separately)
-- Garnishes: herbs, spices, small vegetables (include these too)
-
-Return valid JSON with this EXACT structure:
-{
-  "ingredients": [
-    { 
-      "name": "specific food name (e.g. grilled chicken breast, white rice, broccoli)", 
-      "weight_g": 100, 
-      "calories": 165,
-      "protein_g": 31, 
-      "fat_g": 4, 
-      "carbs_g": 0,
-      "vitamins": {
-        "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
-        "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
-        "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
-      },
-      "minerals": {
-        "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
-        "fluoride": 0, "manganese": 0.1, "phosphorus": 200
-      },
-      "other": {
-        "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
-      }
-    }
-  ],
-  "total": { 
-    "calories": 165, "protein_g": 31, "fat_g": 4, "carbs_g": 0,
-    "vitamins": {
-      "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
-      "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
-      "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
-    },
-    "minerals": {
-      "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
-      "fluoride": 0, "manganese": 0.1, "phosphorus": 200
-    },
-    "other": {
-      "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
-    }
-  }
-}
-
-UNITS (CRITICAL - DO NOT CONVERT):
-Vitamins: A,D,K,B7,B9,B12=mcg | C,E,B1,B2,B3,B5,B6=mg
-Minerals: Ca,Fe,Mg,K,Na,Zn,Fluoride,Manganese,Phosphorus=mg | Cr,Cu,I,Mo,Se=mcg  
-Other: fiber,sugar,saturated_fats,omega_6=g | cholesterol,omega_3=mg
+    // ENHANCED prompt for better ingredient detection
+    const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
 
 CRITICAL REQUIREMENTS:
-- ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
-- NEVER omit any nutrient - use 0 if not present
-- Include fluoride, manganese, phosphorus in minerals (all in mg)
-- Use exact units specified above
-- MINIMUM 2 ingredients for any meal (unless truly single item)
-- SCAN SYSTEMATICALLY: Look at all areas of the plate/image
-- IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
+1. **Multiple Ingredient Detection**: For complex meals, identify EACH separate ingredient/component
+2. **Precise Values**: Provide exact decimal values (e.g., 23.7g, not 24g)
+3. **Comprehensive Analysis**: Include all visible food components
 
-DETECTION STRATEGY:
-1. Scan the entire image systematically (left to right, top to bottom)
-2. Identify the main protein(s) - meat, fish, eggs, dairy
-3. Identify all vegetables - even small garnishes count
-4. Identify starches/grains - rice, bread, pasta, potatoes
-5. Identify sides/salads - coleslaw, mixed salads, etc.
-6. Identify sauces/condiments - dressings, oils, etc.
-7. Double-check: Have I found at least 2-3 distinct items?
+INGREDIENT CATEGORIES TO DETECT:
+- **Proteins**: meat, fish, eggs, dairy, legumes, nuts
+- **Vegetables**: all visible vegetables, garnishes, herbs
+- **Grains/Starches**: rice, bread, pasta, potatoes
+- **Sauces/Condiments**: dressings, sauces, oils
+- **Fruits**: any visible fruits or fruit components
 
-QUALITY CHECK:
-- If you only detect 1 ingredient, look again more carefully
-- Complex plated meals should have 3-6 ingredients typically
-- Use realistic USDA nutrition values with precise decimal places
-- Include ALL nutrients with correct units
-- Use 0 for absent nutrients (e.g. cholesterol in vegetables)`;
+MULTI-INGREDIENT DETECTION RULES:
+1. **Scan systematically**: Look at all areas of the plate/image
+2. **Identify layers**: Check for ingredients that might be layered or mixed
+3. **Consider garnishes**: Include herbs, spices, small vegetables
+4. **Separate components**: Treat each distinct food item as separate ingredient
+5. **Minimum threshold**: Always try to identify at least 2-3 ingredients unless it's genuinely a single-ingredient meal
+
+RESPONSE FORMAT (JSON ONLY):
+{
+  "meal_name": "Descriptive meal name",
+  "ingredients": [
+    {
+      "name": "Ingredient Name",
+      "weight_g": 100.0,
+      "calories": 250.0,
+      "protein_g": 15.0,
+      "fat_g": 10.0,
+      "carbs_g": 30.0
+    }
+  ]
+}
+
+IMPORTANT:
+- EVERY number MUST end with .0 even for whole numbers
+- Always try to detect multiple ingredients when visible
+- If only 1 ingredient detected, double-check the image for missed components`;
 
     let finalResponse = null;
     
@@ -219,36 +215,36 @@ QUALITY CHECK:
         const timeoutId = setTimeout(() => {
           console.log(`OpenAI API call timeout for job ${jobId}`);
           controller.abort();
-        }, 90000); // 90 second timeout for large uncompressed images
+        }, 60000); // Increased to 60 seconds
         
         // Use GPT-4o with image analysis capability
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-          signal: controller.signal,
-      body: JSON.stringify({
-            model: "gpt-4o", // Using gpt-4o which can handle images
-            temperature: 0.1,  // Slight variation for better JSON generation
-            response_format: { type: "json_object" },
-        messages: [
-          {
-                role: "system",
-                content: systemPrompt
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
           },
-          {
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: "gpt-4o", // Using gpt-4o which can handle images
+            temperature: 0.1,  // Lower temperature for more predictable outputs
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: enhancedPrompt
+              },
+              {
                 role: "user",
-            content: [
-                  { type: "text", text: "Analyze this meal image and identify ALL separate food components. Look carefully at every part of the plate - identify each distinct ingredient separately (proteins, vegetables, sides, garnishes). For complex meals, you should typically find 3-6 distinct ingredients. Return comprehensive nutrition data in JSON format exactly as specified." },
+                content: [
+                  { type: "text", text: "What is in this food image? Identify ALL separate ingredients and components." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
-          }
-        ],
-            max_tokens: 2000  // Increased significantly for comprehensive nutrition analysis with all 33 nutrients
-      })
-    });
+              }
+            ],
+            max_tokens: 1500  // Increased from 800 to allow for more detailed analysis
+          })
+        });
 
         clearTimeout(timeoutId);
         
@@ -265,6 +261,11 @@ QUALITY CHECK:
             
             // Check if we have valid ingredients
             if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
+              console.log(`Detected ${jsonResponse.ingredients.length} ingredients for job ${jobId}`);
+              if (jsonResponse.ingredients.length === 1) {
+                console.warn(`WARNING: Only 1 ingredient detected for job ${jobId}. This might indicate the image needs better analysis or the meal is genuinely simple.`);
+              }
+              
               // Convert OpenAI's response to our expected format
               finalResponse = processVisionResponse(jsonResponse);
               
@@ -278,7 +279,7 @@ QUALITY CHECK:
               });
               
               console.log(`Job ${jobId} marked completed at ${new Date().toISOString()}`);
-      } else {
+            } else {
               // No ingredients found - return error
               console.log('No ingredients detected by API');
               await updateJobStatus(jobId, {
