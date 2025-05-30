@@ -933,7 +933,7 @@ class _SnapFoodState extends State<SnapFood> {
               imageBase64: displayImageBase64 ?? base64Image,
               ingredients: ingredientsList,
               additionalNutrients:
-                  _extractAdditionalNutrients(_analysisResult ?? {}),
+                  _extractNutrientsFromIngredients(ingredientsList),
               scanId: finalScanId, // Pass the scanId to FoodCardOpen
             ),
           ),
@@ -1751,209 +1751,58 @@ class _SnapFoodState extends State<SnapFood> {
     return thresholds;
   }
 
-  // Helper method to extract additional nutrients from the analysis data
-  Map<String, dynamic> _extractAdditionalNutrients(
-      Map<String, dynamic> analysisData) {
-    // Create with initial capacity to avoid resizing
+  // Helper method to extract nutrients from ingredients list
+  Map<String, dynamic> _extractNutrientsFromIngredients(
+      List<Map<String, dynamic>> ingredientsList) {
     Map<String, dynamic> nutrients = {};
 
-    // Extract vitamins if available - direct extraction approach
-    if (analysisData.containsKey('vitamins') &&
-        analysisData['vitamins'] is Map) {
-      final Map<String, dynamic> vitamins =
-          Map<String, dynamic>.from(analysisData['vitamins'] as Map);
-      for (final entry in vitamins.entries) {
-        final key = entry.key;
-        final value = entry.value;
+    // Aggregate vitamins and minerals from all ingredients
+    for (var ingredient in ingredientsList) {
+      // Extract vitamins
+      if (ingredient.containsKey('vitamins') && ingredient['vitamins'] is Map) {
+        Map<String, dynamic> vitamins =
+            Map<String, dynamic>.from(ingredient['vitamins']);
+        vitamins.forEach((key, value) {
+          String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+          double currentValue =
+              double.tryParse(nutrients[normalizedKey]?.toString() ?? '0') ??
+                  0.0;
+          double newValue = double.tryParse(value.toString()) ?? 0.0;
+          nutrients[normalizedKey] = (currentValue + newValue).toString();
+        });
+      }
 
-        // Normalize key format
-        String normalizedKey = key.toLowerCase();
+      // Extract minerals
+      if (ingredient.containsKey('minerals') && ingredient['minerals'] is Map) {
+        Map<String, dynamic> minerals =
+            Map<String, dynamic>.from(ingredient['minerals']);
+        minerals.forEach((key, value) {
+          String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+          double currentValue =
+              double.tryParse(nutrients[normalizedKey]?.toString() ?? '0') ??
+                  0.0;
+          double newValue = double.tryParse(value.toString()) ?? 0.0;
+          nutrients[normalizedKey] = (currentValue + newValue).toString();
+        });
+      }
 
-        // Quick prefix check for vitamins
-        if (normalizedKey.length <= 3 &&
-            (normalizedKey == 'a' ||
-                normalizedKey == 'c' ||
-                normalizedKey == 'd' ||
-                normalizedKey == 'e' ||
-                normalizedKey == 'k' ||
-                normalizedKey.startsWith('b'))) {
-          normalizedKey = 'vitamin_$normalizedKey';
-        }
-
-        // Simple space replacement
-        if (normalizedKey.contains(' ')) {
-          normalizedKey = normalizedKey.replaceAll(' ', '_');
-        }
-
-        nutrients[normalizedKey] = value.toString();
+      // Extract other nutrients
+      if (ingredient.containsKey('other') && ingredient['other'] is Map) {
+        Map<String, dynamic> other =
+            Map<String, dynamic>.from(ingredient['other']);
+        other.forEach((key, value) {
+          String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+          double currentValue =
+              double.tryParse(nutrients[normalizedKey]?.toString() ?? '0') ??
+                  0.0;
+          double newValue = double.tryParse(value.toString()) ?? 0.0;
+          nutrients[normalizedKey] = (currentValue + newValue).toString();
+        });
       }
     }
 
-    // Direct extraction of minerals
-    if (analysisData.containsKey('minerals') &&
-        analysisData['minerals'] is Map) {
-      final Map<String, dynamic> minerals =
-          Map<String, dynamic>.from(analysisData['minerals'] as Map);
-      minerals.forEach(
-          (key, value) => nutrients[key.toLowerCase()] = value.toString());
-    }
-
-    // Direct extraction of other nutrients - check both possible key formats
-    if (analysisData.containsKey('other_nutrients') &&
-        analysisData['other_nutrients'] is Map) {
-      final Map<String, dynamic> otherNutrients =
-          Map<String, dynamic>.from(analysisData['other_nutrients'] as Map);
-      otherNutrients.forEach(
-          (key, value) => nutrients[key.toLowerCase()] = value.toString());
-    }
-
-    // Also check for "other" key format (without underscore)
-    if (analysisData.containsKey('other') && analysisData['other'] is Map) {
-      final Map<String, dynamic> otherNutrients =
-          Map<String, dynamic>.from(analysisData['other'] as Map);
-      otherNutrients.forEach(
-          (key, value) => nutrients[key.toLowerCase()] = value.toString());
-    }
-
-    // Extract from nutrition or nutrition_values
-    if (analysisData.containsKey('nutrition') &&
-        analysisData['nutrition'] is Map) {
-      _extractNestedNutrients(
-          Map<String, dynamic>.from(analysisData['nutrition']), nutrients);
-    } else if (analysisData.containsKey('nutrition_values') &&
-        analysisData['nutrition_values'] is Map) {
-      _extractNestedNutrients(
-          Map<String, dynamic>.from(analysisData['nutrition_values']),
-          nutrients);
-    }
-
-    // Check for ingredient_macros which might contain nutrient data
-    if (analysisData.containsKey('ingredient_macros') &&
-        analysisData['ingredient_macros'] is List) {
-      List<dynamic> ingredientMacros = analysisData['ingredient_macros'];
-
-      // For aggregate nutrients, we'll combine values from all ingredients
-      for (var macroData in ingredientMacros) {
-        if (macroData is Map) {
-          Map<String, dynamic> macros = Map<String, dynamic>.from(macroData);
-
-          // Check for nested nutrition data
-          if (macros.containsKey('nutrition') && macros['nutrition'] is Map) {
-            _extractNestedNutrients(
-                Map<String, dynamic>.from(macros['nutrition']), nutrients);
-          } else if (macros.containsKey('nutrition_values') &&
-              macros['nutrition_values'] is Map) {
-            _extractNestedNutrients(
-                Map<String, dynamic>.from(macros['nutrition_values']),
-                nutrients);
-          }
-        }
-      }
-    }
-
-    // Process common root level nutrients in a single pass
-    final commonNutrients = [
-      'fiber',
-      'cholesterol',
-      'sodium',
-      'sugar',
-      'saturated_fat',
-      'omega_3',
-      'omega_6',
-      'potassium',
-      'calcium',
-      'iron',
-      'vitamin_a',
-      'vitamin_c',
-      'vitamin_d',
-      'vitamin_e',
-      'vitamin_k',
-      'thiamin',
-      'riboflavin',
-      'niacin',
-      'folate',
-      'vitamin_b12'
-    ];
-
-    for (final nutrient in commonNutrients) {
-      if (analysisData.containsKey(nutrient)) {
-        nutrients[nutrient] = analysisData[nutrient].toString();
-      }
-    }
-
+    print("Extracted nutrients from ingredients list: $nutrients");
     return nutrients;
-  }
-
-  // Helper method to extract nested nutrient data
-  void _extractNestedNutrients(
-      Map<String, dynamic> source, Map<String, dynamic> target) {
-    // Check for vitamins
-    if (source.containsKey('vitamins') && source['vitamins'] is Map) {
-      Map<String, dynamic> vitamins =
-          Map<String, dynamic>.from(source['vitamins']);
-      vitamins.forEach((key, value) {
-        String normalizedKey = key.toLowerCase();
-        // Format vitamin keys consistently
-        if (normalizedKey.length <= 3 &&
-            (normalizedKey == 'a' ||
-                normalizedKey == 'c' ||
-                normalizedKey == 'd' ||
-                normalizedKey == 'e' ||
-                normalizedKey == 'k' ||
-                normalizedKey.startsWith('b'))) {
-          normalizedKey = 'vitamin_$normalizedKey';
-        }
-
-        // Handle different value types
-        if (value is Map && value.containsKey('amount')) {
-          target[normalizedKey] = value['amount'].toString();
-        } else {
-          target[normalizedKey] = value.toString();
-        }
-      });
-    }
-
-    // Check for minerals
-    if (source.containsKey('minerals') && source['minerals'] is Map) {
-      Map<String, dynamic> minerals =
-          Map<String, dynamic>.from(source['minerals']);
-      minerals.forEach((key, value) {
-        String normalizedKey = key.toLowerCase();
-        // Handle different value types
-        if (value is Map && value.containsKey('amount')) {
-          target[normalizedKey] = value['amount'].toString();
-        } else {
-          target[normalizedKey] = value.toString();
-        }
-      });
-    }
-
-    // Check for other nutrients
-    if (source.containsKey('other') && source['other'] is Map) {
-      Map<String, dynamic> other = Map<String, dynamic>.from(source['other']);
-      other.forEach((key, value) {
-        String normalizedKey = key.toLowerCase();
-        // Handle different value types
-        if (value is Map && value.containsKey('amount')) {
-          target[normalizedKey] = value['amount'].toString();
-        } else {
-          target[normalizedKey] = value.toString();
-        }
-      });
-    }
-
-    // Also check for flat nutrient values directly in the source
-    source.forEach((key, value) {
-      if (key != 'vitamins' && key != 'minerals' && key != 'other') {
-        String normalizedKey = key.toLowerCase();
-        // Handle different value types
-        if (value is Map && value.containsKey('amount')) {
-          target[normalizedKey] = value['amount'].toString();
-        } else if (value is num || value is String) {
-          target[normalizedKey] = value.toString();
-        }
-      }
-    });
   }
 
   // Helper method to build corner frames

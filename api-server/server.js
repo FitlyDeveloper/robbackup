@@ -122,31 +122,37 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
 
 CRITICAL REQUIREMENTS:
-1. **Multiple Ingredient Detection**: For complex meals, identify EACH separate ingredient/component
+1. **Compound Foods as Single Items**: Treat compound foods like "grilled chicken thigh", "beef steak", "pork chop" as ONE ingredient, not separate parts
 2. **Precise Values**: Provide exact decimal values (e.g., 23.7g, not 24g)
 3. **Comprehensive Analysis**: Include all visible food components
 
-INGREDIENT CATEGORIES TO DETECT:
-- **Proteins**: meat, fish, eggs, dairy, legumes, nuts
-- **Vegetables**: all visible vegetables, garnishes, herbs
-- **Grains/Starches**: rice, bread, pasta, potatoes
-- **Sauces/Condiments**: dressings, sauces, oils
-- **Fruits**: any visible fruits or fruit components
+INGREDIENT IDENTIFICATION RULES:
+- **Proteins**: "grilled chicken thigh" = 1 ingredient (NOT "grilled chicken" + "thigh")
+- **Vegetables**: each distinct vegetable type (tomatoes, cucumbers, lettuce, etc.)
+- **Grains/Starches**: rice, bread, pasta, potatoes as separate items
+- **Sauces/Condiments**: dressings, sauces, oils as separate items
+- **Sides**: coleslaw, salads, etc. as separate items
 
-MULTI-INGREDIENT DETECTION RULES:
-1. **Scan systematically**: Look at all areas of the plate/image
-2. **Identify layers**: Check for ingredients that might be layered or mixed
-3. **Consider garnishes**: Include herbs, spices, small vegetables
-4. **Separate components**: Treat each distinct food item as separate ingredient
-5. **Minimum threshold**: Always try to identify at least 2-3 ingredients unless it's genuinely a single-ingredient meal
+IMPORTANT GUIDELINES:
+1. **Don't over-split**: "chicken breast" = 1 ingredient, "beef steak" = 1 ingredient
+2. **Do identify separate items**: chicken + vegetables + rice = 3 ingredients
+3. **Include garnishes**: herbs, spices, small vegetables as separate if visible
+4. **Systematic scanning**: Look at all areas of the plate/image
+5. **Minimum threshold**: Try to identify 2-5 ingredients for typical meals
 
 RESPONSE FORMAT (JSON ONLY):
-Return a JSON object with meal_name and ingredients array. Each ingredient should have name, weight_g, calories, protein_g, fat_g, and carbs_g properties.
+Return a JSON object with meal_name and ingredients array. Each ingredient should have:
+- name: descriptive name (e.g., "grilled chicken thigh", not "grilled chicken" + "thigh")
+- weight_g: estimated weight
+- calories, protein_g, fat_g, carbs_g: nutritional values
+- vitamins: object with vitamin values
+- minerals: object with mineral values  
+- other: object with fiber, cholesterol, etc.
 
 IMPORTANT:
 - EVERY number MUST end with .0 even for whole numbers
-- Always try to detect multiple ingredients when visible
-- If only 1 ingredient detected, double-check the image for missed components`;
+- Keep compound food names together (don't split "chicken thigh" into parts)
+- Include comprehensive vitamin/mineral data for each ingredient`;
 
     let finalResponse = null;
     
@@ -179,7 +185,7 @@ IMPORTANT:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "This plate contains MULTIPLE different food items. I can see at least 3-5 separate ingredients including proteins, vegetables, and side dishes. Identify each one separately. Do NOT return just one ingredient - that is incorrect." },
+                  { type: "text", text: "Analyze this food image. Identify each distinct food item as a single ingredient (e.g., grilled chicken thigh = 1 ingredient, not grilled chicken + thigh). Look for proteins, vegetables, sides, and sauces as separate items. Compound foods should remain as one ingredient." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
@@ -356,7 +362,7 @@ Return JSON format with meal_name and ingredients array. Each ingredient needs n
               });
               
               console.log(`Job ${jobId} marked completed at ${new Date().toISOString()}`);
-            } else {
+      } else {
               // No ingredients found - return error
               console.log('No ingredients detected by API');
               await updateJobStatus(jobId, {
@@ -420,7 +426,7 @@ Return JSON format with meal_name and ingredients array. Each ingredient needs n
             
             console.log(`Job ${jobId} marked failed (JSON parse error) at ${new Date().toISOString()}`);
         }
-      } else {
+          } else {
       const errorData = await response.text();
       console.error('OpenAI API error:', response.status, errorData);
           await updateJobStatus(jobId, {
@@ -442,8 +448,8 @@ Return JSON format with meal_name and ingredients array. Each ingredient needs n
         });
         
         console.log(`Job ${jobId} marked failed (API call error) at ${new Date().toISOString()}`);
-    }
-        } else {
+        }
+      } else {
       console.log('No OpenAI API key available');
       await updateJobStatus(jobId, {
         status: 'failed',
