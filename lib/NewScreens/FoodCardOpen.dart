@@ -4534,7 +4534,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
     });
 
-    print(
+              print(
         'NUTRITION TOTALS: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
   }
 
@@ -7710,7 +7710,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
 
         await prefs.setStringList('food_cards', compressedCards);
-        print(
+    print(
             'Storage cleanup: Compressed images in ${compressedCards.length} cards');
       }
     } catch (e) {
