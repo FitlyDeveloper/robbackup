@@ -125,13 +125,19 @@ CRITICAL REQUIREMENTS:
 1. **Compound Foods as Single Items**: Treat compound foods like "grilled chicken thigh", "beef steak", "pork chop" as ONE ingredient, not separate parts
 2. **Precise Values**: Provide exact decimal values (e.g., 23.7g, not 24g)
 3. **Comprehensive Analysis**: Include all visible food components
+4. **Short Names**: Use concise ingredient names (e.g., "tomatoes" not "sliced tomatoes", "chicken" not "grilled chicken breast")
+5. **Recognizable Meal Names**: If the meal is recognizable (like "Chicken Caesar Salad", "Beef Tacos", "Margherita Pizza"), use that name. Otherwise use generic names like "Mixed Plate", "Dinner Bowl", "Lunch Plate", etc.
 
 INGREDIENT IDENTIFICATION RULES:
-- **Proteins**: "grilled chicken thigh" = 1 ingredient (NOT "grilled chicken" + "thigh")
-- **Vegetables**: each distinct vegetable type (tomatoes, cucumbers, lettuce, etc.)
+- **Proteins**: "chicken" = 1 ingredient (NOT "grilled chicken breast")
+- **Vegetables**: each distinct vegetable type (tomatoes, cucumbers, lettuce, etc.) - use simple names
 - **Grains/Starches**: rice, bread, pasta, potatoes as separate items
 - **Sauces/Condiments**: dressings, sauces, oils as separate items
 - **Sides**: coleslaw, salads, etc. as separate items
+
+NAMING GUIDELINES:
+- **Ingredient Names**: Keep simple - "chicken" not "grilled chicken breast", "tomatoes" not "cherry tomatoes", "sausages" not "grilled sausages"
+- **Meal Names**: Use recognizable dish names when possible (Pizza, Pasta, Tacos, Salad, etc.) or generic terms (Mixed Plate, Dinner Bowl, Lunch)
 
 IMPORTANT GUIDELINES:
 1. **Don't over-split**: "chicken breast" = 1 ingredient, "beef steak" = 1 ingredient
@@ -142,7 +148,7 @@ IMPORTANT GUIDELINES:
 
 RESPONSE FORMAT (JSON ONLY):
 Return a JSON object with meal_name and ingredients array. Each ingredient should have:
-- name: descriptive name (e.g., "grilled chicken thigh", not "grilled chicken" + "thigh")
+- name: simple, concise name (e.g., "chicken", "tomatoes", "rice")
 - weight_g: estimated weight
 - calories, protein_g, fat_g, carbs_g: nutritional values
 - vitamins: object with vitamin values
@@ -151,7 +157,8 @@ Return a JSON object with meal_name and ingredients array. Each ingredient shoul
 
 IMPORTANT:
 - EVERY number MUST end with .0 even for whole numbers
-- Keep compound food names together (don't split "chicken thigh" into parts)
+- Keep ingredient names short and simple
+- Use recognizable meal names or generic terms like "Mixed Plate"
 - Include comprehensive vitamin/mineral data for each ingredient`;
 
     let finalResponse = null;
@@ -185,7 +192,7 @@ IMPORTANT:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Analyze this food image. Identify each distinct food item as a single ingredient (e.g., grilled chicken thigh = 1 ingredient, not grilled chicken + thigh). Look for proteins, vegetables, sides, and sauces as separate items. Compound foods should remain as one ingredient." },
+                  { type: "text", text: "Analyze this food image. Identify each distinct food item as a single ingredient (e.g., grilled chicken thigh = 1 ingredient, not grilled chicken + thigh). Look for proteins, vegetables, sides, and sauces as separate items." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
@@ -215,142 +222,9 @@ IMPORTANT:
             // Check if we have valid ingredients
             if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
               console.log(`Detected ${jsonResponse.ingredients.length} ingredients for job ${jobId}`);
-              if (jsonResponse.ingredients.length === 1) {
-                console.warn(`WARNING: Only 1 ingredient detected for job ${jobId}. This might indicate the image needs better analysis or the meal is genuinely simple.`);
-                
-                // FALLBACK: Try again with more aggressive prompt if only 1 ingredient detected
-                console.log(`Attempting fallback analysis for job ${jobId} to detect more ingredients...`);
-                
-                // Try with less compressed image for fallback
-                let fallbackImage = processedImage;
-                try {
-                  const parts = image.split(','); // Use original image
-                  const mimeType = parts[0];
-                  const base64Data = parts[1] || '';
-                  
-                  // Use 1MB for fallback instead of broken compression
-                  const fallbackTargetSize = 1000000; // 1MB - much larger for fallback
-                  if (image.length > fallbackTargetSize) {
-                    console.log('Creating fallback compressed image...');
-                    
-                    // Use proper compression for fallback too
-                    const compressionRatio = fallbackTargetSize / image.length;
-                    
-                    if (compressionRatio < 0.1) {
-                      // Aggressive compression for very large images
-                      const keepEveryN = Math.ceil(1 / compressionRatio);
-                      let compressedData = '';
-                      
-                      for (let i = 0; i < base64Data.length; i += keepEveryN) {
-                        compressedData += base64Data[i];
-                      }
-                      
-                      fallbackImage = `${mimeType},${compressedData}`;
-                      console.log(`Fallback aggressively compressed to ${fallbackImage.length} bytes`);
-                    } else {
-                      // Moderate compression with valid base64
-                      const keepLength = Math.floor(base64Data.length * compressionRatio);
-                      const validKeepLength = Math.floor(keepLength / 4) * 4;
-                      
-                      fallbackImage = `${mimeType},${base64Data.substring(0, validKeepLength)}`;
-                      console.log(`Fallback compressed to ${fallbackImage.length} bytes`);
-                    }
-                  } else {
-                    fallbackImage = image; // Use original if small enough
-                    console.log(`Using original image for fallback: ${fallbackImage.length} bytes`);
-                  }
-                } catch (e) {
-                  console.log('Failed to create fallback compressed image, using processed version');
-                  fallbackImage = processedImage;
-                }
-                
-                const aggressivePrompt = `CRITICAL: This image contains MULTIPLE food ingredients. You MUST identify ALL separate components.
-
-Look at this image again and identify EVERY SINGLE ingredient, component, and food item visible:
-- Scan the ENTIRE image systematically
-- Look for vegetables, proteins, sides, garnishes, sauces
-- Identify items that might be partially hidden or mixed
-- Consider different textures and colors as separate ingredients
-- Include small items like herbs, spices, condiments
-
-You MUST return at least 2-3 ingredients unless this is genuinely a single food item (which is rare).
-
-Return JSON format with meal_name and ingredients array. Each ingredient needs name, weight_g, calories, protein_g, fat_g, carbs_g properties.`;
-
-                try {
-                  const fallbackController = new AbortController();
-                  const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 30000);
-                  
-                  const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-                    signal: fallbackController.signal,
-      body: JSON.stringify({
-                      model: "gpt-4o",
-                      temperature: 0.3,  // Slightly higher temperature for more creativity
-                      response_format: { type: "json_object" },
-        messages: [
-          {
-                          role: "system",
-                          content: aggressivePrompt
-          },
-          {
-                          role: "user",
-            content: [
-                            { type: "text", text: "This image has multiple ingredients. Identify ALL of them - look harder and find every component, vegetable, protein, and side dish visible." },
-                            { type: "image_url", image_url: { url: fallbackImage } }
-                          ]
-                        }
-                      ],
-                      max_tokens: 1500
-      })
-    });
-
-                  clearTimeout(fallbackTimeoutId);
-                  
-                  if (fallbackResponse.ok) {
-                    const fallbackData = await fallbackResponse.json();
-                    const fallbackContent = fallbackData.choices[0].message.content.trim();
-                    
-                    console.log('=== FALLBACK RESPONSE DEBUG ===');
-                    console.log('Fallback raw content:', fallbackContent);
-                    console.log('=== END FALLBACK DEBUG ===');
-                    
-                    try {
-                      const fallbackJson = JSON.parse(fallbackContent);
-                      console.log('Fallback parsed JSON:', JSON.stringify(fallbackJson, null, 2));
-                      console.log('Fallback ingredients count:', fallbackJson.ingredients ? fallbackJson.ingredients.length : 0);
-                      
-                      if (fallbackJson.ingredients && fallbackJson.ingredients.length > jsonResponse.ingredients.length) {
-                        console.log(`Fallback detected ${fallbackJson.ingredients.length} ingredients (improved from ${jsonResponse.ingredients.length})`);
-                        // Use the better result
-                        finalResponse = processVisionResponse(fallbackJson);
-      } else {
-                        console.log(`Fallback didn't improve results, using original`);
-                        finalResponse = processVisionResponse(jsonResponse);
-                      }
-                    } catch (fallbackParseError) {
-                      console.log(`Fallback JSON parse failed: ${fallbackParseError.message}, using original result`);
-                      finalResponse = processVisionResponse(jsonResponse);
-                    }
-          } else {
-                    console.log(`Fallback API call failed, using original result`);
-                    finalResponse = processVisionResponse(jsonResponse);
-                  }
-                } catch (fallbackError) {
-                  console.log(`Fallback attempt failed: ${fallbackError.message}, using original result`);
-                  finalResponse = processVisionResponse(jsonResponse);
-        }
-      } else {
-                // Multiple ingredients detected, use the result
-                finalResponse = processVisionResponse(jsonResponse);
-              }
               
-              // Convert OpenAI's response to our expected format
-              // finalResponse = processVisionResponse(jsonResponse);
+              // Process the response directly without fallback
+              finalResponse = processVisionResponse(jsonResponse);
               
               // Update job status with success
               await updateJobStatus(jobId, {
@@ -362,7 +236,7 @@ Return JSON format with meal_name and ingredients array. Each ingredient needs n
               });
               
               console.log(`Job ${jobId} marked completed at ${new Date().toISOString()}`);
-      } else {
+            } else {
               // No ingredients found - return error
               console.log('No ingredients detected by API');
               await updateJobStatus(jobId, {
@@ -479,10 +353,96 @@ Return JSON format with meal_name and ingredients array. Each ingredient needs n
 function processVisionResponse(visionResponse) {
   const { ingredients, total } = visionResponse;
   
-  // Map ingredients to our format with comprehensive nutrition data
+  // Helper function to clean ingredient names
+  function cleanIngredientName(name) {
+    if (!name) return name;
+    
+    // Remove common descriptive words
+    const wordsToRemove = [
+      'grilled', 'fried', 'baked', 'roasted', 'steamed', 'boiled',
+      'sliced', 'diced', 'chopped', 'minced', 'fresh', 'cooked',
+      'seasoned', 'marinated', 'sautéed', 'pan-fried', 'deep-fried'
+    ];
+    
+    let cleaned = name.toLowerCase();
+    
+    // Remove descriptive words
+    wordsToRemove.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\s+`, 'gi');
+      cleaned = cleaned.replace(regex, '');
+    });
+    
+    // Clean up extra spaces and capitalize first letter
+    cleaned = cleaned.trim().replace(/\s+/g, ' ');
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+  
+  // Helper function to generate appropriate meal name
+  function generateMealName(ingredientNames) {
+    if (!ingredientNames || ingredientNames.length === 0) {
+      return "Mixed Plate";
+    }
+    
+    // Use the meal_name from API response if it exists and is reasonable
+    if (visionResponse.meal_name && 
+        visionResponse.meal_name.length < 50 && 
+        !visionResponse.meal_name.includes(' with ') &&
+        !visionResponse.meal_name.includes(' and ')) {
+      return visionResponse.meal_name;
+    }
+    
+    const ingredients = ingredientNames.map(name => name.toLowerCase());
+    
+    // Check for recognizable meal patterns
+    if (ingredients.some(ing => ing.includes('pizza'))) {
+      return "Pizza";
+    }
+    if (ingredients.some(ing => ing.includes('pasta') || ing.includes('spaghetti') || ing.includes('noodles'))) {
+      return "Pasta Dish";
+    }
+    if (ingredients.some(ing => ing.includes('taco') || ing.includes('tortilla'))) {
+      return "Tacos";
+    }
+    if (ingredients.some(ing => ing.includes('burger') || ing.includes('bun'))) {
+      return "Burger";
+    }
+    if (ingredients.some(ing => ing.includes('salad') || ing.includes('lettuce')) && 
+        ingredients.length >= 3) {
+      return "Salad";
+    }
+    if (ingredients.some(ing => ing.includes('soup'))) {
+      return "Soup";
+    }
+    if (ingredients.some(ing => ing.includes('sandwich'))) {
+      return "Sandwich";
+    }
+    if (ingredients.some(ing => ing.includes('rice')) && ingredients.length >= 2) {
+      return "Rice Bowl";
+    }
+    if (ingredients.some(ing => ing.includes('steak') || ing.includes('beef'))) {
+      return "Steak Dinner";
+    }
+    if (ingredients.some(ing => ing.includes('chicken'))) {
+      return "Chicken Dish";
+    }
+    if (ingredients.some(ing => ing.includes('fish') || ing.includes('salmon') || ing.includes('tuna'))) {
+      return "Fish Dish";
+    }
+    
+    // Generic names based on number of ingredients
+    if (ingredients.length === 1) {
+      return ingredientNames[0];
+    } else if (ingredients.length <= 3) {
+      return "Light Meal";
+    } else {
+      return "Mixed Plate";
+    }
+  }
+  
+  // Map ingredients to our format with comprehensive nutrition data and clean names
   const mappedIngredients = ingredients.map(item => {
     const ingredient = {
-      name: item.name,
+      name: cleanIngredientName(item.name),
       weight_g: item.weight_g || 100.0,
       calories: item.calories || 0,
       protein_g: item.protein_g || 0,
@@ -508,9 +468,9 @@ function processVisionResponse(visionResponse) {
     return ingredient;
   });
   
-  // Create a meal name from the ingredients
+  // Generate appropriate meal name
   const foodNames = mappedIngredients.map(item => item.name);
-  const mealName = foodNames.length > 0 ? foodNames.join(' with ') : "Analyzed Meal";
+  const mealName = generateMealName(foodNames);
   
   // Build comprehensive response with all nutrition data
   const response = {
@@ -729,15 +689,14 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // System prompt for accurate food recognition
       const systemPrompt = `You are a professional food nutrition analyzer. Analyze the image and identify ALL visible food items with comprehensive nutrition data.
 
-CRITICAL: ALWAYS DETECT MULTIPLE INGREDIENTS
-- Look carefully at EVERY part of the plate/image
-- Identify EACH separate food component (proteins, vegetables, sides, garnishes)
-- For complex meals, you should typically find 3-6 distinct ingredients
-- Do NOT combine multiple foods into one ingredient
-- Treat each distinct food item as a separate ingredient
+IMPORTANT GUIDELINES:
+- Identify each distinct food item as a single ingredient
+- Keep compound foods together (e.g., "grilled chicken thigh" = 1 ingredient, NOT "grilled chicken" + "thigh")
+- Look for separate food items: proteins, vegetables, sides, sauces, garnishes
+- Don't over-split compound food names
 
-EXAMPLES OF WHAT TO DETECT SEPARATELY:
-- Meat items: chicken, beef, sausage, fish (each type separately)
+EXAMPLES OF PROPER DETECTION:
+- Meat items: "grilled chicken thigh", "beef steak", "pork sausage" (each as single ingredient)
 - Vegetables: broccoli, carrots, tomatoes, cucumbers, lettuce (each separately)
 - Starches: rice, pasta, bread, potatoes (each separately)
 - Sides: coleslaw, salad, sauce, dressing (each separately)
@@ -1100,4 +1059,4 @@ QUALITY CHECK:
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server with real OpenAI integration running on port ${PORT}`);
-});
+}); 
