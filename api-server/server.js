@@ -159,7 +159,21 @@ IMPORTANT:
 - EVERY number MUST end with .0 even for whole numbers
 - Keep ingredient names short and simple
 - Use recognizable meal names or generic terms like "Mixed Plate"
-- Include comprehensive vitamin/mineral data for each ingredient`;
+- Include comprehensive vitamin/mineral data for each ingredient
+
+CRITICAL VITAMIN UNITS:
+- Vitamin A: ALWAYS in mcg (micrograms), NOT IU. Typical values: 0-500 mcg per meal
+- Vitamin D, K, B7, B9, B12: mcg (micrograms)
+- Vitamin C, E, B1, B2, B3, B5, B6: mg (milligrams)
+- If you calculate vitamin A in IU, convert: 1 IU = 0.3 mcg
+
+VITAMIN A CRITICAL NOTES:
+- NEVER return vitamin A in IU (International Units)
+- ALWAYS return vitamin A in mcg (micrograms)
+- Common foods: chicken (0-10 mcg), tomatoes (40-50 mcg), carrots (800-900 mcg)
+- If you calculate 966 IU, convert to 290 mcg (966 × 0.3 = 290)
+- Maximum realistic vitamin A per meal: 1000 mcg
+`;
 
     let finalResponse = null;
     
@@ -170,7 +184,7 @@ IMPORTANT:
         const timeoutId = setTimeout(() => {
           console.log(`OpenAI API call timeout for job ${jobId}`);
           controller.abort();
-        }, 60000); // Increased to 60 seconds
+        }, 120000); // Increased to 120 seconds for image analysis
         
         // Use GPT-4o with image analysis capability
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -314,11 +328,19 @@ IMPORTANT:
     }
   } catch (error) {
         console.error(`API call failed for job ${jobId}:`, error);
+        
+        let errorMessage = `API call error: ${error.message}`;
+        if (error.type === 'request-timeout' || error.message.includes('timeout')) {
+          errorMessage = 'Request timeout - image analysis took too long. Please try again with a smaller image.';
+        } else if (error.message.includes('network')) {
+          errorMessage = 'Network error - please check your connection and try again.';
+        }
+        
         await updateJobStatus(jobId, {
           status: 'failed',
           progress: 100,
           completedAt: Date.now(),
-          error: `API call error: ${error.message}`
+          error: errorMessage
         });
         
         console.log(`Job ${jobId} marked failed (API call error) at ${new Date().toISOString()}`);
@@ -357,20 +379,63 @@ function processVisionResponse(visionResponse) {
   function cleanIngredientName(name) {
     if (!name) return name;
     
-    // Remove common descriptive words
+    // Convert to lowercase for processing
+    let cleaned = name.toLowerCase().trim();
+    
+    // Remove common descriptive words and cooking methods
     const wordsToRemove = [
       'grilled', 'fried', 'baked', 'roasted', 'steamed', 'boiled',
       'sliced', 'diced', 'chopped', 'minced', 'fresh', 'cooked',
-      'seasoned', 'marinated', 'sautéed', 'pan-fried', 'deep-fried'
+      'seasoned', 'marinated', 'sautéed', 'pan-fried', 'deep-fried',
+      'organic', 'raw', 'frozen', 'canned', 'dried', 'smoked',
+      'boneless', 'skinless', 'lean', 'extra', 'large', 'small',
+      'medium', 'whole', 'half', 'quarter', 'piece', 'pieces'
     ];
-    
-    let cleaned = name.toLowerCase();
     
     // Remove descriptive words
     wordsToRemove.forEach(word => {
       const regex = new RegExp(`\\b${word}\\s+`, 'gi');
       cleaned = cleaned.replace(regex, '');
     });
+    
+    // Specific ingredient simplifications
+    const simplifications = {
+      'chicken breast': 'chicken',
+      'chicken thigh': 'chicken', 
+      'chicken wing': 'chicken',
+      'chicken drumstick': 'chicken',
+      'beef steak': 'beef',
+      'ground beef': 'beef',
+      'pork chop': 'pork',
+      'pork tenderloin': 'pork',
+      'cherry tomatoes': 'tomatoes',
+      'roma tomatoes': 'tomatoes',
+      'grape tomatoes': 'tomatoes',
+      'bell pepper': 'peppers',
+      'red pepper': 'peppers',
+      'green pepper': 'peppers',
+      'sweet potato': 'potato',
+      'russet potato': 'potato',
+      'red potato': 'potato',
+      'brown rice': 'rice',
+      'white rice': 'rice',
+      'jasmine rice': 'rice',
+      'basmati rice': 'rice',
+      'olive oil': 'oil',
+      'vegetable oil': 'oil',
+      'canola oil': 'oil',
+      'italian sausage': 'sausages',
+      'turkey sausage': 'sausages',
+      'pork sausage': 'sausages'
+    };
+    
+    // Apply simplifications
+    for (const [long, short] of Object.entries(simplifications)) {
+      if (cleaned.includes(long)) {
+        cleaned = short;
+        break;
+      }
+    }
     
     // Clean up extra spaces and capitalize first letter
     cleaned = cleaned.trim().replace(/\s+/g, ' ');
@@ -385,55 +450,99 @@ function processVisionResponse(visionResponse) {
     
     // Use the meal_name from API response if it exists and is reasonable
     if (visionResponse.meal_name && 
-        visionResponse.meal_name.length < 50 && 
+        visionResponse.meal_name.length < 30 && 
         !visionResponse.meal_name.includes(' with ') &&
-        !visionResponse.meal_name.includes(' and ')) {
+        !visionResponse.meal_name.includes(' and ') &&
+        !visionResponse.meal_name.toLowerCase().includes('ingredients')) {
       return visionResponse.meal_name;
     }
     
     const ingredients = ingredientNames.map(name => name.toLowerCase());
     
-    // Check for recognizable meal patterns
+    // Enhanced meal pattern recognition with specific combinations
     if (ingredients.some(ing => ing.includes('pizza'))) {
       return "Pizza";
     }
+    
+    // Pasta dishes with specific types
     if (ingredients.some(ing => ing.includes('pasta') || ing.includes('spaghetti') || ing.includes('noodles'))) {
+      if (ingredients.some(ing => ing.includes('carbonara'))) return "Carbonara Pasta";
+      if (ingredients.some(ing => ing.includes('alfredo'))) return "Alfredo Pasta";
+      if (ingredients.some(ing => ing.includes('marinara') || ing.includes('tomato'))) return "Marinara Pasta";
+      if (ingredients.some(ing => ing.includes('pesto'))) return "Pesto Pasta";
       return "Pasta Dish";
     }
+    
+    // Taco variations
     if (ingredients.some(ing => ing.includes('taco') || ing.includes('tortilla'))) {
+      if (ingredients.some(ing => ing.includes('beef') || ing.includes('meat'))) return "Meat Tacos";
+      if (ingredients.some(ing => ing.includes('chicken'))) return "Chicken Tacos";
+      if (ingredients.some(ing => ing.includes('fish'))) return "Fish Tacos";
       return "Tacos";
     }
+    
     if (ingredients.some(ing => ing.includes('burger') || ing.includes('bun'))) {
       return "Burger";
     }
+    
+    // Salad variations
     if (ingredients.some(ing => ing.includes('salad') || ing.includes('lettuce')) && 
         ingredients.length >= 3) {
+      if (ingredients.some(ing => ing.includes('caesar'))) return "Caesar Salad";
+      if (ingredients.some(ing => ing.includes('chicken'))) return "Chicken Salad";
+      if (ingredients.some(ing => ing.includes('greek'))) return "Greek Salad";
       return "Salad";
     }
+    
     if (ingredients.some(ing => ing.includes('soup'))) {
       return "Soup";
     }
+    
     if (ingredients.some(ing => ing.includes('sandwich'))) {
       return "Sandwich";
     }
+    
+    // Rice bowl variations
     if (ingredients.some(ing => ing.includes('rice')) && ingredients.length >= 2) {
+      if (ingredients.some(ing => ing.includes('chicken'))) return "Chicken Rice Bowl";
+      if (ingredients.some(ing => ing.includes('beef'))) return "Beef Rice Bowl";
+      if (ingredients.some(ing => ing.includes('pork'))) return "Pork Rice Bowl";
       return "Rice Bowl";
     }
+    
+    // Protein-based dishes
     if (ingredients.some(ing => ing.includes('steak') || ing.includes('beef'))) {
       return "Steak Dinner";
     }
+    
     if (ingredients.some(ing => ing.includes('chicken'))) {
+      if (ingredients.some(ing => ing.includes('wings'))) return "Chicken Wings";
+      if (ingredients.some(ing => ing.includes('grilled'))) return "Grilled Chicken";
       return "Chicken Dish";
     }
+    
     if (ingredients.some(ing => ing.includes('fish') || ing.includes('salmon') || ing.includes('tuna'))) {
+      if (ingredients.some(ing => ing.includes('salmon'))) return "Salmon Dish";
+      if (ingredients.some(ing => ing.includes('tuna'))) return "Tuna Dish";
       return "Fish Dish";
     }
     
-    // Generic names based on number of ingredients
+    if (ingredients.some(ing => ing.includes('pork'))) {
+      return "Pork Dish";
+    }
+    
+    // Breakfast items
+    if (ingredients.some(ing => ing.includes('eggs') || ing.includes('pancake') || ing.includes('waffle'))) {
+      return "Breakfast";
+    }
+    
+    // Generic names based on number of ingredients and content
     if (ingredients.length === 1) {
       return ingredientNames[0];
-    } else if (ingredients.length <= 3) {
+    } else if (ingredients.length <= 2) {
       return "Light Meal";
+    } else if (ingredients.length <= 4) {
+      return "Dinner Plate";
     } else {
       return "Mixed Plate";
     }
@@ -750,6 +859,19 @@ Vitamins: A,D,K,B7,B9,B12=mcg | C,E,B1,B2,B3,B5,B6=mg
 Minerals: Ca,Fe,Mg,K,Na,Zn,Fluoride,Manganese,Phosphorus=mg | Cr,Cu,I,Mo,Se=mcg  
 Other: fiber,sugar,saturated_fats,omega_6=g | cholesterol,omega_3=mg
 
+VITAMIN A CRITICAL NOTE: 
+- ALWAYS return Vitamin A in MICROGRAMS (mcg), NOT International Units (IU)
+- Typical meal values: 50-500 mcg (NOT 500-5000 IU)
+- If you calculate IU, convert: 1 IU = 0.3 mcg for vitamin A
+- Example: 1000 IU = 300 mcg
+
+REALISTIC VITAMIN A VALUES FOR COMMON FOODS:
+- Chicken: 0-10 mcg per 100g
+- Tomatoes: 40-50 mcg per 100g  
+- Carrots: 800-900 mcg per 100g
+- Leafy greens: 400-500 mcg per 100g
+- Most meals: 50-300 mcg total
+
 CRITICAL REQUIREMENTS:
 - ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
 - NEVER omit any nutrient - use 0 if not present
@@ -782,7 +904,7 @@ QUALITY CHECK:
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
       },
-        timeout: 90000, // 90 second timeout for legacy endpoint to match main endpoint
+        timeout: 120000, // Increased to 120 seconds for image analysis
       body: JSON.stringify({
           model: "gpt-4o", // Using gpt-4o which can handle images
           temperature: 0.1,  // Slight variation for better JSON generation
@@ -813,13 +935,13 @@ QUALITY CHECK:
           console.log('LEGACY ENDPOINT - Raw OpenAI response length:', content.length);
           console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
           
-          // Check for position 4443 specifically where the error occurs
-          if (content.length > 4443) {
-            console.log('LEGACY ENDPOINT - Character at position 4443:', JSON.stringify(content.charAt(4443)));
-            console.log('LEGACY ENDPOINT - Context around position 4443:', JSON.stringify(content.substring(4430, 4450)));
+          // Check for position 3711 specifically where the error occurs
+          if (content.length > 3711) {
+            console.log('LEGACY ENDPOINT - Character at position 3711:', JSON.stringify(content.charAt(3711)));
+            console.log('LEGACY ENDPOINT - Context around position 3711:', JSON.stringify(content.substring(3700, 3720)));
           }
           
-          // Try to clean the response
+          // Try to clean the response first
           let cleanedContent = content.trim();
           
           // Remove markdown code blocks if present
@@ -829,32 +951,126 @@ QUALITY CHECK:
             cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
           }
           
-          // Fix common JSON issues that cause unterminated strings
+          // Fix common JSON syntax errors
           cleanedContent = cleanedContent
-            .replace(/\n/g, ' ')     // Replace newlines with spaces
-            .replace(/\r/g, ' ')     // Replace carriage returns with spaces  
-            .replace(/\t/g, ' ')     // Replace tabs with spaces
-            .replace(/\s+/g, ' ');   // Collapse multiple spaces
+            .replace(/,\s*}/g, '}')     // Remove trailing commas before }
+            .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
+            .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
+            .replace(/:\s*,/g, ': null,')       // Fix missing values
+            .replace(/,\s*,/g, ',');            // Fix double commas
           
           console.log('LEGACY ENDPOINT - Cleaned response preview (first 500 chars):', cleanedContent.substring(0, 500));
           
-          // Parse JSON response
-          const jsonResponse = JSON.parse(cleanedContent);
-          
-          // Check if we have valid ingredients
-          if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
-            // Convert OpenAI's response to our expected format
-            const result = processVisionResponse(jsonResponse);
-            return res.json({
-              success: true,
-              data: result
-            });
-          } else {
-            return res.status(422).json({
-              success: false,
-              error: 'No food ingredients could be detected in the image'
-            });
+          // Try to find the ingredients array and extract complete ingredients
+          const ingredientsMatch = cleanedContent.match(/"ingredients":\s*\[(.*?)\]/s);
+          if (ingredientsMatch) {
+            console.log('LEGACY ENDPOINT - Found ingredients array, attempting to parse...');
+            
+            try {
+              // Try to parse just the ingredients array first
+              const ingredientsArrayStr = `[${ingredientsMatch[1]}]`;
+              const cleanedIngredientsStr = ingredientsArrayStr
+                .replace(/,\s*}/g, '}')
+                .replace(/,\s*]/g, ']')
+                .replace(/"\s*:\s*,/g, '": null,')
+                .replace(/:\s*,/g, ': null,');
+              
+              const ingredientsArray = JSON.parse(cleanedIngredientsStr);
+              
+              if (ingredientsArray && ingredientsArray.length > 0) {
+                console.log(`LEGACY ENDPOINT - Successfully parsed ${ingredientsArray.length} ingredients`);
+                
+                // Calculate totals from ingredients
+                let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+                
+                ingredientsArray.forEach(ingredient => {
+                  totalCalories += ingredient.calories || 0;
+                  totalProtein += ingredient.protein_g || 0;
+                  totalFat += ingredient.fat_g || 0;
+                  totalCarbs += ingredient.carbs_g || 0;
+                });
+                
+                const repairedResponse = {
+                  ingredients: ingredientsArray,
+                  total: {
+                    calories: totalCalories,
+                    protein_g: totalProtein,
+                    fat_g: totalFat,
+                    carbs_g: totalCarbs
+                  }
+                };
+                
+                console.log('LEGACY ENDPOINT - JSON repair successful via ingredients array!');
+                const result = processVisionResponse(repairedResponse);
+                return res.json({
+                  success: true,
+                  data: result
+                });
+              }
+            } catch (ingredientsError) {
+              console.log('LEGACY ENDPOINT - Ingredients array parsing failed:', ingredientsError.message);
+            }
           }
+          
+          // Alternative approach: find individual ingredient objects
+          const ingredientMatches = cleanedContent.match(/\{\s*"name":\s*"[^"]+",[\s\S]*?\}/g);
+          if (ingredientMatches && ingredientMatches.length > 0) {
+            console.log(`LEGACY ENDPOINT - Found ${ingredientMatches.length} individual ingredient objects`);
+            
+            const validIngredients = [];
+            
+            for (const ingredientStr of ingredientMatches) {
+              try {
+                const cleanedIngredientStr = ingredientStr
+                  .replace(/,\s*}/g, '}')
+                  .replace(/"\s*:\s*,/g, '": null,')
+                  .replace(/:\s*,/g, ': null,');
+                
+                const ingredient = JSON.parse(cleanedIngredientStr);
+                if (ingredient.name) {
+                  validIngredients.push(ingredient);
+                }
+              } catch (ingredientError) {
+                console.log('LEGACY ENDPOINT - Failed to parse individual ingredient:', ingredientError.message);
+              }
+            }
+            
+            if (validIngredients.length > 0) {
+              console.log(`LEGACY ENDPOINT - Successfully parsed ${validIngredients.length} individual ingredients`);
+              
+              // Calculate totals
+              let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+              
+              validIngredients.forEach(ingredient => {
+                totalCalories += ingredient.calories || 0;
+                totalProtein += ingredient.protein_g || 0;
+                totalFat += ingredient.fat_g || 0;
+                totalCarbs += ingredient.carbs_g || 0;
+              });
+              
+              const repairedResponse = {
+                ingredients: validIngredients,
+                total: {
+                  calories: totalCalories,
+                  protein_g: totalProtein,
+                  fat_g: totalFat,
+                  carbs_g: totalCarbs
+                }
+              };
+              
+              console.log('LEGACY ENDPOINT - JSON repair successful via individual ingredients!');
+              const result = processVisionResponse(repairedResponse);
+              return res.json({
+                success: true,
+                data: result
+              });
+            }
+          }
+          
+          return res.status(500).json({
+            success: false,
+            error: 'Invalid response format from image analysis'
+          });
         } catch (parseError) {
           console.error(`LEGACY ENDPOINT - Error parsing API response: ${parseError}`);
           console.log('LEGACY ENDPOINT - Raw response length:', content.length);
@@ -877,146 +1093,118 @@ QUALITY CHECK:
             // Clean whitespace but preserve structure
             repairedContent = repairedContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             
-            // Find the last complete ingredient object
-            const ingredientsStartMatch = repairedContent.match(/"ingredients":\s*\[/);
-            if (ingredientsStartMatch) {
-              const ingredientsStart = ingredientsStartMatch.index + ingredientsStartMatch[0].length;
-              let ingredientsContent = repairedContent.substring(ingredientsStart);
+            // Fix common JSON syntax errors
+            repairedContent = repairedContent
+              .replace(/,\s*}/g, '}')     // Remove trailing commas before }
+              .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
+              .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
+              .replace(/:\s*,/g, ': null,')       // Fix missing values
+              .replace(/,\s*,/g, ',');            // Fix double commas
+            
+            // Try to find the ingredients array and extract complete ingredients
+            const ingredientsMatch = repairedContent.match(/"ingredients":\s*\[(.*?)\]/s);
+            if (ingredientsMatch) {
+              console.log('LEGACY ENDPOINT - Found ingredients array, attempting to parse...');
               
-              // Find complete ingredient objects by counting braces
-              let completeIngredients = [];
-              let currentIngredient = '';
-              let braceCount = 0;
-              let inString = false;
-              let escapeNext = false;
-              
-              for (let i = 0; i < ingredientsContent.length; i++) {
-                const char = ingredientsContent[i];
+              try {
+                // Try to parse just the ingredients array first
+                const ingredientsArrayStr = `[${ingredientsMatch[1]}]`;
+                const cleanedIngredientsStr = ingredientsArrayStr
+                  .replace(/,\s*}/g, '}')
+                  .replace(/,\s*]/g, ']')
+                  .replace(/"\s*:\s*,/g, '": null,')
+                  .replace(/:\s*,/g, ': null,');
                 
-                if (escapeNext) {
-                  escapeNext = false;
-                  currentIngredient += char;
-                  continue;
-                }
+                const ingredientsArray = JSON.parse(cleanedIngredientsStr);
                 
-                if (char === '\\') {
-                  escapeNext = true;
-                  currentIngredient += char;
-                  continue;
-                }
-                
-                if (char === '"' && !escapeNext) {
-                  inString = !inString;
-                }
-                
-                if (!inString) {
-                  if (char === '{') {
-                    braceCount++;
-                  } else if (char === '}') {
-                    braceCount--;
-                    
-                    // If we've closed all braces, we have a complete ingredient
-                    if (braceCount === 0 && currentIngredient.trim()) {
-                      currentIngredient += char;
-                      completeIngredients.push(currentIngredient.trim());
-                      currentIngredient = '';
-                      
-                      // Skip comma and whitespace
-                      while (i + 1 < ingredientsContent.length && 
-                             (ingredientsContent[i + 1] === ',' || 
-                              ingredientsContent[i + 1] === ' ' || 
-                              ingredientsContent[i + 1] === '\n' || 
-                              ingredientsContent[i + 1] === '\t')) {
-                        i++;
-                      }
-                      continue;
+                if (ingredientsArray && ingredientsArray.length > 0) {
+                  console.log(`LEGACY ENDPOINT - Successfully parsed ${ingredientsArray.length} ingredients`);
+                  
+                  // Calculate totals from ingredients
+                  let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+                  
+                  ingredientsArray.forEach(ingredient => {
+                    totalCalories += ingredient.calories || 0;
+                    totalProtein += ingredient.protein_g || 0;
+                    totalFat += ingredient.fat_g || 0;
+                    totalCarbs += ingredient.carbs_g || 0;
+                  });
+                  
+                  const repairedResponse = {
+                    ingredients: ingredientsArray,
+                    total: {
+                      calories: totalCalories,
+                      protein_g: totalProtein,
+                      fat_g: totalFat,
+                      carbs_g: totalCarbs
                     }
-                  }
+                  };
+                  
+                  console.log('LEGACY ENDPOINT - JSON repair successful via ingredients array!');
+                  const result = processVisionResponse(repairedResponse);
+                  return res.json({
+                    success: true,
+                    data: result
+                  });
                 }
-                
-                currentIngredient += char;
+              } catch (ingredientsError) {
+                console.log('LEGACY ENDPOINT - Ingredients array parsing failed:', ingredientsError.message);
+              }
+            }
+            
+            // Alternative approach: find individual ingredient objects
+            const ingredientMatches = repairedContent.match(/\{\s*"name":\s*"[^"]+",[\s\S]*?\}/g);
+            if (ingredientMatches && ingredientMatches.length > 0) {
+              console.log(`LEGACY ENDPOINT - Found ${ingredientMatches.length} individual ingredient objects`);
+              
+              const validIngredients = [];
+              
+              for (const ingredientStr of ingredientMatches) {
+                try {
+                  const cleanedIngredientStr = ingredientStr
+                    .replace(/,\s*}/g, '}')
+                    .replace(/"\s*:\s*,/g, '": null,')
+                    .replace(/:\s*,/g, ': null,');
+                  
+                  const ingredient = JSON.parse(cleanedIngredientStr);
+                  if (ingredient.name) {
+                    validIngredients.push(ingredient);
+                  }
+                } catch (ingredientError) {
+                  console.log('LEGACY ENDPOINT - Failed to parse individual ingredient:', ingredientError.message);
+                }
               }
               
-              console.log(`LEGACY ENDPOINT - Found ${completeIngredients.length} complete ingredients`);
-              
-              if (completeIngredients.length > 0) {
-                // Build a valid JSON with complete ingredients
-                const validJson = `{
-                  "ingredients": [
-                    ${completeIngredients.join(',\n    ')}
-                  ],
-                  "total": {
-                    "calories": 0,
-                    "protein_g": 0,
-                    "fat_g": 0,
-                    "carbs_g": 0
-                  }
-                }`;
+              if (validIngredients.length > 0) {
+                console.log(`LEGACY ENDPOINT - Successfully parsed ${validIngredients.length} individual ingredients`);
                 
-                console.log('LEGACY ENDPOINT - Attempting to parse repaired JSON...');
-                const jsonResponse = JSON.parse(validJson);
-                
-                // Calculate totals from ingredients
+                // Calculate totals
                 let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
                 
-                jsonResponse.ingredients.forEach(ingredient => {
+                validIngredients.forEach(ingredient => {
                   totalCalories += ingredient.calories || 0;
                   totalProtein += ingredient.protein_g || 0;
                   totalFat += ingredient.fat_g || 0;
                   totalCarbs += ingredient.carbs_g || 0;
                 });
                 
-                jsonResponse.total = {
-                  calories: totalCalories,
-                  protein_g: totalProtein,
-                  fat_g: totalFat,
-                  carbs_g: totalCarbs
+                const repairedResponse = {
+                  ingredients: validIngredients,
+                  total: {
+                    calories: totalCalories,
+                    protein_g: totalProtein,
+                    fat_g: totalFat,
+                    carbs_g: totalCarbs
+                  }
                 };
                 
-                console.log('LEGACY ENDPOINT - JSON repair successful!');
-                const result = processVisionResponse(jsonResponse);
+                console.log('LEGACY ENDPOINT - JSON repair successful via individual ingredients!');
+                const result = processVisionResponse(repairedResponse);
                 return res.json({
                   success: true,
                   data: result
                 });
               }
-            }
-            
-            // If ingredients parsing failed, try simpler extraction
-            console.log('LEGACY ENDPOINT - Attempting simple ingredient extraction...');
-            const simpleMatch = content.match(/"name":\s*"([^"]+)"/g);
-            if (simpleMatch && simpleMatch.length > 0) {
-              const simpleIngredients = simpleMatch.map((match, index) => {
-                const name = match.match(/"name":\s*"([^"]+)"/)[1];
-                return {
-                  name: name,
-                  weight_g: 100,
-                  calories: 100,
-                  protein_g: 10,
-                  fat_g: 5,
-                  carbs_g: 10,
-                  vitamins: {},
-                  minerals: {},
-                  other: {}
-                };
-              });
-              
-              const fallbackResponse = {
-                ingredients: simpleIngredients,
-                total: {
-                  calories: simpleIngredients.length * 100,
-                  protein_g: simpleIngredients.length * 10,
-                  fat_g: simpleIngredients.length * 5,
-                  carbs_g: simpleIngredients.length * 10
-                }
-              };
-              
-              console.log(`LEGACY ENDPOINT - Simple extraction found ${simpleIngredients.length} ingredients`);
-              const result = processVisionResponse(fallbackResponse);
-              return res.json({
-                success: true,
-                data: result
-              });
             }
             
           } catch (repairError) {
@@ -1042,9 +1230,17 @@ QUALITY CHECK:
       }
     } catch (error) {
       console.error('OpenAI API error:', error);
+      
+      let errorMessage = `API call error: ${error.message}`;
+      if (error.type === 'request-timeout' || error.message.includes('timeout')) {
+        errorMessage = 'Request timeout - image analysis took too long. Please try again with a smaller image.';
+      } else if (error.message.includes('network')) {
+        errorMessage = 'Network error - please check your connection and try again.';
+      }
+      
       return res.status(500).json({
         success: false,
-        error: `API call error: ${error.message}`
+        error: errorMessage
       });
     }
   } catch (error) {
