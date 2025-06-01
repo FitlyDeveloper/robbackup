@@ -853,24 +853,6 @@ CRITICAL RULES:
           console.log('LEGACY ENDPOINT - Raw OpenAI response length:', content.length);
           console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
           
-          // FIRST: Try to parse the original response directly
-          try {
-            const originalJson = JSON.parse(content);
-            console.log('LEGACY ENDPOINT - Original JSON parsed successfully!');
-            
-            if (originalJson.ingredients && originalJson.ingredients.length > 0) {
-              const result = processVisionResponse(originalJson);
-              return res.json({
-                success: true,
-                data: result
-              });
-            } else {
-              console.log('LEGACY ENDPOINT - No ingredients found in original response');
-            }
-          } catch (originalError) {
-            console.log('LEGACY ENDPOINT - Original JSON parse failed:', originalError.message);
-          }
-          
           // SECOND: Try simple JSON cleaning
           console.log('LEGACY ENDPOINT - Attempting simple JSON cleaning...');
           let cleanedContent = content.trim();
@@ -879,10 +861,34 @@ CRITICAL RULES:
           cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
           cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
           
-          // Simple cleaning only
+          // AGGRESSIVE JSON REPAIR
           cleanedContent = cleanedContent
             .replace(/,\s*}/g, '}')     // Remove trailing commas before }
-            .replace(/,\s*]/g, ']');    // Remove trailing commas before ]
+            .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
+            .replace(/,\s*,/g, ',')     // Remove double commas
+            .replace(/:\s*,/g, ': null,')  // Fix empty values
+            .replace(/"\s*:\s*,/g, '": null,')  // Fix empty string values
+            .replace(/:\s*([^",}\]]+)(?=\s*[,}\]])/g, ': "$1"')  // Quote unquoted string values
+            .replace(/:\s*"([^"]*)\n/g, ': "$1",\n')  // Fix unterminated strings at line end
+            .replace(/:\s*"([^"]*?)(?=\s*[,}\]])/g, ': "$1"')  // Fix unterminated strings before delimiters
+            .replace(/([^\\])"([^",:}\]]*)"([^,}\]]*)/g, '$1"$2"$3')  // Fix broken quotes
+            .replace(/"\s*:\s*([0-9.]+)\s*([,}\]])/g, '": $1$2')  // Fix number formatting
+            .replace(/([{,]\s*)"([^"]*)"(\s*:\s*)"([^"]*)"([^,}\]]*)/g, '$1"$2"$3"$4"$5'); // Fix quote issues
+          
+          // Try to fix specific unterminated string patterns
+          const lines = cleanedContent.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            // Count unescaped quotes in the line
+            const quotes = (line.match(/(?<!\\)"/g) || []).length;
+            if (quotes % 2 !== 0) {
+              // Odd number of quotes - likely unterminated string
+              console.log(`LEGACY ENDPOINT - Fixing unterminated string on line ${i + 1}: ${line.substring(0, 100)}...`);
+              // Add closing quote before comma, brace, or bracket
+              lines[i] = line.replace(/([^"])(\s*[,}\]])/, '$1"$2');
+            }
+          }
+          cleanedContent = lines.join('\n');
           
           try {
             const cleanedJson = JSON.parse(cleanedContent);
@@ -899,9 +905,32 @@ CRITICAL RULES:
             }
           } catch (cleanError) {
             console.log('LEGACY ENDPOINT - Cleaned JSON parse failed:', cleanError.message);
+            
+            // FINAL ATTEMPT: Try to extract just the ingredients array
+            console.log('LEGACY ENDPOINT - Attempting to extract ingredients array...');
+            try {
+              const ingredientsMatch = content.match(/"ingredients"\s*:\s*\[(.*?)\]/s);
+              if (ingredientsMatch) {
+                const ingredientsStr = `{"ingredients": [${ingredientsMatch[1]}]}`;
+                const ingredientsJson = JSON.parse(ingredientsStr);
+                
+                if (ingredientsJson.ingredients && ingredientsJson.ingredients.length > 0) {
+                  // Add a default meal name
+                  ingredientsJson.meal_name = "Mixed Plate";
+                  const result = processVisionResponse(ingredientsJson);
+                  return res.json({
+                    success: true,
+                    data: result,
+                    note: "Extracted ingredients from partial JSON"
+                  });
+                }
+              }
+            } catch (extractError) {
+              console.log('LEGACY ENDPOINT - Ingredient extraction failed:', extractError.message);
+            }
           }
           
-          // THIRD: Log the actual error and return failure
+          // If we reach here, all parsing attempts failed
           console.error('LEGACY ENDPOINT - All JSON parsing attempts failed');
           console.log('LEGACY ENDPOINT - Raw response (first 1000 chars):', content.substring(0, 1000));
           console.log('LEGACY ENDPOINT - Raw response (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
@@ -956,4 +985,4 @@ CRITICAL RULES:
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server with real OpenAI integration running on port ${PORT}`);
-}); 
+});
