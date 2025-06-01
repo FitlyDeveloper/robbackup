@@ -271,14 +271,38 @@ function getRealUSDANutrients(foodName, carbs, protein, fat) {
     nutrients.phosphorus = 24; nutrients.potassium = 237; nutrients.fiber = 1.2;
     nutrients.sugar = 2.6;
   }
+  else if (foodName.includes('cucumber')) {
+    nutrients.vitamin_A = 7; nutrients.vitamin_C = 2.8; nutrients.vitamin_K = 16.4;
+    nutrients.calcium = 16; nutrients.iron = 0.28; nutrients.magnesium = 13;
+    nutrients.phosphorus = 24; nutrients.potassium = 147; nutrients.fiber = 0.5;
+    nutrients.sugar = 1.7;
+  }
   else if (foodName.includes('pepper') || foodName.includes('bell pepper')) {
     nutrients.vitamin_A = 157; nutrients.vitamin_C = 127.7; nutrients.vitamin_K = 4.9;
     nutrients.calcium = 7; nutrients.iron = 0.34; nutrients.magnesium = 10;
     nutrients.phosphorus = 20; nutrients.potassium = 175; nutrients.fiber = 1.7;
     nutrients.sugar = 2.4;
   }
+  else if (foodName.includes('onion')) {
+    nutrients.vitamin_A = 0; nutrients.vitamin_C = 7.4; nutrients.vitamin_B6 = 0.12;
+    nutrients.calcium = 23; nutrients.iron = 0.21; nutrients.magnesium = 10;
+    nutrients.phosphorus = 29; nutrients.potassium = 146; nutrients.fiber = 1.7;
+    nutrients.sugar = 4.2;
+  }
+  else if (foodName.includes('lettuce')) {
+    nutrients.vitamin_A = 166; nutrients.vitamin_C = 9.2; nutrients.vitamin_K = 126.3;
+    nutrients.vitamin_B9 = 38; nutrients.calcium = 18; nutrients.iron = 0.86;
+    nutrients.magnesium = 13; nutrients.phosphorus = 20; nutrients.potassium = 194;
+    nutrients.fiber = 1.3; nutrients.sugar = 0.8;
+  }
   
-  // PROTEINS
+  // PROTEINS & MEATS
+  else if (foodName.includes('sausage')) {
+    nutrients.vitamin_B1 = 0.4; nutrients.vitamin_B3 = 4.5; nutrients.vitamin_B12 = 1.2;
+    nutrients.iron = 1.5; nutrients.zinc = 2.4; nutrients.phosphorus = 180;
+    nutrients.selenium = 15; nutrients.sodium = 1200; nutrients.magnesium = 18;
+    nutrients.potassium = 250; nutrients.saturated_fats = 8.5; nutrients.cholesterol = 65;
+  }
   else if (foodName.includes('chicken')) {
     nutrients.vitamin_B3 = 8.5; nutrients.vitamin_B6 = 0.5; nutrients.vitamin_B12 = 0.3;
     nutrients.phosphorus = 200; nutrients.selenium = 22; nutrients.iron = 0.9;
@@ -291,6 +315,11 @@ function getRealUSDANutrients(foodName, carbs, protein, fat) {
     nutrients.vitamin_B3 = 5.8; nutrients.vitamin_B12 = 2.6; nutrients.iron = 2.6;
     nutrients.zinc = 4.8; nutrients.phosphorus = 198; nutrients.selenium = 14.2;
     nutrients.magnesium = 21; nutrients.potassium = 318;
+  }
+  else if (foodName.includes('pork')) {
+    nutrients.vitamin_B1 = 0.7; nutrients.vitamin_B3 = 4.6; nutrients.vitamin_B12 = 0.7;
+    nutrients.iron = 0.9; nutrients.zinc = 2.4; nutrients.phosphorus = 230;
+    nutrients.selenium = 38; nutrients.potassium = 423;
   }
   else if (foodName.includes('salmon')) {
     nutrients.vitamin_D = 11; nutrients.vitamin_B12 = 3.2; nutrients.omega_3 = 2260;
@@ -371,36 +400,59 @@ function getRealUSDANutrients(foodName, carbs, protein, fat) {
     nutrients.fiber = 6.7; nutrients.omega_3 = 111;
   }
   
-  // Generic estimates for unmatched foods
+  // ENHANCED Generic estimates for unmatched foods - ENSURE ALL FOODS GET NUTRIENTS
   else if (foodName.includes('fruit') || foodName.includes('berry')) {
-    nutrients.vitamin_C = Math.max(carbs * 2, 10);
-    nutrients.vitamin_A = Math.max(carbs * 1.5, 5);
-    nutrients.potassium = Math.max(carbs * 10, 100);
-    nutrients.fiber = Math.max(carbs * 0.3, 1);
-    nutrients.sugar = Math.max(carbs * 0.8, 5);
-  }
-  else if (foodName.includes('vegetable') || foodName.includes('green')) {
-    nutrients.vitamin_A = Math.max(carbs * 5, 20);
     nutrients.vitamin_C = Math.max(carbs * 3, 15);
-    nutrients.vitamin_K = Math.max(carbs * 2, 10);
-    nutrients.iron = Math.max(protein * 0.5, 0.5);
-    nutrients.calcium = Math.max(carbs * 8, 20);
+    nutrients.vitamin_A = Math.max(carbs * 2, 8);
+    nutrients.potassium = Math.max(carbs * 12, 120);
     nutrients.fiber = Math.max(carbs * 0.4, 2);
+    nutrients.sugar = Math.max(carbs * 0.8, 6);
+    nutrients.calcium = Math.max(carbs * 1.5, 10);
+    nutrients.iron = Math.max(carbs * 0.05, 0.3);
+    nutrients.magnesium = Math.max(carbs * 1, 8);
+  }
+  else if (foodName.includes('vegetable') || foodName.includes('green') || foodName.includes('salad')) {
+    nutrients.vitamin_A = Math.max(carbs * 8, 25);
+    nutrients.vitamin_C = Math.max(carbs * 4, 20);
+    nutrients.vitamin_K = Math.max(carbs * 3, 15);
+    nutrients.iron = Math.max(protein * 0.6, 0.8);
+    nutrients.calcium = Math.max(carbs * 10, 25);
+    nutrients.fiber = Math.max(carbs * 0.5, 2.5);
+    nutrients.potassium = Math.max(carbs * 15, 150);
+    nutrients.magnesium = Math.max(carbs * 2, 12);
   }
   else if (foodName.includes('meat') || foodName.includes('protein')) {
-    nutrients.vitamin_B12 = Math.max(protein * 0.3, 1);
-    nutrients.vitamin_B3 = Math.max(protein * 1.5, 5);
-    nutrients.iron = Math.max(protein * 0.4, 1);
-    nutrients.zinc = Math.max(protein * 0.3, 1);
-    nutrients.phosphorus = Math.max(protein * 8, 150);
-    nutrients.selenium = Math.max(protein * 2, 10);
+    nutrients.vitamin_B12 = Math.max(protein * 0.4, 1.5);
+    nutrients.vitamin_B3 = Math.max(protein * 2, 6);
+    nutrients.iron = Math.max(protein * 0.5, 1.2);
+    nutrients.zinc = Math.max(protein * 0.4, 1.5);
+    nutrients.phosphorus = Math.max(protein * 10, 180);
+    nutrients.selenium = Math.max(protein * 3, 15);
+    nutrients.potassium = Math.max(protein * 12, 200);
+    nutrients.magnesium = Math.max(protein * 1.5, 20);
   }
   else if (foodName.includes('fish') || foodName.includes('seafood')) {
-    nutrients.vitamin_D = Math.max(protein * 0.5, 2);
-    nutrients.vitamin_B12 = Math.max(protein * 0.4, 2);
-    nutrients.omega_3 = Math.max(fat * 50, 500);
-    nutrients.selenium = Math.max(protein * 3, 20);
-    nutrients.phosphorus = Math.max(protein * 10, 200);
+    nutrients.vitamin_D = Math.max(protein * 0.6, 3);
+    nutrients.vitamin_B12 = Math.max(protein * 0.5, 2.5);
+    nutrients.omega_3 = Math.max(fat * 60, 800);
+    nutrients.selenium = Math.max(protein * 4, 25);
+    nutrients.phosphorus = Math.max(protein * 12, 220);
+    nutrients.potassium = Math.max(protein * 15, 280);
+    nutrients.iron = Math.max(protein * 0.3, 0.8);
+  }
+  else {
+    // FALLBACK for ANY unrecognized food - ensure it gets SOME nutrients
+    nutrients.vitamin_C = Math.max(carbs * 1.5, 5);
+    nutrients.vitamin_A = Math.max(carbs * 1, 3);
+    nutrients.calcium = Math.max(carbs * 2 + protein * 3, 15);
+    nutrients.iron = Math.max(protein * 0.3 + carbs * 0.1, 0.5);
+    nutrients.magnesium = Math.max(carbs * 1.5 + protein * 1, 10);
+    nutrients.potassium = Math.max(carbs * 8 + protein * 5, 100);
+    nutrients.phosphorus = Math.max(protein * 6 + carbs * 2, 50);
+    nutrients.zinc = Math.max(protein * 0.2, 0.5);
+    nutrients.fiber = Math.max(carbs * 0.2, 1);
+    nutrients.vitamin_B3 = Math.max(protein * 0.8, 2);
+    nutrients.vitamin_B6 = Math.max(protein * 0.1, 0.1);
   }
   
   console.log(`🔬 Generated ${Object.keys(nutrients).filter(k => nutrients[k] > 0).length} nutrients for ${foodName}`);
@@ -429,14 +481,16 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // COMPREHENSIVE prompt to detect ALL ingredients
-    const systemPrompt = `Analyze this food image and identify EVERY food item you can see. Return ONLY valid JSON:
+    // ULTRA COMPREHENSIVE prompt to detect EVERY ingredient
+    const systemPrompt = `You are a professional food analyst. Examine this image VERY carefully and identify EVERY SINGLE food item, ingredient, component, and element you can see.
+
+Return ONLY valid JSON:
 
 {
-  "meal_name": "Food Name",
+  "meal_name": "Descriptive Meal Name",
   "ingredients": [
     {
-      "name": "food item",
+      "name": "specific food item",
       "weight_g": 100,
       "calories": 50,
       "protein_g": 2,
@@ -446,15 +500,18 @@ async function processAndAnalyzeImage(jobId, userId, image) {
   ]
 }
 
-CRITICAL RULES:
-1. Identify ALL distinct food items visible in the image (not just 1-3)
-2. Include every ingredient, garnish, sauce, side dish, and component
-3. Use specific food names like "grilled chicken breast", "steamed broccoli", "white rice"
-4. Provide realistic nutrition values per 100g for each item
-5. If you see a complex dish, break it down into individual components
-6. Include seasonings, oils, and sauces if visible
-7. Keep JSON structure exactly as shown
-8. NO extra text outside JSON`;
+CRITICAL DETECTION RULES:
+1. Look at EVERY part of the image - foreground, background, sides, corners
+2. Identify ALL visible foods: main dishes, sides, garnishes, sauces, seasonings, oils
+3. Break down complex dishes into individual components (e.g., "pasta with tomato sauce" = pasta + tomato sauce + cheese + herbs)
+4. Include small items: herbs, spices, seeds, nuts, garnishes, condiments
+5. Look for partially visible items at edges of plates/bowls
+6. Identify cooking oils, butter, dressings if visible
+7. Include bread, crackers, or other accompaniments
+8. Detect vegetables, fruits, proteins, grains separately even if mixed
+9. Aim for 5-15 ingredients minimum - be thorough!
+10. Use specific names: "cherry tomatoes" not just "tomatoes", "olive oil" not just "oil"
+11. NO extra text outside JSON structure`;
 
     let finalResponse = null;
     
@@ -487,12 +544,12 @@ CRITICAL RULES:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Identify ALL foods in this image - every ingredient, component, and item you can see." },
+                  { type: "text", text: "Analyze this food image with extreme detail. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
             ],
-            max_tokens: 800
+            max_tokens: 1500
       })
     });
 
@@ -1150,12 +1207,12 @@ Rules:
             {
               role: "user",
               content: [
-                { type: "text", text: "Identify the main foods in this image." },
+                { type: "text", text: "Analyze this food image with extreme detail. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items." },
                 { type: "image_url", image_url: { url: processedImage } }
               ]
             }
           ],
-          max_tokens: 300
+          max_tokens: 1500
         })
       });
 
