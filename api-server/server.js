@@ -990,7 +990,7 @@ INSTRUCTIONS:
           
           return res.status(500).json({
             success: false,
-            error: `JSON parsing failed: ${parseError.message}`
+            error: `JSON parsing failed: Unable to repair malformed JSON`
           });
         } catch (parseError) {
           console.error(`LEGACY ENDPOINT - JSON PARSE ERROR: ${parseError.message}`);
