@@ -122,10 +122,11 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
 
 CRITICAL REQUIREMENTS:
-- ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
+- ALWAYS include ALL 13 vitamins, ALL 15 minerals, ALL 6 other nutrients
 - NEVER omit any nutrient - use 0 if not present
-- Include fluoride, manganese, phosphorus in minerals (all in mg)
-- Use exact units specified above
+- Include ALL minerals: calcium, chloride, chromium, copper, fluoride, iodine, iron, magnesium, manganese, molybdenum, phosphorus, potassium, selenium, sodium, zinc
+- Include ALL other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6
+- Use exact units specified below
 - MINIMUM 2 ingredients for any meal (unless truly single item)
 - SCAN SYSTEMATICALLY: Look at all areas of the plate/image
 - IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
@@ -158,9 +159,53 @@ Return a JSON object with meal_name and ingredients array. Each ingredient shoul
 - name: simple, concise name (e.g., "chicken", "tomatoes", "rice")
 - weight_g: Estimated weight based on ACTUAL VISUAL portion size shown in the image
 - calories, protein_g, fat_g, carbs_g: nutritional values
-- vitamins: object with vitamin values
-- minerals: object with mineral values  
-- other: object with fiber, cholesterol, etc.
+- vitamins: object with ALL 13 vitamin values
+- minerals: object with ALL 15 mineral values  
+- other: object with ALL 6 other nutrient values
+
+MANDATORY NUTRIENT STRUCTURE:
+vitamins: {
+  "vitamin_A_mcg": 0.0,
+  "vitamin_C_mg": 0.0,
+  "vitamin_D_mcg": 0.0,
+  "vitamin_E_mg": 0.0,
+  "vitamin_K_mcg": 0.0,
+  "vitamin_B1_mg": 0.0,
+  "vitamin_B2_mg": 0.0,
+  "vitamin_B3_mg": 0.0,
+  "vitamin_B5_mg": 0.0,
+  "vitamin_B6_mg": 0.0,
+  "vitamin_B7_mcg": 0.0,
+  "vitamin_B9_mcg": 0.0,
+  "vitamin_B12_mcg": 0.0
+}
+
+minerals: {
+  "calcium_mg": 0.0,
+  "chloride_mg": 0.0,
+  "chromium_mcg": 0.0,
+  "copper_mcg": 0.0,
+  "fluoride_mg": 0.0,
+  "iodine_mcg": 0.0,
+  "iron_mg": 0.0,
+  "magnesium_mg": 0.0,
+  "manganese_mg": 0.0,
+  "molybdenum_mcg": 0.0,
+  "phosphorus_mg": 0.0,
+  "potassium_mg": 0.0,
+  "selenium_mcg": 0.0,
+  "sodium_mg": 0.0,
+  "zinc_mg": 0.0
+}
+
+other: {
+  "fiber_g": 0.0,
+  "cholesterol_mg": 0.0,
+  "sugar_g": 0.0,
+  "saturated_fats_g": 0.0,
+  "omega_3_mg": 0.0,
+  "omega_6_g": 0.0
+}
 
 IMPORTANT:
 - EVERY number MUST end with .0 even for whole numbers
@@ -168,6 +213,7 @@ IMPORTANT:
 - Use recognizable meal names or generic terms like "Mixed Plate"
 - Include comprehensive vitamin/mineral data for each ingredient
 - ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
+- NEVER omit any nutrient from the structure above - use 0.0 if not present
 
 CRITICAL VITAMIN UNITS:
 - Vitamin A: ALWAYS in mcg (micrograms), NOT IU. Typical values: 0-500 mcg per meal
@@ -187,8 +233,9 @@ QUALITY CHECK:
 - Complex plated meals should have 3-6 ingredients typically
 - Use realistic USDA nutrition values with precise decimal places
 - Include ALL nutrients with correct units
-- Use 0 for absent nutrients (e.g. cholesterol in vegetables)
-- ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY`;
+- Use 0.0 for absent nutrients (e.g. cholesterol in vegetables)
+- ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
+- VERIFY all 13 vitamins, 15 minerals, and 6 other nutrients are included`;
 
     let finalResponse = null;
     
