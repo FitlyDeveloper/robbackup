@@ -137,7 +137,26 @@ INGREDIENT IDENTIFICATION RULES:
 
 NAMING GUIDELINES:
 - **Ingredient Names**: Keep simple - "chicken" not "grilled chicken breast", "tomatoes" not "cherry tomatoes", "sausages" not "grilled sausages"
-- **Meal Names**: Use recognizable dish names when possible (Pizza, Pasta, Tacos, Salad, etc.) or generic terms (Mixed Plate, Dinner Bowl, Lunch)
+- **Meal Names**: Use recognizable dish names when possible (Pizza, Pasta, Tacos, Salad, etc.) or generic terms like "Mixed Plate", "Dinner Bowl", "Lunch"
+
+CRITICAL WEIGHT ESTIMATION REQUIREMENTS:
+You MUST provide realistic weight_g estimates for each ingredient based on VISUAL ANALYSIS of the actual portion sizes shown in the image.
+
+**VISUAL ESTIMATION INSTRUCTIONS:**
+- Look at the actual size of each food item in the image
+- Compare portion sizes relative to the plate, utensils, or other reference objects
+- Estimate the actual weight based on what you can see, not standard serving sizes
+- Small pieces should have small weights (e.g., 15g for a small piece of chicken)
+- Large portions should have larger weights accordingly
+- Consider the thickness, volume, and density of each food item as it appears
+- Base your estimate on the ACTUAL visual portion, not typical meal portions
+
+**EXAMPLES OF VISUAL-BASED ESTIMATION:**
+- A small piece of chicken visible in the image = estimate its actual small weight (could be 15g, 25g, etc.)
+- A large steak filling most of the plate = estimate its actual large weight
+- A few cherry tomatoes = estimate their actual small combined weight
+- A full cup of rice = estimate based on the visible volume
+- A thin layer of sauce = estimate the actual thin amount visible
 
 IMPORTANT GUIDELINES:
 1. **Don't over-split**: "chicken breast" = 1 ingredient, "beef steak" = 1 ingredient
@@ -145,11 +164,12 @@ IMPORTANT GUIDELINES:
 3. **Include garnishes**: herbs, spices, small vegetables as separate if visible
 4. **Systematic scanning**: Look at all areas of the plate/image
 5. **Minimum threshold**: Try to identify 2-5 ingredients for typical meals
+6. **ALWAYS provide weight_g**: Never leave weight_g empty or null - estimate based on ACTUAL VISUAL portion size in the image
 
 RESPONSE FORMAT (JSON ONLY):
 Return a JSON object with meal_name and ingredients array. Each ingredient should have:
 - name: simple, concise name (e.g., "chicken", "tomatoes", "rice")
-- weight_g: estimated weight
+- weight_g: Estimated weight based on ACTUAL VISUAL portion size shown in the image
 - calories, protein_g, fat_g, carbs_g: nutritional values
 - vitamins: object with vitamin values
 - minerals: object with mineral values  
@@ -160,6 +180,7 @@ IMPORTANT:
 - Keep ingredient names short and simple
 - Use recognizable meal names or generic terms like "Mixed Plate"
 - Include comprehensive vitamin/mineral data for each ingredient
+- ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
 
 CRITICAL VITAMIN UNITS:
 - Vitamin A: ALWAYS in mcg (micrograms), NOT IU. Typical values: 0-500 mcg per meal
@@ -552,12 +573,17 @@ function processVisionResponse(visionResponse) {
   const mappedIngredients = ingredients.map(item => {
     const ingredient = {
       name: cleanIngredientName(item.name),
-      weight_g: item.weight_g || 100.0,
+      weight_g: item.weight_g || 100.0, // Simple fallback only if OpenAI completely fails to provide weight
       calories: item.calories || 0,
       protein_g: item.protein_g || 0,
       fat_g: item.fat_g || 0,
       carbs_g: item.carbs_g || 0
     };
+
+    // Log warning if OpenAI failed to provide weight
+    if (!item.weight_g) {
+      console.warn(`⚠️  OpenAI failed to provide weight_g for ingredient: ${item.name}, using fallback 100g`);
+    }
 
     // Add vitamins if present
     if (item.vitamins) {
@@ -811,12 +837,31 @@ EXAMPLES OF PROPER DETECTION:
 - Sides: coleslaw, salad, sauce, dressing (each separately)
 - Garnishes: herbs, spices, small vegetables (include these too)
 
+CRITICAL WEIGHT ESTIMATION REQUIREMENTS:
+You MUST provide realistic weight_g estimates for each ingredient based on VISUAL ANALYSIS of the actual portion sizes shown in the image.
+
+**VISUAL ESTIMATION INSTRUCTIONS:**
+- Look at the actual size of each food item in the image
+- Compare portion sizes relative to the plate, utensils, or other reference objects
+- Estimate the actual weight based on what you can see, not standard serving sizes
+- Small pieces should have small weights (e.g., 15g for a small piece of chicken)
+- Large portions should have larger weights accordingly
+- Consider the thickness, volume, and density of each food item as it appears
+- Base your estimate on the ACTUAL visual portion, not typical meal portions
+
+**EXAMPLES OF VISUAL-BASED ESTIMATION:**
+- A small piece of chicken visible in the image = estimate its actual small weight (could be 15g, 25g, etc.)
+- A large steak filling most of the plate = estimate its actual large weight
+- A few cherry tomatoes = estimate their actual small combined weight
+- A full cup of rice = estimate based on the visible volume
+- A thin layer of sauce = estimate the actual thin amount visible
+
 Return valid JSON with this EXACT structure:
 {
   "ingredients": [
     { 
       "name": "specific food name (e.g. grilled chicken breast, white rice, broccoli)", 
-      "weight_g": 100, 
+      "weight_g": 150.0, 
       "calories": 165,
       "protein_g": 31, 
       "fat_g": 4, 
@@ -880,6 +925,7 @@ CRITICAL REQUIREMENTS:
 - MINIMUM 2 ingredients for any meal (unless truly single item)
 - SCAN SYSTEMATICALLY: Look at all areas of the plate/image
 - IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
+- ALWAYS provide weight_g based on what you SEE in the image - this is MANDATORY
 
 DETECTION STRATEGY:
 1. Scan the entire image systematically (left to right, top to bottom)
@@ -895,7 +941,8 @@ QUALITY CHECK:
 - Complex plated meals should have 3-6 ingredients typically
 - Use realistic USDA nutrition values with precise decimal places
 - Include ALL nutrients with correct units
-- Use 0 for absent nutrients (e.g. cholesterol in vegetables)`;
+- Use 0 for absent nutrients (e.g. cholesterol in vegetables)
+- ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -945,11 +992,7 @@ QUALITY CHECK:
           let cleanedContent = content.trim();
           
           // Remove markdown code blocks if present
-          if (cleanedContent.startsWith('```json')) {
-            cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-          } else if (cleanedContent.startsWith('```')) {
-            cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
-          }
+          cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
           
           // Fix common JSON syntax errors
           cleanedContent = cleanedContent
@@ -1002,10 +1045,10 @@ QUALITY CHECK:
                 
                 console.log('LEGACY ENDPOINT - JSON repair successful via ingredients array!');
                 const result = processVisionResponse(repairedResponse);
-                return res.json({
-                  success: true,
-                  data: result
-                });
+            return res.json({
+              success: true,
+              data: result
+            });
               }
             } catch (ingredientsError) {
               console.log('LEGACY ENDPOINT - Ingredients array parsing failed:', ingredientsError.message);
@@ -1063,8 +1106,8 @@ QUALITY CHECK:
               return res.json({
                 success: true,
                 data: result
-              });
-            }
+            });
+          }
           }
           
           return res.status(500).json({
@@ -1116,37 +1159,37 @@ QUALITY CHECK:
                   .replace(/:\s*,/g, ': null,');
                 
                 const ingredientsArray = JSON.parse(cleanedIngredientsStr);
-                
+              
                 if (ingredientsArray && ingredientsArray.length > 0) {
                   console.log(`LEGACY ENDPOINT - Successfully parsed ${ingredientsArray.length} ingredients`);
-                  
-                  // Calculate totals from ingredients
-                  let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
-                  
+                
+                // Calculate totals from ingredients
+                let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+                
                   ingredientsArray.forEach(ingredient => {
-                    totalCalories += ingredient.calories || 0;
-                    totalProtein += ingredient.protein_g || 0;
-                    totalFat += ingredient.fat_g || 0;
-                    totalCarbs += ingredient.carbs_g || 0;
-                  });
-                  
+                  totalCalories += ingredient.calories || 0;
+                  totalProtein += ingredient.protein_g || 0;
+                  totalFat += ingredient.fat_g || 0;
+                  totalCarbs += ingredient.carbs_g || 0;
+                });
+                
                   const repairedResponse = {
                     ingredients: ingredientsArray,
                     total: {
-                      calories: totalCalories,
-                      protein_g: totalProtein,
-                      fat_g: totalFat,
-                      carbs_g: totalCarbs
+                  calories: totalCalories,
+                  protein_g: totalProtein,
+                  fat_g: totalFat,
+                  carbs_g: totalCarbs
                     }
-                  };
-                  
+                };
+                
                   console.log('LEGACY ENDPOINT - JSON repair successful via ingredients array!');
                   const result = processVisionResponse(repairedResponse);
-                  return res.json({
-                    success: true,
-                    data: result
-                  });
-                }
+                return res.json({
+                  success: true,
+                  data: result
+                });
+              }
               } catch (ingredientsError) {
                 console.log('LEGACY ENDPOINT - Ingredients array parsing failed:', ingredientsError.message);
               }
@@ -1186,24 +1229,24 @@ QUALITY CHECK:
                   totalProtein += ingredient.protein_g || 0;
                   totalFat += ingredient.fat_g || 0;
                   totalCarbs += ingredient.carbs_g || 0;
-                });
-                
+              });
+              
                 const repairedResponse = {
                   ingredients: validIngredients,
-                  total: {
+                total: {
                     calories: totalCalories,
                     protein_g: totalProtein,
                     fat_g: totalFat,
                     carbs_g: totalCarbs
-                  }
-                };
-                
+                }
+              };
+              
                 console.log('LEGACY ENDPOINT - JSON repair successful via individual ingredients!');
                 const result = processVisionResponse(repairedResponse);
-                return res.json({
-                  success: true,
-                  data: result
-                });
+              return res.json({
+                success: true,
+                data: result
+              });
               }
             }
             
