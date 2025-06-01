@@ -174,31 +174,31 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // RELIABLE prompt - get food names and let server generate nutrients
-    const systemPrompt = `Analyze this food image and identify the main food items you can see.
+    // DETAILED prompt for accurate food detection - RESTORE ORIGINAL WORKING VERSION
+    const systemPrompt = `You are a food analyst. Analyze the image and identify the main food items visible.
 
-Return ONLY this JSON structure with NO extra text:
+Return ONLY valid JSON with this EXACT structure (no extra text):
 
 {
+  "meal_name": "Descriptive Meal Name",
   "ingredients": [
     {
-      "name": "pineapple",
-      "calories": 50,
-      "weight_g": 100
-    },
-    {
-      "name": "watermelon", 
-      "calories": 30,
-      "weight_g": 100
+      "name": "specific food name",
+      "weight_g": 100,
+      "calories": 150
     }
   ]
 }
 
-Rules:
-- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli", "rice", "salmon"
-- Provide realistic calories per 100g for each food
-- Return 2-4 ingredients maximum
-- NO explanations, NO markdown, ONLY the JSON`;
+CRITICAL RULES:
+1. Identify 2-4 distinct food items you can clearly see
+2. Use specific names: "grilled chicken breast", "steamed broccoli", "brown rice", "mixed salad"
+3. Provide realistic calories per 100g for each food
+4. Provide realistic weight estimates for each portion
+5. NO text outside the JSON structure
+6. Ensure all quotes are properly closed
+7. Do NOT include any explanations or markdown
+8. Be very specific about what foods you can actually see in the image`;
 
     let finalResponse = null;
     
@@ -826,31 +826,31 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // RELIABLE prompt - get food names and let server generate nutrients
-      const systemPrompt = `Analyze this food image and identify the main food items you can see.
+      // DETAILED prompt for accurate food detection - RESTORE ORIGINAL WORKING VERSION
+      const systemPrompt = `You are a food analyst. Analyze the image and identify the main food items visible.
 
-Return ONLY this JSON structure with NO extra text:
+Return ONLY valid JSON with this EXACT structure (no extra text):
 
 {
+  "meal_name": "Descriptive Meal Name",
   "ingredients": [
     {
-      "name": "pineapple",
-      "calories": 50,
-      "weight_g": 100
-    },
-    {
-      "name": "watermelon", 
-      "calories": 30,
-      "weight_g": 100
+      "name": "specific food name",
+      "weight_g": 100,
+      "calories": 150
     }
   ]
 }
 
-Rules:
-- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli", "rice", "salmon"
-- Provide realistic calories per 100g for each food
-- Return 2-4 ingredients maximum
-- NO explanations, NO markdown, ONLY the JSON`;
+CRITICAL RULES:
+1. Identify 2-4 distinct food items you can clearly see
+2. Use specific names: "grilled chicken breast", "steamed broccoli", "brown rice", "mixed salad"
+3. Provide realistic calories per 100g for each food
+4. Provide realistic weight estimates for each portion
+5. NO text outside the JSON structure
+6. Ensure all quotes are properly closed
+7. Do NOT include any explanations or markdown
+8. Be very specific about what foods you can actually see in the image`;
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
@@ -1040,6 +1040,28 @@ function convertSimpleToFullFormat(simpleIngredients) {
         phosphorus: 22, potassium: 358, selenium: 1, sodium: 1, zinc: 0.2,
         fiber: 2.6, cholesterol: 0, sugar: 12, saturated_fats: 0.1, omega_3: 27, omega_6: 0.05
       };
+    } else if (name.includes('orange') || name.includes('citrus')) {
+      nutrients = {
+        protein_g: 0.9, fat_g: 0.1, carbs_g: 12,
+        vitamin_A: 11, vitamin_C: 53, vitamin_D: 0, vitamin_E: 0.18, vitamin_K: 0,
+        vitamin_B1: 0.09, vitamin_B2: 0.04, vitamin_B3: 0.3, vitamin_B5: 0.25, vitamin_B6: 0.06,
+        vitamin_B7: 1, vitamin_B9: 40, vitamin_B12: 0,
+        calcium: 40, chloride: 1, chromium: 0.1, copper: 45, fluoride: 0.1,
+        iodine: 1, iron: 0.1, magnesium: 10, manganese: 0.03, molybdenum: 1,
+        phosphorus: 14, potassium: 181, selenium: 0.5, sodium: 0, zinc: 0.07,
+        fiber: 2.4, cholesterol: 0, sugar: 9, saturated_fats: 0.02, omega_3: 6, omega_6: 0.03
+      };
+    } else if (name.includes('strawberr')) {
+      nutrients = {
+        protein_g: 0.7, fat_g: 0.3, carbs_g: 8,
+        vitamin_A: 1, vitamin_C: 59, vitamin_D: 0, vitamin_E: 0.29, vitamin_K: 2.2,
+        vitamin_B1: 0.02, vitamin_B2: 0.02, vitamin_B3: 0.4, vitamin_B5: 0.12, vitamin_B6: 0.05,
+        vitamin_B7: 1, vitamin_B9: 24, vitamin_B12: 0,
+        calcium: 16, chloride: 1, chromium: 0.1, copper: 48, fluoride: 0.1,
+        iodine: 1, iron: 0.4, magnesium: 13, manganese: 0.4, molybdenum: 1,
+        phosphorus: 24, potassium: 153, selenium: 0.4, sodium: 1, zinc: 0.14,
+        fiber: 2, cholesterol: 0, sugar: 4.9, saturated_fats: 0.02, omega_3: 65, omega_6: 0.09
+      };
     }
     
     // VEGETABLES
@@ -1064,6 +1086,39 @@ function convertSimpleToFullFormat(simpleIngredients) {
         iodine: 1, iron: 0.3, magnesium: 12, manganese: 0.1, molybdenum: 1,
         phosphorus: 35, potassium: 320, selenium: 0.1, sodium: 69, zinc: 0.2,
         fiber: 2.8, cholesterol: 0, sugar: 4.7, saturated_fats: 0.04, omega_3: 2, omega_6: 0.1
+      };
+    } else if (name.includes('spinach') || name.includes('leafy')) {
+      nutrients = {
+        protein_g: 2.9, fat_g: 0.4, carbs_g: 3.6,
+        vitamin_A: 469, vitamin_C: 28, vitamin_D: 0, vitamin_E: 2.03, vitamin_K: 483,
+        vitamin_B1: 0.08, vitamin_B2: 0.19, vitamin_B3: 0.7, vitamin_B5: 0.07, vitamin_B6: 0.2,
+        vitamin_B7: 7, vitamin_B9: 194, vitamin_B12: 0,
+        calcium: 99, chloride: 1, chromium: 0.1, copper: 130, fluoride: 0.1,
+        iodine: 1, iron: 2.7, magnesium: 79, manganese: 0.9, molybdenum: 1,
+        phosphorus: 49, potassium: 558, selenium: 1, sodium: 79, zinc: 0.5,
+        fiber: 2.2, cholesterol: 0, sugar: 0.4, saturated_fats: 0.06, omega_3: 138, omega_6: 0.03
+      };
+    } else if (name.includes('tomato')) {
+      nutrients = {
+        protein_g: 0.9, fat_g: 0.2, carbs_g: 3.9,
+        vitamin_A: 42, vitamin_C: 14, vitamin_D: 0, vitamin_E: 0.54, vitamin_K: 7.9,
+        vitamin_B1: 0.04, vitamin_B2: 0.02, vitamin_B3: 0.6, vitamin_B5: 0.09, vitamin_B6: 0.08,
+        vitamin_B7: 4, vitamin_B9: 15, vitamin_B12: 0,
+        calcium: 10, chloride: 1, chromium: 0.1, copper: 59, fluoride: 0.1,
+        iodine: 1, iron: 0.3, magnesium: 11, manganese: 0.1, molybdenum: 1,
+        phosphorus: 24, potassium: 237, selenium: 0, sodium: 5, zinc: 0.17,
+        fiber: 1.2, cholesterol: 0, sugar: 2.6, saturated_fats: 0.03, omega_3: 2, omega_6: 0.08
+      };
+    } else if (name.includes('pepper') || name.includes('bell')) {
+      nutrients = {
+        protein_g: 1, fat_g: 0.3, carbs_g: 7,
+        vitamin_A: 157, vitamin_C: 128, vitamin_D: 0, vitamin_E: 1.58, vitamin_K: 4.9,
+        vitamin_B1: 0.05, vitamin_B2: 0.03, vitamin_B3: 1, vitamin_B5: 0.32, vitamin_B6: 0.29,
+        vitamin_B7: 1, vitamin_B9: 46, vitamin_B12: 0,
+        calcium: 7, chloride: 1, chromium: 0.1, copper: 17, fluoride: 0.1,
+        iodine: 1, iron: 0.5, magnesium: 12, manganese: 0.1, molybdenum: 1,
+        phosphorus: 26, potassium: 211, selenium: 0.1, sodium: 4, zinc: 0.25,
+        fiber: 2.5, cholesterol: 0, sugar: 4.2, saturated_fats: 0.06, omega_3: 16, omega_6: 0.13
       };
     }
     
@@ -1101,9 +1156,20 @@ function convertSimpleToFullFormat(simpleIngredients) {
         phosphorus: 198, potassium: 318, selenium: 14.2, sodium: 72, zinc: 4.8,
         fiber: 0, cholesterol: 90, sugar: 0, saturated_fats: 6, omega_3: 84, omega_6: 0.5
       };
+    } else if (name.includes('egg')) {
+      nutrients = {
+        protein_g: 13, fat_g: 11, carbs_g: 1.1,
+        vitamin_A: 160, vitamin_C: 0, vitamin_D: 2, vitamin_E: 1.05, vitamin_K: 0.3,
+        vitamin_B1: 0.04, vitamin_B2: 0.46, vitamin_B3: 0.1, vitamin_B5: 1.53, vitamin_B6: 0.17,
+        vitamin_B7: 20, vitamin_B9: 47, vitamin_B12: 0.89,
+        calcium: 56, chloride: 1, chromium: 0.1, copper: 72, fluoride: 0.1,
+        iodine: 1, iron: 1.75, magnesium: 12, manganese: 0.03, molybdenum: 1,
+        phosphorus: 198, potassium: 138, selenium: 30, sodium: 142, zinc: 1.29,
+        fiber: 0, cholesterol: 372, sugar: 0.4, saturated_fats: 3.1, omega_3: 37, omega_6: 1.4
+      };
     }
     
-    // GRAINS
+    // GRAINS & STARCHES
     else if (name.includes('rice')) {
       nutrients = {
         protein_g: 2.7, fat_g: 0.3, carbs_g: 23,
@@ -1114,6 +1180,28 @@ function convertSimpleToFullFormat(simpleIngredients) {
         iodine: 1, iron: 0.8, magnesium: 25, manganese: 1.1, molybdenum: 1,
         phosphorus: 115, potassium: 115, selenium: 15, sodium: 5, zinc: 1.1,
         fiber: 0.4, cholesterol: 0, sugar: 0.1, saturated_fats: 0.1, omega_3: 5, omega_6: 0.1
+      };
+    } else if (name.includes('potato')) {
+      nutrients = {
+        protein_g: 2, fat_g: 0.1, carbs_g: 17,
+        vitamin_A: 0, vitamin_C: 20, vitamin_D: 0, vitamin_E: 0.01, vitamin_K: 2,
+        vitamin_B1: 0.08, vitamin_B2: 0.03, vitamin_B3: 1.1, vitamin_B5: 0.3, vitamin_B6: 0.3,
+        vitamin_B7: 0.2, vitamin_B9: 15, vitamin_B12: 0,
+        calcium: 12, chloride: 1, chromium: 0.1, copper: 110, fluoride: 0.1,
+        iodine: 1, iron: 0.8, magnesium: 23, manganese: 0.15, molybdenum: 1,
+        phosphorus: 57, potassium: 421, selenium: 0.4, sodium: 6, zinc: 0.3,
+        fiber: 2.2, cholesterol: 0, sugar: 0.8, saturated_fats: 0.03, omega_3: 9, omega_6: 0.04
+      };
+    } else if (name.includes('bread') || name.includes('toast')) {
+      nutrients = {
+        protein_g: 9, fat_g: 3.2, carbs_g: 49,
+        vitamin_A: 0, vitamin_C: 0, vitamin_D: 0, vitamin_E: 0.3, vitamin_K: 0.1,
+        vitamin_B1: 0.5, vitamin_B2: 0.3, vitamin_B3: 4, vitamin_B5: 0.4, vitamin_B6: 0.09,
+        vitamin_B7: 6, vitamin_B9: 34, vitamin_B12: 0,
+        calcium: 34, chloride: 1, chromium: 0.1, copper: 190, fluoride: 0.1,
+        iodine: 1, iron: 3.6, magnesium: 22, manganese: 0.9, molybdenum: 1,
+        phosphorus: 89, potassium: 100, selenium: 28, sodium: 491, zinc: 0.7,
+        fiber: 2.7, cholesterol: 0, sugar: 5, saturated_fats: 0.7, omega_3: 27, omega_6: 1.2
       };
     }
     
