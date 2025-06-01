@@ -122,11 +122,14 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
 
 CRITICAL REQUIREMENTS:
-1. **Compound Foods as Single Items**: Treat compound foods like "grilled chicken thigh", "beef steak", "pork chop" as ONE ingredient, not separate parts
-2. **Precise Values**: Provide exact decimal values (e.g., 23.7g, not 24g)
-3. **Comprehensive Analysis**: Include all visible food components
-4. **Short Names**: Use concise ingredient names (e.g., "tomatoes" not "sliced tomatoes", "chicken" not "grilled chicken breast")
-5. **Recognizable Meal Names**: If the meal is recognizable (like "Chicken Caesar Salad", "Beef Tacos", "Margherita Pizza"), use that name. Otherwise use generic names like "Mixed Plate", "Dinner Bowl", "Lunch Plate", etc.
+- ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
+- NEVER omit any nutrient - use 0 if not present
+- Include fluoride, manganese, phosphorus in minerals (all in mg)
+- Use exact units specified above
+- MINIMUM 2 ingredients for any meal (unless truly single item)
+- SCAN SYSTEMATICALLY: Look at all areas of the plate/image
+- IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
+- ALWAYS provide weight_g based on what you SEE in the image - this is MANDATORY
 
 INGREDIENT IDENTIFICATION RULES:
 - **Proteins**: "chicken" = 1 ingredient (NOT "grilled chicken breast")
@@ -137,7 +140,7 @@ INGREDIENT IDENTIFICATION RULES:
 
 NAMING GUIDELINES:
 - **Ingredient Names**: Keep simple - "chicken" not "grilled chicken breast", "tomatoes" not "cherry tomatoes", "sausages" not "grilled sausages"
-- **Meal Names**: Use recognizable dish names when possible (Pizza, Pasta, Tacos, Salad, etc.) or generic terms like "Mixed Plate", "Dinner Bowl", "Lunch"
+- **Meal Names**: Use recognizable dish names when possible (Pizza, Pasta, Tacos, Salad, etc.) or generic names like "Mixed Plate", "Dinner Bowl", "Lunch Plate", etc.
 
 CRITICAL WEIGHT ESTIMATION REQUIREMENTS:
 You MUST provide realistic weight_g estimates for each ingredient based on VISUAL ANALYSIS of the actual portion sizes shown in the image.
@@ -146,25 +149,18 @@ You MUST provide realistic weight_g estimates for each ingredient based on VISUA
 - Look at the actual size of each food item in the image
 - Compare portion sizes relative to the plate, utensils, or other reference objects
 - Estimate the actual weight based on what you can see, not standard serving sizes
-- Small pieces should have small weights (e.g., 15g for a small piece of chicken)
-- Large portions should have larger weights accordingly
+- Small pieces should have small weights, large portions should have larger weights
 - Consider the thickness, volume, and density of each food item as it appears
 - Base your estimate on the ACTUAL visual portion, not typical meal portions
-
-**CRITICAL: REALISTIC WEIGHT ESTIMATION FOR SMALL ITEMS:**
-- **Herbs/Garnishes**: A light sprinkling of herbs = 2-5g, small handful = 5-10g, large handful = 15-20g MAX
-- **Spices**: Light seasoning = 1-3g, visible spice coating = 3-8g MAX
-- **Small vegetables**: Few cherry tomatoes = 20-40g, thin onion slices = 10-20g
-- **Sauces/Dressings**: Light drizzle = 5-15g, moderate coating = 15-30g
-- **Cheese sprinkles**: Light dusting = 5-10g, moderate sprinkle = 10-20g
+- Use your visual analysis to determine realistic weights for what you actually see
 
 **EXAMPLES OF VISUAL-BASED ESTIMATION:**
-- A small piece of chicken visible in the image = estimate its actual small weight (could be 15g, 25g, etc.)
-- A large steak filling most of the plate = estimate its actual large weight
-- A few cherry tomatoes = estimate their actual small combined weight
+- A small piece of chicken visible in the image = estimate its actual small weight based on visual size
+- A large steak filling most of the plate = estimate its actual large weight based on visual size
+- A few cherry tomatoes = estimate their actual combined weight based on visual size
 - A full cup of rice = estimate based on the visible volume
 - A thin layer of sauce = estimate the actual thin amount visible
-- **HERBS/GARNISH**: If you see a light sprinkling of herbs on top of food = 2-8g MAX, NOT 50g or 100g!
+- Herbs/garnish = estimate based on the actual amount you can see in the image
 
 IMPORTANT GUIDELINES:
 1. **Don't over-split**: "chicken breast" = 1 ingredient, "beef steak" = 1 ingredient
@@ -202,26 +198,6 @@ VITAMIN A CRITICAL NOTES:
 - Common foods: chicken (0-10 mcg), tomatoes (40-50 mcg), carrots (800-900 mcg)
 - If you calculate 966 IU, convert to 290 mcg (966 × 0.3 = 290)
 - Maximum realistic vitamin A per meal: 1000 mcg
-
-CRITICAL REQUIREMENTS:
-- ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
-- NEVER omit any nutrient - use 0 if not present
-- Include fluoride, manganese, phosphorus in minerals (all in mg)
-- Use exact units specified above
-- MINIMUM 2 ingredients for any meal (unless truly single item)
-- SCAN SYSTEMATICALLY: Look at all areas of the plate/image
-- IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
-- ALWAYS provide weight_g based on what you SEE in the image - this is MANDATORY
-- **CRITICAL**: DO NOT give unrealistic weights like 100g for herbs/garnishes - a light sprinkling = 2-8g MAX!
-
-DETECTION STRATEGY:
-1. Scan the entire image systematically (left to right, top to bottom)
-2. Identify the main protein(s) - meat, fish, eggs, dairy
-3. Identify all vegetables - even small garnishes count
-4. Identify starches/grains - rice, bread, pasta, potatoes
-5. Identify sides/salads - coleslaw, mixed salads, etc.
-6. Identify sauces/condiments - dressings, oils, etc.
-7. Double-check: Have I found at least 2-3 distinct items?
 
 QUALITY CHECK:
 - If you only detect 1 ingredient, look again more carefully
@@ -262,7 +238,7 @@ QUALITY CHECK:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Analyze this food image. Identify each distinct food item as a single ingredient (e.g., grilled chicken thigh = 1 ingredient, not grilled chicken + thigh). Look for proteins, vegetables, sides, and sauces as separate items. CRITICAL: Be realistic with weights - herbs/garnishes should be 2-10g MAX, not 50g or 100g!" },
+                  { type: "text", text: "Analyze this food image. Identify each distinct food item as a single ingredient (e.g., grilled chicken thigh = 1 ingredient, not grilled chicken + thigh). Look for proteins, vegetables, sides, and sauces as separate items. Estimate weights based purely on what you see in the image." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
@@ -879,25 +855,18 @@ You MUST provide realistic weight_g estimates for each ingredient based on VISUA
 - Look at the actual size of each food item in the image
 - Compare portion sizes relative to the plate, utensils, or other reference objects
 - Estimate the actual weight based on what you can see, not standard serving sizes
-- Small pieces should have small weights (e.g., 15g for a small piece of chicken)
-- Large portions should have larger weights accordingly
+- Small pieces should have small weights, large portions should have larger weights
 - Consider the thickness, volume, and density of each food item as it appears
 - Base your estimate on the ACTUAL visual portion, not typical meal portions
-
-**CRITICAL: REALISTIC WEIGHT ESTIMATION FOR SMALL ITEMS:**
-- **Herbs/Garnishes**: A light sprinkling of herbs = 2-5g, small handful = 5-10g, large handful = 15-20g MAX
-- **Spices**: Light seasoning = 1-3g, visible spice coating = 3-8g MAX
-- **Small vegetables**: Few cherry tomatoes = 20-40g, thin onion slices = 10-20g
-- **Sauces/Dressings**: Light drizzle = 5-15g, moderate coating = 15-30g
-- **Cheese sprinkles**: Light dusting = 5-10g, moderate sprinkle = 10-20g
+- Use your visual analysis to determine realistic weights for what you actually see
 
 **EXAMPLES OF VISUAL-BASED ESTIMATION:**
-- A small piece of chicken visible in the image = estimate its actual small weight (could be 15g, 25g, etc.)
-- A large steak filling most of the plate = estimate its actual large weight
-- A few cherry tomatoes = estimate their actual small combined weight
+- A small piece of chicken visible in the image = estimate its actual small weight based on visual size
+- A large steak filling most of the plate = estimate its actual large weight based on visual size
+- A few cherry tomatoes = estimate their actual combined weight based on visual size
 - A full cup of rice = estimate based on the visible volume
 - A thin layer of sauce = estimate the actual thin amount visible
-- **HERBS/GARNISH**: If you see a light sprinkling of herbs on top of food = 2-8g MAX, NOT 50g or 100g!
+- Herbs/garnish = estimate based on the actual amount you can see in the image
 
 Return valid JSON with this EXACT structure:
 {
@@ -960,26 +929,6 @@ REALISTIC VITAMIN A VALUES FOR COMMON FOODS:
 - Leafy greens: 400-500 mcg per 100g
 - Most meals: 50-300 mcg total
 
-CRITICAL REQUIREMENTS:
-- ALWAYS include ALL 13 vitamins, ALL 14 minerals, ALL 6 other nutrients
-- NEVER omit any nutrient - use 0 if not present
-- Include fluoride, manganese, phosphorus in minerals (all in mg)
-- Use exact units specified above
-- MINIMUM 2 ingredients for any meal (unless truly single item)
-- SCAN SYSTEMATICALLY: Look at all areas of the plate/image
-- IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
-- ALWAYS provide weight_g based on what you SEE in the image - this is MANDATORY
-- **CRITICAL**: DO NOT give unrealistic weights like 100g for herbs/garnishes - a light sprinkling = 2-8g MAX!
-
-DETECTION STRATEGY:
-1. Scan the entire image systematically (left to right, top to bottom)
-2. Identify the main protein(s) - meat, fish, eggs, dairy
-3. Identify all vegetables - even small garnishes count
-4. Identify starches/grains - rice, bread, pasta, potatoes
-5. Identify sides/salads - coleslaw, mixed salads, etc.
-6. Identify sauces/condiments - dressings, oils, etc.
-7. Double-check: Have I found at least 2-3 distinct items?
-
 QUALITY CHECK:
 - If you only detect 1 ingredient, look again more carefully
 - Complex plated meals should have 3-6 ingredients typically
@@ -1008,7 +957,7 @@ QUALITY CHECK:
           {
               role: "user",
             content: [
-                { type: "text", text: "Analyze this meal image and identify ALL separate food components. Look carefully at every part of the plate - identify each distinct ingredient separately (proteins, vegetables, sides, garnishes). For complex meals, you should typically find 3-6 distinct ingredients. CRITICAL: Be realistic with weights - herbs/garnishes should be 2-10g MAX, not 50g or 100g! Return comprehensive nutrition data in JSON format exactly as specified." },
+                { type: "text", text: "Analyze this meal image and identify ALL separate food components. Look carefully at every part of the plate - identify each distinct ingredient separately (proteins, vegetables, sides, garnishes). For complex meals, you should typically find 3-6 distinct ingredients. Estimate weights based purely on what you see in the image. Return comprehensive nutrition data in JSON format exactly as specified." },
                 { type: "image_url", image_url: { url: processedImage } }
             ]
           }
