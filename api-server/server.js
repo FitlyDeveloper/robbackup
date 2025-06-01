@@ -154,6 +154,8 @@ function convertFlatNutrientsToNested(ingredients) {
 
 // Expand simple OpenAI response to include all 34 nutrients using real nutritional knowledge
 function expandToFullNutrients(simpleResponse) {
+  console.log('🔬 Expanding nutrients for ingredients:', simpleResponse.ingredients.map(i => i.name));
+  
   const expandedIngredients = simpleResponse.ingredients.map(ingredient => {
     const name = ingredient.name.toLowerCase();
     
@@ -170,8 +172,11 @@ function expandToFullNutrients(simpleResponse) {
     // Use real nutritional knowledge to estimate missing micronutrients based on food type
     const micronutrients = estimateMicronutrients(name, expanded.calories, expanded.protein_g, expanded.fat_g, expanded.carbs_g);
     
+    console.log(`🍎 ${ingredient.name}: Generated ${Object.keys(micronutrients).filter(k => micronutrients[k] > 0).length} non-zero nutrients`);
+    console.log(`   Key nutrients: vitamin_C=${micronutrients.vitamin_C}, iron=${micronutrients.iron}, calcium=${micronutrients.calcium}`);
+    
     // Merge with OpenAI's provided values (OpenAI takes priority)
-    return {
+    const result = {
       ...expanded,
       ...micronutrients,
       // Override with any values OpenAI specifically provided
@@ -179,8 +184,11 @@ function expandToFullNutrients(simpleResponse) {
       iron: ingredient.iron || micronutrients.iron,
       calcium: ingredient.calcium || micronutrients.calcium
     };
+    
+    return result;
   });
   
+  console.log('🔬 Expansion complete, returning expanded ingredients');
   return {
     meal_name: simpleResponse.meal_name || "Mixed Plate",
     ingredients: expandedIngredients
@@ -240,13 +248,26 @@ function estimateMicronutrients(foodName, calories, protein, fat, carbs) {
   
   // Fruits
   else if (foodName.includes('apple') || foodName.includes('banana') || foodName.includes('orange') ||
-           foodName.includes('berry') || foodName.includes('fruit')) {
+           foodName.includes('berry') || foodName.includes('fruit') || foodName.includes('pineapple') ||
+           foodName.includes('watermelon') || foodName.includes('melon') || foodName.includes('grape') ||
+           foodName.includes('strawberry') || foodName.includes('mango') || foodName.includes('kiwi') ||
+           foodName.includes('peach') || foodName.includes('pear') || foodName.includes('cherry')) {
     nutrients.vitamin_C = carbs * 3;
     nutrients.vitamin_A = carbs * 2;
     nutrients.potassium = carbs * 15;
     nutrients.fiber = carbs * 0.2;
     nutrients.sugar = carbs * 0.7;
     nutrients.vitamin_B6 = carbs * 0.02;
+    
+    // Special cases for specific fruits
+    if (foodName.includes('pineapple')) {
+      nutrients.vitamin_C = carbs * 4; // Pineapple is high in vitamin C
+      nutrients.manganese = carbs * 0.1;
+    }
+    if (foodName.includes('watermelon')) {
+      nutrients.vitamin_A = carbs * 3; // Watermelon has more vitamin A
+      nutrients.vitamin_C = carbs * 1; // But less vitamin C
+    }
   }
   
   // Grains and starches
