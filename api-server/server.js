@@ -96,6 +96,62 @@ function getJobStatus(jobId) {
   }
 }
 
+// Convert flat nutrient structure from OpenAI to nested structure expected by app
+function convertFlatNutrientsToNested(ingredients) {
+  return ingredients.map(ingredient => {
+    const converted = {
+      name: ingredient.name,
+      weight_g: ingredient.weight_g || 100,
+      calories: ingredient.calories || 0,
+      protein_g: ingredient.protein_g || 0,
+      fat_g: ingredient.fat_g || 0,
+      carbs_g: ingredient.carbs_g || 0,
+      vitamins: {
+        vitamin_A_mcg: ingredient.vitamin_A || 0,
+        vitamin_C_mg: ingredient.vitamin_C || 0,
+        vitamin_D_mcg: ingredient.vitamin_D || 0,
+        vitamin_E_mg: ingredient.vitamin_E || 0,
+        vitamin_K_mcg: ingredient.vitamin_K || 0,
+        vitamin_B1_mg: ingredient.vitamin_B1 || 0,
+        vitamin_B2_mg: ingredient.vitamin_B2 || 0,
+        vitamin_B3_mg: ingredient.vitamin_B3 || 0,
+        vitamin_B5_mg: ingredient.vitamin_B5 || 0,
+        vitamin_B6_mg: ingredient.vitamin_B6 || 0,
+        vitamin_B7_mcg: ingredient.vitamin_B7 || 0,
+        vitamin_B9_mcg: ingredient.vitamin_B9 || 0,
+        vitamin_B12_mcg: ingredient.vitamin_B12 || 0
+      },
+      minerals: {
+        calcium_mg: ingredient.calcium || 0,
+        chloride_mg: ingredient.chloride || 0,
+        chromium_mcg: ingredient.chromium || 0,
+        copper_mcg: ingredient.copper || 0,
+        fluoride_mg: ingredient.fluoride || 0,
+        iodine_mcg: ingredient.iodine || 0,
+        iron_mg: ingredient.iron || 0,
+        magnesium_mg: ingredient.magnesium || 0,
+        manganese_mg: ingredient.manganese || 0,
+        molybdenum_mcg: ingredient.molybdenum || 0,
+        phosphorus_mg: ingredient.phosphorus || 0,
+        potassium_mg: ingredient.potassium || 0,
+        selenium_mcg: ingredient.selenium || 0,
+        sodium_mg: ingredient.sodium || 0,
+        zinc_mg: ingredient.zinc || 0
+      },
+      other: {
+        fiber_g: ingredient.fiber || 0,
+        cholesterol_mg: ingredient.cholesterol || 0,
+        sugar_g: ingredient.sugar || 0,
+        saturated_fats_g: ingredient.saturated_fats || 0,
+        omega_3_mg: ingredient.omega_3 || 0,
+        omega_6_g: ingredient.omega_6 || 0
+      }
+    };
+    
+    return converted;
+  });
+}
+
 // Add nutrients to ingredients based on food type
 function addNutrientsToIngredients(ingredients) {
   return ingredients.map(ingredient => {
@@ -188,7 +244,41 @@ Return ONLY valid JSON with this EXACT structure (no extra text):
       "calories": 150,
       "protein_g": 5,
       "fat_g": 2,
-      "carbs_g": 20
+      "carbs_g": 20,
+      "vitamin_A": 10,
+      "vitamin_C": 5,
+      "vitamin_D": 0,
+      "vitamin_E": 1,
+      "vitamin_K": 2,
+      "vitamin_B1": 0.1,
+      "vitamin_B2": 0.1,
+      "vitamin_B3": 1,
+      "vitamin_B5": 0.5,
+      "vitamin_B6": 0.2,
+      "vitamin_B7": 2,
+      "vitamin_B9": 20,
+      "vitamin_B12": 0,
+      "calcium": 50,
+      "chloride": 100,
+      "chromium": 1,
+      "copper": 100,
+      "fluoride": 0.1,
+      "iodine": 10,
+      "iron": 2,
+      "magnesium": 25,
+      "manganese": 0.5,
+      "molybdenum": 5,
+      "phosphorus": 80,
+      "potassium": 200,
+      "selenium": 5,
+      "sodium": 50,
+      "zinc": 1,
+      "fiber": 3,
+      "cholesterol": 0,
+      "sugar": 5,
+      "saturated_fats": 0.5,
+      "omega_3": 50,
+      "omega_6": 0.2
     }
   ]
 }
@@ -200,7 +290,7 @@ CRITICAL RULES:
 4. NO text outside the JSON structure
 5. Ensure all quotes are properly closed
 6. Do NOT include any explanations or markdown
-7. ONLY include name, weight_g, calories, protein_g, fat_g, carbs_g - NO OTHER FIELDS`;
+7. Include ALL nutrients for each ingredient with realistic values based on the food type`;
 
     let finalResponse = null;
     
@@ -621,23 +711,20 @@ function processVisionResponse(visionResponse) {
     return ingredient;
   });
   
-  // Add nutrients to ingredients based on food type
-  const nutrientsAddedIngredients = addNutrientsToIngredients(mappedIngredients);
-  
   // Generate appropriate meal name
-  const foodNames = nutrientsAddedIngredients.map(item => item.name);
+  const foodNames = mappedIngredients.map(item => item.name);
   const mealName = generateMealName(foodNames);
   
   // Build comprehensive response with all nutrition data
   const response = {
     meal_name: mealName,
-    ingredients: nutrientsAddedIngredients,
-    health_score: calculateHealthScore(nutrientsAddedIngredients),
+    ingredients: mappedIngredients,
+    health_score: calculateHealthScore(mappedIngredients),
     // Basic macronutrients
-    calories: total?.calories || nutrientsAddedIngredients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
-    protein: total?.protein_g || nutrientsAddedIngredients.reduce((sum, ing) => sum + (ing.protein_g || 0), 0),
-    fat: total?.fat_g || nutrientsAddedIngredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0),
-    carbs: total?.carbs_g || nutrientsAddedIngredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0)
+    calories: total?.calories || mappedIngredients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
+    protein: total?.protein_g || mappedIngredients.reduce((sum, ing) => sum + (ing.protein_g || 0), 0),
+    fat: total?.fat_g || mappedIngredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0),
+    carbs: total?.carbs_g || mappedIngredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0)
   };
 
   // Add comprehensive nutrition data if available in totals
@@ -654,8 +741,8 @@ function processVisionResponse(visionResponse) {
   }
 
   // Also include ingredient_nutrients array for detailed per-ingredient nutrition
-  if (nutrientsAddedIngredients.length > 0) {
-    response.ingredient_nutrients = nutrientsAddedIngredients.map(ingredient => ({
+  if (mappedIngredients.length > 0) {
+    response.ingredient_nutrients = mappedIngredients.map(ingredient => ({
       name: ingredient.name,
       vitamins: ingredient.vitamins || {},
       minerals: ingredient.minerals || {},
@@ -856,7 +943,41 @@ Return ONLY valid JSON with this EXACT structure (no extra text):
       "calories": 150,
       "protein_g": 5,
       "fat_g": 2,
-      "carbs_g": 20
+      "carbs_g": 20,
+      "vitamin_A": 10,
+      "vitamin_C": 5,
+      "vitamin_D": 0,
+      "vitamin_E": 1,
+      "vitamin_K": 2,
+      "vitamin_B1": 0.1,
+      "vitamin_B2": 0.1,
+      "vitamin_B3": 1,
+      "vitamin_B5": 0.5,
+      "vitamin_B6": 0.2,
+      "vitamin_B7": 2,
+      "vitamin_B9": 20,
+      "vitamin_B12": 0,
+      "calcium": 50,
+      "chloride": 100,
+      "chromium": 1,
+      "copper": 100,
+      "fluoride": 0.1,
+      "iodine": 10,
+      "iron": 2,
+      "magnesium": 25,
+      "manganese": 0.5,
+      "molybdenum": 5,
+      "phosphorus": 80,
+      "potassium": 200,
+      "selenium": 5,
+      "sodium": 50,
+      "zinc": 1,
+      "fiber": 3,
+      "cholesterol": 0,
+      "sugar": 5,
+      "saturated_fats": 0.5,
+      "omega_3": 50,
+      "omega_6": 0.2
     }
   ]
 }
@@ -868,7 +989,7 @@ CRITICAL RULES:
 4. NO text outside the JSON structure
 5. Ensure all quotes are properly closed
 6. Do NOT include any explanations or markdown
-7. ONLY include name, weight_g, calories, protein_g, fat_g, carbs_g - NO OTHER FIELDS`;
+7. Include ALL nutrients for each ingredient with realistic values based on the food type`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -950,13 +1071,13 @@ CRITICAL RULES:
             console.log('LEGACY ENDPOINT - Cleaned JSON parsed successfully!');
             
             if (cleanedJson.ingredients && cleanedJson.ingredients.length > 0) {
-              // Add nutrients programmatically to avoid JSON parsing issues
-              const enrichedJson = {
+              // Convert flat nutrient structure to nested structure expected by app
+              const convertedJson = {
                 ...cleanedJson,
-                ingredients: addNutrientsToIngredients(cleanedJson.ingredients)
+                ingredients: convertFlatNutrientsToNested(cleanedJson.ingredients)
               };
               
-              const result = processVisionResponse(enrichedJson);
+              const result = processVisionResponse(convertedJson);
               return res.json({
                 success: true,
                 data: result
@@ -976,13 +1097,13 @@ CRITICAL RULES:
                 const ingredientsJson = JSON.parse(ingredientsStr);
                 
                 if (ingredientsJson.ingredients && ingredientsJson.ingredients.length > 0) {
-                  // Add a default meal name and nutrients
-                  const enrichedJson = {
+                  // Convert flat nutrient structure and add default meal name
+                  const convertedJson = {
                     meal_name: "Mixed Plate",
-                    ingredients: addNutrientsToIngredients(ingredientsJson.ingredients)
+                    ingredients: convertFlatNutrientsToNested(ingredientsJson.ingredients)
                   };
                   
-                  const result = processVisionResponse(enrichedJson);
+                  const result = processVisionResponse(convertedJson);
                   return res.json({
                     success: true,
                     data: result,
