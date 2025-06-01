@@ -142,25 +142,8 @@ NAMING GUIDELINES:
 - **Ingredient Names**: Keep simple - "chicken" not "grilled chicken breast", "tomatoes" not "cherry tomatoes", "sausages" not "grilled sausages"
 - **Meal Names**: Use recognizable dish names when possible (Pizza, Pasta, Tacos, Salad, etc.) or generic names like "Mixed Plate", "Dinner Bowl", "Lunch Plate", etc.
 
-CRITICAL WEIGHT ESTIMATION REQUIREMENTS:
-You MUST provide realistic weight_g estimates for each ingredient based on VISUAL ANALYSIS of the actual portion sizes shown in the image.
-
-**VISUAL ESTIMATION INSTRUCTIONS:**
-- Look at the actual size of each food item in the image
-- Compare portion sizes relative to the plate, utensils, or other reference objects
-- Estimate the actual weight based on what you can see, not standard serving sizes
-- Small pieces should have small weights, large portions should have larger weights
-- Consider the thickness, volume, and density of each food item as it appears
-- Base your estimate on the ACTUAL visual portion, not typical meal portions
-- Use your visual analysis to determine realistic weights for what you actually see
-
-**EXAMPLES OF VISUAL-BASED ESTIMATION:**
-- A small piece of chicken visible in the image = estimate its actual small weight based on visual size
-- A large steak filling most of the plate = estimate its actual large weight based on visual size
-- A few cherry tomatoes = estimate their actual combined weight based on visual size
-- A full cup of rice = estimate based on the visible volume
-- A thin layer of sauce = estimate the actual thin amount visible
-- Herbs/garnish = estimate based on the actual amount you can see in the image
+WEIGHT ESTIMATION:
+You MUST provide weight_g estimates for each ingredient based on visual analysis of the actual portion sizes shown in the image. Look at the actual size of each food item and estimate the weight based on what you see.
 
 IMPORTANT GUIDELINES:
 1. **Don't over-split**: "chicken breast" = 1 ingredient, "beef steak" = 1 ingredient
@@ -582,10 +565,14 @@ function processVisionResponse(visionResponse) {
   
   // Map ingredients to our format with comprehensive nutrition data and clean names
   const mappedIngredients = ingredients.map(item => {
+    const cleanName = cleanIngredientName(item.name);
+    const weight = item.weight_g || 100.0;
+    const calories = item.calories || 0;
+    
     const ingredient = {
-      name: cleanIngredientName(item.name),
-      weight_g: item.weight_g || 100.0, // Simple fallback only if OpenAI completely fails to provide weight
-      calories: item.calories || 0,
+      name: `${cleanName} - ${weight}g - ${calories} kcal`,
+      weight_g: weight,
+      calories: calories,
       protein_g: item.protein_g || 0,
       fat_g: item.fat_g || 0,
       carbs_g: item.carbs_g || 0
@@ -615,7 +602,10 @@ function processVisionResponse(visionResponse) {
   });
   
   // Generate appropriate meal name
-  const foodNames = mappedIngredients.map(item => item.name);
+  const foodNames = mappedIngredients.map(item => {
+    // Extract clean name from the formatted name (before the first " - ")
+    return item.name.split(' - ')[0];
+  });
   const mealName = generateMealName(foodNames);
   
   // Build comprehensive response with all nutrition data
@@ -848,73 +838,38 @@ EXAMPLES OF PROPER DETECTION:
 - Sides: coleslaw, salad, sauce, dressing (each separately)
 - Garnishes: herbs, spices, small vegetables (include these too)
 
-CRITICAL WEIGHT ESTIMATION REQUIREMENTS:
-You MUST provide realistic weight_g estimates for each ingredient based on VISUAL ANALYSIS of the actual portion sizes shown in the image.
+WEIGHT ESTIMATION:
+You MUST provide weight_g estimates for each ingredient based on visual analysis of the actual portion sizes shown in the image. Look at the actual size of each food item and estimate the weight based on what you see.
 
-**VISUAL ESTIMATION INSTRUCTIONS:**
-- Look at the actual size of each food item in the image
-- Compare portion sizes relative to the plate, utensils, or other reference objects
-- Estimate the actual weight based on what you can see, not standard serving sizes
-- Small pieces should have small weights, large portions should have larger weights
-- Consider the thickness, volume, and density of each food item as it appears
-- Base your estimate on the ACTUAL visual portion, not typical meal portions
-- Use your visual analysis to determine realistic weights for what you actually see
+IMPORTANT GUIDELINES:
+1. **Don't over-split**: "chicken breast" = 1 ingredient, "beef steak" = 1 ingredient
+2. **Do identify separate items**: chicken + vegetables + rice = 3 ingredients
+3. **Include garnishes**: herbs, spices, small vegetables as separate if visible
+4. **Systematic scanning**: Look at all areas of the plate/image
+5. **Minimum threshold**: Try to identify 2-5 ingredients for typical meals
+6. **ALWAYS provide weight_g**: Never leave weight_g empty or null - estimate based on ACTUAL VISUAL portion size in the image
 
-**EXAMPLES OF VISUAL-BASED ESTIMATION:**
-- A small piece of chicken visible in the image = estimate its actual small weight based on visual size
-- A large steak filling most of the plate = estimate its actual large weight based on visual size
-- A few cherry tomatoes = estimate their actual combined weight based on visual size
-- A full cup of rice = estimate based on the visible volume
-- A thin layer of sauce = estimate the actual thin amount visible
-- Herbs/garnish = estimate based on the actual amount you can see in the image
+RESPONSE FORMAT (JSON ONLY):
+Return a JSON object with meal_name and ingredients array. Each ingredient should have:
+- name: simple, concise name (e.g., "chicken", "tomatoes", "rice")
+- weight_g: Estimated weight based on ACTUAL VISUAL portion size shown in the image
+- calories, protein_g, fat_g, carbs_g: nutritional values
+- vitamins: object with vitamin values
+- minerals: object with mineral values  
+- other: object with fiber, cholesterol, etc.
 
-Return valid JSON with this EXACT structure:
-{
-  "ingredients": [
-    { 
-      "name": "specific food name (e.g. grilled chicken breast, white rice, broccoli)", 
-      "weight_g": 150.0, 
-      "calories": 165,
-      "protein_g": 31, 
-      "fat_g": 4, 
-      "carbs_g": 0,
-      "vitamins": {
-        "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
-        "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
-        "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
-      },
-      "minerals": {
-        "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-        "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
-        "fluoride": 0, "manganese": 0.1, "phosphorus": 200
-      },
-      "other": {
-        "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
-      }
-    }
-  ],
-  "total": { 
-    "calories": 165, "protein_g": 31, "fat_g": 4, "carbs_g": 0,
-    "vitamins": {
-      "vitamin_a": 0, "vitamin_c": 0, "vitamin_d": 0, "vitamin_e": 1.2, "vitamin_k": 0.3,
-      "vitamin_b1": 0.1, "vitamin_b2": 0.2, "vitamin_b3": 12.5, "vitamin_b5": 1.8, 
-      "vitamin_b6": 0.6, "vitamin_b7": 3.2, "vitamin_b9": 8, "vitamin_b12": 0.3
-    },
-    "minerals": {
-      "calcium": 15, "iron": 1.0, "magnesium": 29, "potassium": 256, "sodium": 74, "zinc": 1.9,
-      "chromium": 0.1, "copper": 45, "iodine": 2, "molybdenum": 1.5, "selenium": 8.5,
-      "fluoride": 0, "manganese": 0.1, "phosphorus": 200
-    },
-    "other": {
-      "fiber": 0, "cholesterol": 85, "sugar": 0, "saturated_fats": 1.1, "omega_3": 74, "omega_6": 0.6
-    }
-  }
-}
+IMPORTANT:
+- EVERY number MUST end with .0 even for whole numbers
+- Keep ingredient names short and simple
+- Use recognizable meal names or generic terms like "Mixed Plate"
+- Include comprehensive vitamin/mineral data for each ingredient
+- ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
 
-UNITS (CRITICAL - DO NOT CONVERT):
-Vitamins: A,D,K,B7,B9,B12=mcg | C,E,B1,B2,B3,B5,B6=mg
-Minerals: Ca,Fe,Mg,K,Na,Zn,Fluoride,Manganese,Phosphorus=mg | Cr,Cu,I,Mo,Se=mcg  
-Other: fiber,sugar,saturated_fats,omega_6=g | cholesterol,omega_3=mg
+CRITICAL VITAMIN UNITS:
+- Vitamin A: ALWAYS in mcg (micrograms), NOT IU. Typical values: 0-500 mcg per meal
+- Vitamin D, K, B7, B9, B12: mcg (micrograms)
+- Vitamin C, E, B1, B2, B3, B5, B6: mg (milligrams)
+- If you calculate vitamin A in IU, convert: 1 IU = 0.3 mcg
 
 VITAMIN A CRITICAL NOTE: 
 - ALWAYS return Vitamin A in MICROGRAMS (mcg), NOT International Units (IU)
