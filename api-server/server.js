@@ -122,11 +122,9 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
 
 CRITICAL REQUIREMENTS:
-- ALWAYS include ALL 13 vitamins, ALL 15 minerals, ALL 6 other nutrients
-- NEVER omit any nutrient - use 0 if not present
-- Include ALL minerals: calcium, chloride, chromium, copper, fluoride, iodine, iron, magnesium, manganese, molybdenum, phosphorus, potassium, selenium, sodium, zinc
-- Include ALL other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6
-- Use exact units specified below
+- ALWAYS include ALL 13 vitamins, ALL 15 minerals, ALL 6 other nutrients for EVERY ingredient
+- NEVER omit any nutrient - use 0.0 if not present
+- Use EXACT units and structure specified below
 - MINIMUM 2 ingredients for any meal (unless truly single item)
 - SCAN SYSTEMATICALLY: Look at all areas of the plate/image
 - IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
@@ -146,24 +144,16 @@ NAMING GUIDELINES:
 WEIGHT ESTIMATION:
 You MUST provide weight_g estimates for each ingredient based on visual analysis of the actual portion sizes shown in the image. Look at the actual size of each food item and estimate the weight based on what you see.
 
-IMPORTANT GUIDELINES:
-1. **Don't over-split**: "chicken breast" = 1 ingredient, "beef steak" = 1 ingredient
-2. **Do identify separate items**: chicken + vegetables + rice = 3 ingredients
-3. **Include garnishes**: herbs, spices, small vegetables as separate if visible
-4. **Systematic scanning**: Look at all areas of the plate/image
-5. **Minimum threshold**: Try to identify 2-5 ingredients for typical meals
-6. **ALWAYS provide weight_g**: Never leave weight_g empty or null - estimate based on ACTUAL VISUAL portion size in the image
-
 RESPONSE FORMAT (JSON ONLY):
-Return a JSON object with meal_name and ingredients array. Each ingredient should have:
+Return a JSON object with meal_name and ingredients array. Each ingredient MUST have:
 - name: simple, concise name (e.g., "chicken", "tomatoes", "rice")
 - weight_g: Estimated weight based on ACTUAL VISUAL portion size shown in the image
 - calories, protein_g, fat_g, carbs_g: nutritional values
-- vitamins: object with ALL 13 vitamin values
-- minerals: object with ALL 15 mineral values  
-- other: object with ALL 6 other nutrient values
+- vitamins: object with ALL 13 vitamin values (MANDATORY)
+- minerals: object with ALL 15 mineral values (MANDATORY)
+- other: object with ALL 6 other nutrient values (MANDATORY)
 
-MANDATORY NUTRIENT STRUCTURE:
+MANDATORY EXACT NUTRIENT STRUCTURE FOR EVERY INGREDIENT:
 vitamins: {
   "vitamin_A_mcg": 0.0,
   "vitamin_C_mg": 0.0,
@@ -207,35 +197,68 @@ other: {
   "omega_6_g": 0.0
 }
 
+CRITICAL NUTRIENT REQUIREMENTS:
+- EVERY ingredient MUST have ALL 13 vitamins, ALL 15 minerals, ALL 6 other nutrients
+- Use 0.0 for nutrients not present in that ingredient
+- NEVER omit any nutrient from the structure above
+- Use realistic USDA nutrition values with precise decimal places
+
+VITAMIN UNITS (CRITICAL):
+- vitamin_A_mcg: micrograms (NOT IU) - typical values 0-500 mcg
+- vitamin_C_mg: milligrams - typical values 0-100 mg
+- vitamin_D_mcg: micrograms - typical values 0-10 mcg
+- vitamin_E_mg: milligrams - typical values 0-15 mg
+- vitamin_K_mcg: micrograms - typical values 0-100 mcg
+- vitamin_B1_mg: milligrams - typical values 0-2 mg
+- vitamin_B2_mg: milligrams - typical values 0-2 mg
+- vitamin_B3_mg: milligrams - typical values 0-20 mg
+- vitamin_B5_mg: milligrams - typical values 0-5 mg
+- vitamin_B6_mg: milligrams - typical values 0-2 mg
+- vitamin_B7_mcg: micrograms - typical values 0-50 mcg
+- vitamin_B9_mcg: micrograms - typical values 0-400 mcg
+- vitamin_B12_mcg: micrograms - typical values 0-10 mcg
+
+MINERAL UNITS (CRITICAL):
+- calcium_mg: milligrams - typical values 0-300 mg
+- chloride_mg: milligrams - typical values 0-1000 mg
+- chromium_mcg: micrograms - typical values 0-50 mcg
+- copper_mcg: micrograms - typical values 0-1000 mcg
+- fluoride_mg: milligrams - typical values 0-2 mg
+- iodine_mcg: micrograms - typical values 0-200 mcg
+- iron_mg: milligrams - typical values 0-10 mg
+- magnesium_mg: milligrams - typical values 0-100 mg
+- manganese_mg: milligrams - typical values 0-3 mg
+- molybdenum_mcg: micrograms - typical values 0-50 mcg
+- phosphorus_mg: milligrams - typical values 0-400 mg
+- potassium_mg: milligrams - typical values 0-1000 mg
+- selenium_mcg: micrograms - typical values 0-100 mcg
+- sodium_mg: milligrams - typical values 0-1000 mg
+- zinc_mg: milligrams - typical values 0-5 mg
+
+OTHER NUTRIENT UNITS (CRITICAL):
+- fiber_g: grams - typical values 0-10 g
+- cholesterol_mg: milligrams - typical values 0-200 mg
+- sugar_g: grams - typical values 0-20 g
+- saturated_fats_g: grams - typical values 0-10 g
+- omega_3_mg: milligrams - typical values 0-1000 mg
+- omega_6_g: grams - typical values 0-5 g
+
 IMPORTANT:
 - EVERY number MUST end with .0 even for whole numbers
 - Keep ingredient names short and simple
 - Use recognizable meal names or generic terms like "Mixed Plate"
-- Include comprehensive vitamin/mineral data for each ingredient
 - ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
 - NEVER omit any nutrient from the structure above - use 0.0 if not present
-
-CRITICAL VITAMIN UNITS:
-- Vitamin A: ALWAYS in mcg (micrograms), NOT IU. Typical values: 0-500 mcg per meal
-- Vitamin D, K, B7, B9, B12: mcg (micrograms)
-- Vitamin C, E, B1, B2, B3, B5, B6: mg (milligrams)
-- If you calculate vitamin A in IU, convert: 1 IU = 0.3 mcg
-
-VITAMIN A CRITICAL NOTES:
-- NEVER return vitamin A in IU (International Units)
-- ALWAYS return vitamin A in mcg (micrograms)
-- Common foods: chicken (0-10 mcg), tomatoes (40-50 mcg), carrots (800-900 mcg)
-- If you calculate 966 IU, convert to 290 mcg (966 × 0.3 = 290)
-- Maximum realistic vitamin A per meal: 1000 mcg
+- VERIFY all 13 vitamins, 15 minerals, and 6 other nutrients are included for EVERY ingredient
 
 QUALITY CHECK:
 - If you only detect 1 ingredient, look again more carefully
 - Complex plated meals should have 3-6 ingredients typically
 - Use realistic USDA nutrition values with precise decimal places
-- Include ALL nutrients with correct units
+- Include ALL nutrients with correct units for EVERY ingredient
 - Use 0.0 for absent nutrients (e.g. cholesterol in vegetables)
 - ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
-- VERIFY all 13 vitamins, 15 minerals, and 6 other nutrients are included`;
+- VERIFY all 13 vitamins, 15 minerals, and 6 other nutrients are included for EVERY ingredient`;
 
     let finalResponse = null;
     
