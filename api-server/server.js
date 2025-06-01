@@ -118,147 +118,70 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // ENHANCED prompt for better ingredient detection
-    const enhancedPrompt = `You are a professional nutritionist and food analyst. Analyze this food image and identify ALL individual ingredients and food items visible in the meal.
+    // System prompt for accurate food recognition - SIMPLIFIED FOR RELIABILITY
+    const systemPrompt = `You are a food analyst. Analyze this image and return valid JSON with this exact format:
 
-CRITICAL REQUIREMENTS:
-- ALWAYS include ALL 13 vitamins, ALL 15 minerals, ALL 6 other nutrients for EVERY ingredient
-- NEVER omit any nutrient - use 0.0 if not present
-- Use EXACT units and structure specified below
-- MINIMUM 2 ingredients for any meal (unless truly single item)
-- SCAN SYSTEMATICALLY: Look at all areas of the plate/image
-- IDENTIFY LAYERS: Check for ingredients that might be layered or mixed
-- ALWAYS provide weight_g based on what you SEE in the image - this is MANDATORY
-
-INGREDIENT IDENTIFICATION RULES:
-- **Proteins**: "chicken" = 1 ingredient (NOT "grilled chicken breast")
-- **Vegetables**: each distinct vegetable type (tomatoes, cucumbers, lettuce, etc.) - use simple names
-- **Grains/Starches**: rice, bread, pasta, potatoes as separate items
-- **Sauces/Condiments**: dressings, sauces, oils as separate items
-- **Sides**: coleslaw, salads, etc. as separate items
-
-NAMING GUIDELINES:
-- **Ingredient Names**: Keep simple - "chicken" not "grilled chicken breast", "tomatoes" not "cherry tomatoes", "sausages" not "grilled sausages"
-- **Meal Names**: Use recognizable dish names when possible (Pizza, Pasta, Tacos, Salad, etc.) or generic names like "Mixed Plate", "Dinner Bowl", "Lunch Plate", etc.
-
-WEIGHT ESTIMATION:
-You MUST provide weight_g estimates for each ingredient based on visual analysis of the actual portion sizes shown in the image. Look at the actual size of each food item and estimate the weight based on what you see.
-
-RESPONSE FORMAT (JSON ONLY):
-Return a JSON object with meal_name and ingredients array. Each ingredient MUST have:
-- name: simple, concise name (e.g., "chicken", "tomatoes", "rice")
-- weight_g: Estimated weight based on ACTUAL VISUAL portion size shown in the image
-- calories, protein_g, fat_g, carbs_g: nutritional values
-- vitamins: object with ALL 13 vitamin values (MANDATORY)
-- minerals: object with ALL 15 mineral values (MANDATORY)
-- other: object with ALL 6 other nutrient values (MANDATORY)
-
-MANDATORY EXACT NUTRIENT STRUCTURE FOR EVERY INGREDIENT:
-vitamins: {
-  "vitamin_A_mcg": 0.0,
-  "vitamin_C_mg": 0.0,
-  "vitamin_D_mcg": 0.0,
-  "vitamin_E_mg": 0.0,
-  "vitamin_K_mcg": 0.0,
-  "vitamin_B1_mg": 0.0,
-  "vitamin_B2_mg": 0.0,
-  "vitamin_B3_mg": 0.0,
-  "vitamin_B5_mg": 0.0,
-  "vitamin_B6_mg": 0.0,
-  "vitamin_B7_mcg": 0.0,
-  "vitamin_B9_mcg": 0.0,
-  "vitamin_B12_mcg": 0.0
+{
+  "meal_name": "Mixed Plate",
+  "ingredients": [
+    {
+      "name": "chicken",
+      "weight_g": 100.0,
+      "calories": 165.0,
+      "protein_g": 31.0,
+      "fat_g": 3.6,
+      "carbs_g": 0.0,
+      "vitamins": {
+        "vitamin_A_mcg": 10.0,
+        "vitamin_C_mg": 0.0,
+        "vitamin_D_mcg": 0.0,
+        "vitamin_E_mg": 0.0,
+        "vitamin_K_mcg": 2.0,
+        "vitamin_B1_mg": 0.0,
+        "vitamin_B2_mg": 0.0,
+        "vitamin_B3_mg": 0.0,
+        "vitamin_B5_mg": 0.0,
+        "vitamin_B6_mg": 0.5,
+        "vitamin_B7_mcg": 0.0,
+        "vitamin_B9_mcg": 0.0,
+        "vitamin_B12_mcg": 0.0
+      },
+      "minerals": {
+        "calcium_mg": 13.0,
+        "chloride_mg": 0.0,
+        "chromium_mcg": 0.0,
+        "copper_mcg": 0.0,
+        "fluoride_mg": 0.0,
+        "iodine_mcg": 0.0,
+        "iron_mg": 1.3,
+        "magnesium_mg": 0.0,
+        "manganese_mg": 0.0,
+        "molybdenum_mcg": 0.0,
+        "phosphorus_mg": 0.0,
+        "potassium_mg": 220.0,
+        "selenium_mcg": 0.0,
+        "sodium_mg": 0.0,
+        "zinc_mg": 0.0
+      },
+      "other": {
+        "fiber_g": 0.0,
+        "cholesterol_mg": 85.0,
+        "sugar_g": 0.0,
+        "saturated_fats_g": 0.0,
+        "omega_3_mg": 0.0,
+        "omega_6_g": 0.0
+      }
+    }
+  ]
 }
 
-minerals: {
-  "calcium_mg": 0.0,
-  "chloride_mg": 0.0,
-  "chromium_mcg": 0.0,
-  "copper_mcg": 0.0,
-  "fluoride_mg": 0.0,
-  "iodine_mcg": 0.0,
-  "iron_mg": 0.0,
-  "magnesium_mg": 0.0,
-  "manganese_mg": 0.0,
-  "molybdenum_mcg": 0.0,
-  "phosphorus_mg": 0.0,
-  "potassium_mg": 0.0,
-  "selenium_mcg": 0.0,
-  "sodium_mg": 0.0,
-  "zinc_mg": 0.0
-}
-
-other: {
-  "fiber_g": 0.0,
-  "cholesterol_mg": 0.0,
-  "sugar_g": 0.0,
-  "saturated_fats_g": 0.0,
-  "omega_3_mg": 0.0,
-  "omega_6_g": 0.0
-}
-
-CRITICAL NUTRIENT REQUIREMENTS:
-- EVERY ingredient MUST have ALL 13 vitamins, ALL 15 minerals, ALL 6 other nutrients
-- Use 0.0 for nutrients not present in that ingredient
-- NEVER omit any nutrient from the structure above
-- Use realistic USDA nutrition values with precise decimal places
-
-VITAMIN UNITS (CRITICAL):
-- vitamin_A_mcg: micrograms (NOT IU) - typical values 0-500 mcg
-- vitamin_C_mg: milligrams - typical values 0-100 mg
-- vitamin_D_mcg: micrograms - typical values 0-10 mcg
-- vitamin_E_mg: milligrams - typical values 0-15 mg
-- vitamin_K_mcg: micrograms - typical values 0-100 mcg
-- vitamin_B1_mg: milligrams - typical values 0-2 mg
-- vitamin_B2_mg: milligrams - typical values 0-2 mg
-- vitamin_B3_mg: milligrams - typical values 0-20 mg
-- vitamin_B5_mg: milligrams - typical values 0-5 mg
-- vitamin_B6_mg: milligrams - typical values 0-2 mg
-- vitamin_B7_mcg: micrograms - typical values 0-50 mcg
-- vitamin_B9_mcg: micrograms - typical values 0-400 mcg
-- vitamin_B12_mcg: micrograms - typical values 0-10 mcg
-
-MINERAL UNITS (CRITICAL):
-- calcium_mg: milligrams - typical values 0-300 mg
-- chloride_mg: milligrams - typical values 0-1000 mg
-- chromium_mcg: micrograms - typical values 0-50 mcg
-- copper_mcg: micrograms - typical values 0-1000 mcg
-- fluoride_mg: milligrams - typical values 0-2 mg
-- iodine_mcg: micrograms - typical values 0-200 mcg
-- iron_mg: milligrams - typical values 0-10 mg
-- magnesium_mg: milligrams - typical values 0-100 mg
-- manganese_mg: milligrams - typical values 0-3 mg
-- molybdenum_mcg: micrograms - typical values 0-50 mcg
-- phosphorus_mg: milligrams - typical values 0-400 mg
-- potassium_mg: milligrams - typical values 0-1000 mg
-- selenium_mcg: micrograms - typical values 0-100 mcg
-- sodium_mg: milligrams - typical values 0-1000 mg
-- zinc_mg: milligrams - typical values 0-5 mg
-
-OTHER NUTRIENT UNITS (CRITICAL):
-- fiber_g: grams - typical values 0-10 g
-- cholesterol_mg: milligrams - typical values 0-200 mg
-- sugar_g: grams - typical values 0-20 g
-- saturated_fats_g: grams - typical values 0-10 g
-- omega_3_mg: milligrams - typical values 0-1000 mg
-- omega_6_g: grams - typical values 0-5 g
-
-IMPORTANT:
-- EVERY number MUST end with .0 even for whole numbers
-- Keep ingredient names short and simple
-- Use recognizable meal names or generic terms like "Mixed Plate"
-- ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
-- NEVER omit any nutrient from the structure above - use 0.0 if not present
-- VERIFY all 13 vitamins, 15 minerals, and 6 other nutrients are included for EVERY ingredient
-
-QUALITY CHECK:
-- If you only detect 1 ingredient, look again more carefully
-- Complex plated meals should have 3-6 ingredients typically
-- Use realistic USDA nutrition values with precise decimal places
-- Include ALL nutrients with correct units for EVERY ingredient
-- Use 0.0 for absent nutrients (e.g. cholesterol in vegetables)
-- ALWAYS provide weight_g estimates based on what you SEE in the image - this is MANDATORY
-- VERIFY all 13 vitamins, 15 minerals, and 6 other nutrients are included for EVERY ingredient`;
+INSTRUCTIONS:
+1. Identify 2-4 food items in the image
+2. Use simple names (chicken, rice, tomatoes)
+3. Copy the exact JSON structure above
+4. Fill in realistic nutrition values
+5. All numbers must end with .0
+6. Return ONLY the JSON, no other text`;
 
     let finalResponse = null;
     
@@ -286,7 +209,7 @@ QUALITY CHECK:
         messages: [
           {
                 role: "system",
-                content: enhancedPrompt
+                content: systemPrompt
               },
               {
                 role: "user",
@@ -296,7 +219,7 @@ QUALITY CHECK:
                 ]
               }
             ],
-            max_tokens: 1500
+            max_tokens: 1200
       })
     });
 
@@ -889,56 +812,54 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // System prompt for accurate food recognition - FORCE ALL NUTRIENTS
-      const systemPrompt = `You are a professional nutritionist. Analyze this food image and identify ALL individual ingredients.
-
-CRITICAL: You MUST return valid JSON with this EXACT structure for EVERY ingredient:
+      // System prompt for accurate food recognition - SIMPLIFIED FOR RELIABILITY
+      const systemPrompt = `You are a food analyst. Analyze this image and return valid JSON with this exact format:
 
 {
-  "meal_name": "descriptive name",
+  "meal_name": "Mixed Plate",
   "ingredients": [
     {
-      "name": "ingredient name",
+      "name": "chicken",
       "weight_g": 100.0,
-      "calories": 150.0,
-      "protein_g": 20.0,
-      "fat_g": 5.0,
-      "carbs_g": 10.0,
+      "calories": 165.0,
+      "protein_g": 31.0,
+      "fat_g": 3.6,
+      "carbs_g": 0.0,
       "vitamins": {
-        "vitamin_A_mcg": 0.0,
+        "vitamin_A_mcg": 10.0,
         "vitamin_C_mg": 0.0,
         "vitamin_D_mcg": 0.0,
         "vitamin_E_mg": 0.0,
-        "vitamin_K_mcg": 0.0,
+        "vitamin_K_mcg": 2.0,
         "vitamin_B1_mg": 0.0,
         "vitamin_B2_mg": 0.0,
         "vitamin_B3_mg": 0.0,
         "vitamin_B5_mg": 0.0,
-        "vitamin_B6_mg": 0.0,
+        "vitamin_B6_mg": 0.5,
         "vitamin_B7_mcg": 0.0,
         "vitamin_B9_mcg": 0.0,
         "vitamin_B12_mcg": 0.0
       },
       "minerals": {
-        "calcium_mg": 0.0,
+        "calcium_mg": 13.0,
         "chloride_mg": 0.0,
         "chromium_mcg": 0.0,
         "copper_mcg": 0.0,
         "fluoride_mg": 0.0,
         "iodine_mcg": 0.0,
-        "iron_mg": 0.0,
+        "iron_mg": 1.3,
         "magnesium_mg": 0.0,
         "manganese_mg": 0.0,
         "molybdenum_mcg": 0.0,
         "phosphorus_mg": 0.0,
-        "potassium_mg": 0.0,
+        "potassium_mg": 220.0,
         "selenium_mcg": 0.0,
         "sodium_mg": 0.0,
         "zinc_mg": 0.0
       },
       "other": {
         "fiber_g": 0.0,
-        "cholesterol_mg": 0.0,
+        "cholesterol_mg": 85.0,
         "sugar_g": 0.0,
         "saturated_fats_g": 0.0,
         "omega_3_mg": 0.0,
@@ -948,16 +869,13 @@ CRITICAL: You MUST return valid JSON with this EXACT structure for EVERY ingredi
   ]
 }
 
-REQUIREMENTS:
-- Identify 2-5 distinct food items in the image
-- Use simple ingredient names (chicken, tomatoes, rice)
-- Estimate weight_g based on visual portion size
-- Include ALL 13 vitamins, ALL 15 minerals, ALL 6 other nutrients for EVERY ingredient
-- Use 0.0 for nutrients not present in that ingredient
-- ALL numbers must end with .0
-- Return ONLY valid JSON, no other text
-
-IMPORTANT: Copy the exact structure above and fill in realistic nutrition values. Do not omit any nutrients.`;
+INSTRUCTIONS:
+1. Identify 2-4 food items in the image
+2. Use simple names (chicken, rice, tomatoes)
+3. Copy the exact JSON structure above
+4. Fill in realistic nutrition values
+5. All numbers must end with .0
+6. Return ONLY the JSON, no other text`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -984,7 +902,7 @@ IMPORTANT: Copy the exact structure above and fill in realistic nutrition values
             ]
           }
         ],
-          max_tokens: 1500
+          max_tokens: 1200
       })
     });
 
