@@ -892,10 +892,10 @@ app.get('/api/jobs/:jobId', async (req, res) => {
   }
 });
 
-// Legacy endpoint with real OpenAI - BULLETPROOF VERSION
+// Legacy endpoint with real OpenAI - NO FALLBACKS, FAIL PROPERLY
 app.post('/api/analyze-food', limiter, async (req, res) => {
   try {
-    console.log('🔥 BULLETPROOF Legacy analyze food endpoint called');
+    console.log('🔥 Legacy analyze food endpoint called - NO FALLBACKS');
     const { image } = req.body;
 
     if (!image) {
@@ -906,23 +906,11 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       });
     }
 
-    // Generate job ID
-    const jobId = uuidv4();
-    console.log(`🔥 Creating bulletproof legacy job ${jobId}`);
-
-    // Create initial job status
-    await updateJobStatus(jobId, {
-      status: 'pending',
-      createdAt: Date.now(),
-      userId: 'legacy-api',
-      progress: 0,
-    });
-
     if (!process.env.OPENAI_API_KEY) {
-      console.log('🔥 No OpenAI API key - using fallback data');
-      return res.json({
-        success: true,
-        data: createFallbackFoodData()
+      console.log('🔥 No OpenAI API key - FAILING');
+      return res.status(500).json({
+        success: false,
+        error: 'OpenAI API key not configured'
       });
     }
 
@@ -952,7 +940,7 @@ Rules:
       // Make OpenAI API call with timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('🔥 OpenAI timeout - using fallback');
+        console.log('🔥 OpenAI timeout - FAILING');
         controller.abort();
       }, 30000); // 30 second timeout
 
@@ -986,60 +974,60 @@ Rules:
 
       clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const responseData = await response.json();
-        const content = responseData.choices[0].message.content.trim();
+      if (!response.ok) {
+        console.log('🔥 OpenAI API error - FAILING:', response.status);
+        return res.status(500).json({
+          success: false,
+          error: `OpenAI API error: ${response.status}`
+        });
+      }
+
+      const responseData = await response.json();
+      const content = responseData.choices[0].message.content.trim();
+      
+      console.log('🔥 OpenAI response received, length:', content.length);
+      
+      try {
+        // Try to parse the response
+        const jsonResponse = JSON.parse(content);
         
-        console.log('🔥 OpenAI response received, length:', content.length);
-        
-        try {
-          // Try to parse the response
-          const jsonResponse = JSON.parse(content);
-          
-          if (jsonResponse.ingredients && Array.isArray(jsonResponse.ingredients) && jsonResponse.ingredients.length > 0) {
-            console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
-            
-            // Convert simple response to full format
-            const fullResponse = convertSimpleToFullFormat(jsonResponse.ingredients);
-            const result = processVisionResponse(fullResponse);
-            
-            return res.json({
-              success: true,
-              data: result
-            });
-          } else {
-            console.log('🔥 No valid ingredients in response - using fallback');
-            return res.json({
-              success: true,
-              data: createFallbackFoodData()
-            });
-          }
-        } catch (parseError) {
-          console.log('🔥 JSON parse failed - using fallback:', parseError.message);
-          return res.json({
-            success: true,
-            data: createFallbackFoodData()
+        if (!jsonResponse.ingredients || !Array.isArray(jsonResponse.ingredients) || jsonResponse.ingredients.length === 0) {
+          console.log('🔥 No valid ingredients in response - FAILING');
+          return res.status(500).json({
+            success: false,
+            error: 'No food ingredients detected in the image'
           });
         }
-      } else {
-        console.log('🔥 OpenAI API error - using fallback:', response.status);
+
+        console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
+        
+        // Convert simple response to full format
+        const fullResponse = convertSimpleToFullFormat(jsonResponse.ingredients);
+        const result = processVisionResponse(fullResponse);
+        
         return res.json({
           success: true,
-          data: createFallbackFoodData()
+          data: result
+        });
+      } catch (parseError) {
+        console.log('🔥 JSON parse failed - FAILING:', parseError.message);
+        return res.status(500).json({
+          success: false,
+          error: 'OpenAI generated invalid JSON that could not be repaired'
         });
       }
     } catch (error) {
-      console.log('🔥 OpenAI call failed - using fallback:', error.message);
-      return res.json({
-        success: true,
-        data: createFallbackFoodData()
+      console.log('🔥 OpenAI call failed - FAILING:', error.message);
+      return res.status(500).json({
+        success: false,
+        error: `API call error: ${error.message}`
       });
     }
   } catch (error) {
-    console.log('🔥 Server error - using fallback:', error.message);
-    return res.json({
-      success: true,
-      data: createFallbackFoodData()
+    console.log('🔥 Server error - FAILING:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: `Server error: ${error.message}`
     });
   }
 });
@@ -1103,41 +1091,6 @@ function convertSimpleToFullFormat(simpleIngredients) {
     meal_name: "Mixed Plate",
     ingredients: convertFlatNutrientsToNested(fullIngredients)
   };
-}
-
-// Create fallback food data that always works
-function createFallbackFoodData() {
-  const fallbackIngredients = [
-    {
-      name: "Mixed Food",
-      weight_g: 150,
-      calories: 250,
-      protein_g: 15,
-      fat_g: 8,
-      carbs_g: 30,
-      vitamins: {
-        vitamin_A_mcg: 100, vitamin_C_mg: 20, vitamin_D_mcg: 2, vitamin_E_mg: 3,
-        vitamin_K_mcg: 15, vitamin_B1_mg: 0.3, vitamin_B2_mg: 0.3, vitamin_B3_mg: 4,
-        vitamin_B5_mg: 1, vitamin_B6_mg: 0.5, vitamin_B7_mcg: 8, vitamin_B9_mcg: 50,
-        vitamin_B12_mcg: 1
-      },
-      minerals: {
-        calcium_mg: 100, chloride_mg: 200, chromium_mcg: 5, copper_mcg: 200,
-        fluoride_mg: 0.2, iodine_mcg: 20, iron_mg: 5, magnesium_mg: 50,
-        manganese_mg: 1, molybdenum_mcg: 10, phosphorus_mg: 150, potassium_mg: 400,
-        selenium_mcg: 15, sodium_mg: 300, zinc_mg: 3
-      },
-      other: {
-        fiber_g: 5, cholesterol_mg: 30, sugar_g: 8, saturated_fats_g: 2,
-        omega_3_mg: 100, omega_6_g: 1
-      }
-    }
-  ];
-  
-  return processVisionResponse({
-    meal_name: "Mixed Plate",
-    ingredients: fallbackIngredients
-  });
 }
 
 // Start the server
