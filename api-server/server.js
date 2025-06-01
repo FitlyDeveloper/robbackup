@@ -152,62 +152,6 @@ function convertFlatNutrientsToNested(ingredients) {
   });
 }
 
-// Add nutrients to ingredients based on food type
-function addNutrientsToIngredients(ingredients) {
-  return ingredients.map(ingredient => {
-    const name = ingredient.name.toLowerCase();
-    
-    // Default nutrients that will be added to every ingredient
-    const defaultNutrients = {
-      vitamins: {
-        vitamin_A_mcg: 10, vitamin_C_mg: 5, vitamin_D_mcg: 0, vitamin_E_mg: 1, 
-        vitamin_K_mcg: 2, vitamin_B1_mg: 0.1, vitamin_B2_mg: 0.1, vitamin_B3_mg: 1, 
-        vitamin_B5_mg: 0.5, vitamin_B6_mg: 0.2, vitamin_B7_mcg: 2, vitamin_B9_mcg: 20, 
-        vitamin_B12_mcg: 0
-      },
-      minerals: {
-        calcium_mg: 50, chloride_mg: 100, chromium_mcg: 1, copper_mcg: 100, 
-        fluoride_mg: 0.1, iodine_mcg: 10, iron_mg: 2, magnesium_mg: 25, 
-        manganese_mg: 0.5, molybdenum_mcg: 5, phosphorus_mg: 80, potassium_mg: 200, 
-        selenium_mcg: 5, sodium_mg: 50, zinc_mg: 1
-      },
-      other: {
-        fiber_g: 3, cholesterol_mg: 0, sugar_g: 5, saturated_fats_g: 0.5, 
-        omega_3_mg: 50, omega_6_g: 0.2
-      }
-    };
-    
-    // Enhanced nutrients based on food type
-    if (name.includes('chicken') || name.includes('meat') || name.includes('beef') || name.includes('pork')) {
-      defaultNutrients.vitamins.vitamin_B12_mcg = 2.4;
-      defaultNutrients.minerals.iron_mg = 8;
-      defaultNutrients.minerals.zinc_mg = 4;
-      defaultNutrients.other.cholesterol_mg = 70;
-    } else if (name.includes('fish') || name.includes('salmon') || name.includes('tuna')) {
-      defaultNutrients.vitamins.vitamin_D_mcg = 10;
-      defaultNutrients.vitamins.vitamin_B12_mcg = 4;
-      defaultNutrients.other.omega_3_mg = 1000;
-      defaultNutrients.other.cholesterol_mg = 50;
-    } else if (name.includes('vegetable') || name.includes('broccoli') || name.includes('spinach') || name.includes('carrot')) {
-      defaultNutrients.vitamins.vitamin_A_mcg = 500;
-      defaultNutrients.vitamins.vitamin_C_mg = 50;
-      defaultNutrients.vitamins.vitamin_K_mcg = 100;
-      defaultNutrients.other.fiber_g = 8;
-      defaultNutrients.other.cholesterol_mg = 0;
-    } else if (name.includes('rice') || name.includes('bread') || name.includes('pasta') || name.includes('grain')) {
-      defaultNutrients.vitamins.vitamin_B1_mg = 0.5;
-      defaultNutrients.vitamins.vitamin_B3_mg = 3;
-      defaultNutrients.other.fiber_g = 2;
-      defaultNutrients.other.cholesterol_mg = 0;
-    }
-    
-    return {
-      ...ingredient,
-      ...defaultNutrients
-    };
-  });
-}
-
 // Process image and analyze with OpenAI using TEXT format instead of JSON (avoids parsing errors)
 async function processAndAnalyzeImage(jobId, userId, image) {
   try {
@@ -245,40 +189,40 @@ Return ONLY valid JSON with this EXACT structure (no extra text):
       "protein_g": 5,
       "fat_g": 2,
       "carbs_g": 20,
-      "vitamin_A": 10,
-      "vitamin_C": 5,
-      "vitamin_D": 0,
-      "vitamin_E": 1,
-      "vitamin_K": 2,
-      "vitamin_B1": 0.1,
-      "vitamin_B2": 0.1,
-      "vitamin_B3": 1,
-      "vitamin_B5": 0.5,
-      "vitamin_B6": 0.2,
-      "vitamin_B7": 2,
-      "vitamin_B9": 20,
-      "vitamin_B12": 0,
-      "calcium": 50,
-      "chloride": 100,
-      "chromium": 1,
-      "copper": 100,
-      "fluoride": 0.1,
-      "iodine": 10,
-      "iron": 2,
-      "magnesium": 25,
-      "manganese": 0.5,
-      "molybdenum": 5,
-      "phosphorus": 80,
-      "potassium": 200,
-      "selenium": 5,
-      "sodium": 50,
-      "zinc": 1,
-      "fiber": 3,
-      "cholesterol": 0,
-      "sugar": 5,
-      "saturated_fats": 0.5,
-      "omega_3": 50,
-      "omega_6": 0.2
+      "vitamin_A": 500,
+      "vitamin_C": 25,
+      "vitamin_D": 2,
+      "vitamin_E": 3,
+      "vitamin_K": 15,
+      "vitamin_B1": 0.3,
+      "vitamin_B2": 0.4,
+      "vitamin_B3": 4,
+      "vitamin_B5": 1.2,
+      "vitamin_B6": 0.5,
+      "vitamin_B7": 8,
+      "vitamin_B9": 50,
+      "vitamin_B12": 1.5,
+      "calcium": 120,
+      "chloride": 150,
+      "chromium": 3,
+      "copper": 150,
+      "fluoride": 0.3,
+      "iodine": 25,
+      "iron": 6,
+      "magnesium": 80,
+      "manganese": 1.2,
+      "molybdenum": 12,
+      "phosphorus": 200,
+      "potassium": 350,
+      "selenium": 15,
+      "sodium": 120,
+      "zinc": 3,
+      "fiber": 8,
+      "cholesterol": 15,
+      "sugar": 12,
+      "saturated_fats": 1.5,
+      "omega_3": 200,
+      "omega_6": 1.8
     }
   ]
 }
@@ -286,11 +230,15 @@ Return ONLY valid JSON with this EXACT structure (no extra text):
 CRITICAL RULES:
 1. Identify 2-4 distinct food items you can clearly see
 2. Use specific names: "grilled chicken breast", "steamed broccoli", "brown rice", "mixed salad"
-3. ALL numeric values must be valid numbers (integers or decimals)
-4. NO text outside the JSON structure
-5. Ensure all quotes are properly closed
-6. Do NOT include any explanations or markdown
-7. Include ALL nutrients for each ingredient with realistic values based on the food type`;
+3. ALL numeric values must be realistic for that specific food type
+4. For fruits: high vitamin C, moderate vitamin A, low protein
+5. For vegetables: high vitamin A/K, moderate vitamin C, high fiber
+6. For meats: high protein, B vitamins, iron, zinc, some cholesterol
+7. For grains: B vitamins, fiber, moderate protein
+8. NO text outside the JSON structure
+9. Ensure all quotes are properly closed
+10. Do NOT include any explanations or markdown
+11. Include ALL nutrients for each ingredient with REALISTIC values based on the food type`;
 
     let finalResponse = null;
     
@@ -925,15 +873,57 @@ Return ONLY this JSON structure with NO extra text:
 
 {
   "ingredients": [
-    {"name": "chicken", "calories": 200},
-    {"name": "rice", "calories": 150},
-    {"name": "vegetables", "calories": 50}
+    {
+      "name": "specific food name",
+      "calories": 150,
+      "protein_g": 5,
+      "fat_g": 2,
+      "carbs_g": 20,
+      "vitamin_A": 500,
+      "vitamin_C": 25,
+      "vitamin_D": 2,
+      "vitamin_E": 3,
+      "vitamin_K": 15,
+      "vitamin_B1": 0.3,
+      "vitamin_B2": 0.4,
+      "vitamin_B3": 4,
+      "vitamin_B5": 1.2,
+      "vitamin_B6": 0.5,
+      "vitamin_B7": 8,
+      "vitamin_B9": 50,
+      "vitamin_B12": 1.5,
+      "calcium": 120,
+      "chloride": 150,
+      "chromium": 3,
+      "copper": 150,
+      "fluoride": 0.3,
+      "iodine": 25,
+      "iron": 6,
+      "magnesium": 80,
+      "manganese": 1.2,
+      "molybdenum": 12,
+      "phosphorus": 200,
+      "potassium": 350,
+      "selenium": 15,
+      "sodium": 120,
+      "zinc": 3,
+      "fiber": 8,
+      "cholesterol": 15,
+      "sugar": 12,
+      "saturated_fats": 1.5,
+      "omega_3": 200,
+      "omega_6": 1.8
+    }
   ]
 }
 
 Rules:
-- Use simple food names like "chicken", "rice", "vegetables", "pasta", "beef", "fish"
-- Each ingredient should have realistic calories (50-300)
+- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli"
+- ALL numeric values must be realistic for that specific food type
+- For fruits: high vitamin C, moderate vitamin A, low protein, natural sugars
+- For vegetables: high vitamin A/K, moderate vitamin C, high fiber, low calories
+- For meats: high protein, B vitamins, iron, zinc, some cholesterol
+- For grains: B vitamins, fiber, moderate protein
 - Return 2-3 ingredients maximum
 - NO explanations, NO markdown, ONLY the JSON`;
 
@@ -1038,52 +1028,48 @@ function convertSimpleToFullFormat(simpleIngredients) {
     const name = ingredient.name || 'Food Item';
     const calories = ingredient.calories || 150;
     
-    // Calculate macros based on calories (rough estimates)
-    const protein = Math.round(calories * 0.2 / 4); // 20% protein
-    const fat = Math.round(calories * 0.3 / 9); // 30% fat  
-    const carbs = Math.round(calories * 0.5 / 4); // 50% carbs
-    
+    // Use the actual micronutrient values from OpenAI instead of calculating from calories
     return {
       name: name,
       weight_g: 100,
       calories: calories,
-      protein_g: protein,
-      fat_g: fat,
-      carbs_g: carbs,
-      vitamin_A: 10,
-      vitamin_C: 5,
-      vitamin_D: 0,
-      vitamin_E: 1,
-      vitamin_K: 2,
-      vitamin_B1: 0.1,
-      vitamin_B2: 0.1,
-      vitamin_B3: 1,
-      vitamin_B5: 0.5,
-      vitamin_B6: 0.2,
-      vitamin_B7: 2,
-      vitamin_B9: 20,
-      vitamin_B12: 0,
-      calcium: 50,
-      chloride: 100,
-      chromium: 1,
-      copper: 100,
-      fluoride: 0.1,
-      iodine: 10,
-      iron: 2,
-      magnesium: 25,
-      manganese: 0.5,
-      molybdenum: 5,
-      phosphorus: 80,
-      potassium: 200,
-      selenium: 5,
-      sodium: 50,
-      zinc: 1,
-      fiber: 3,
-      cholesterol: 0,
-      sugar: 5,
-      saturated_fats: 0.5,
-      omega_3: 50,
-      omega_6: 0.2
+      protein_g: ingredient.protein_g || 0,
+      fat_g: ingredient.fat_g || 0,
+      carbs_g: ingredient.carbs_g || 0,
+      vitamin_A: ingredient.vitamin_A || 0,
+      vitamin_C: ingredient.vitamin_C || 0,
+      vitamin_D: ingredient.vitamin_D || 0,
+      vitamin_E: ingredient.vitamin_E || 0,
+      vitamin_K: ingredient.vitamin_K || 0,
+      vitamin_B1: ingredient.vitamin_B1 || 0,
+      vitamin_B2: ingredient.vitamin_B2 || 0,
+      vitamin_B3: ingredient.vitamin_B3 || 0,
+      vitamin_B5: ingredient.vitamin_B5 || 0,
+      vitamin_B6: ingredient.vitamin_B6 || 0,
+      vitamin_B7: ingredient.vitamin_B7 || 0,
+      vitamin_B9: ingredient.vitamin_B9 || 0,
+      vitamin_B12: ingredient.vitamin_B12 || 0,
+      calcium: ingredient.calcium || 0,
+      chloride: ingredient.chloride || 0,
+      chromium: ingredient.chromium || 0,
+      copper: ingredient.copper || 0,
+      fluoride: ingredient.fluoride || 0,
+      iodine: ingredient.iodine || 0,
+      iron: ingredient.iron || 0,
+      magnesium: ingredient.magnesium || 0,
+      manganese: ingredient.manganese || 0,
+      molybdenum: ingredient.molybdenum || 0,
+      phosphorus: ingredient.phosphorus || 0,
+      potassium: ingredient.potassium || 0,
+      selenium: ingredient.selenium || 0,
+      sodium: ingredient.sodium || 0,
+      zinc: ingredient.zinc || 0,
+      fiber: ingredient.fiber || 0,
+      cholesterol: ingredient.cholesterol || 0,
+      sugar: ingredient.sugar || 0,
+      saturated_fats: ingredient.saturated_fats || 0,
+      omega_3: ingredient.omega_3 || 0,
+      omega_6: ingredient.omega_6 || 0
     };
   });
   
