@@ -152,167 +152,6 @@ function convertFlatNutrientsToNested(ingredients) {
   });
 }
 
-// Expand simple OpenAI response to include all 34 nutrients using real nutritional knowledge
-function expandToFullNutrients(simpleResponse) {
-  console.log('🔬 Expanding nutrients for ingredients:', simpleResponse.ingredients.map(i => i.name));
-  
-  const expandedIngredients = simpleResponse.ingredients.map(ingredient => {
-    const name = ingredient.name.toLowerCase();
-    
-    // Start with OpenAI's provided values
-    const expanded = {
-      name: ingredient.name,
-      weight_g: ingredient.weight_g || 100,
-      calories: ingredient.calories || 100,
-      protein_g: ingredient.protein_g || 0,
-      fat_g: ingredient.fat_g || 0,
-      carbs_g: ingredient.carbs_g || 0
-    };
-    
-    // Use real nutritional knowledge to estimate missing micronutrients based on food type
-    const micronutrients = estimateMicronutrients(name, expanded.calories, expanded.protein_g, expanded.fat_g, expanded.carbs_g);
-    
-    console.log(`🍎 ${ingredient.name}: Generated ${Object.keys(micronutrients).filter(k => micronutrients[k] > 0).length} non-zero nutrients`);
-    console.log(`   Key nutrients: vitamin_C=${micronutrients.vitamin_C}, iron=${micronutrients.iron}, calcium=${micronutrients.calcium}`);
-    
-    // Merge with OpenAI's provided values (OpenAI takes priority)
-    const result = {
-      ...expanded,
-      ...micronutrients,
-      // Override with any values OpenAI specifically provided
-      vitamin_C: ingredient.vitamin_C || micronutrients.vitamin_C,
-      iron: ingredient.iron || micronutrients.iron,
-      calcium: ingredient.calcium || micronutrients.calcium
-    };
-    
-    return result;
-  });
-  
-  console.log('🔬 Expansion complete, returning expanded ingredients');
-  return {
-    meal_name: simpleResponse.meal_name || "Mixed Plate",
-    ingredients: expandedIngredients
-  };
-}
-
-// Estimate micronutrients based on food type and macronutrients using real nutritional knowledge
-function estimateMicronutrients(foodName, calories, protein, fat, carbs) {
-  // Base nutrients (will be adjusted based on food type)
-  let nutrients = {
-    vitamin_A: 0, vitamin_C: 0, vitamin_D: 0, vitamin_E: 0, vitamin_K: 0,
-    vitamin_B1: 0, vitamin_B2: 0, vitamin_B3: 0, vitamin_B5: 0, vitamin_B6: 0,
-    vitamin_B7: 0, vitamin_B9: 0, vitamin_B12: 0,
-    calcium: 0, chloride: 0, chromium: 0, copper: 0, fluoride: 0,
-    iodine: 0, iron: 0, magnesium: 0, manganese: 0, molybdenum: 0,
-    phosphorus: 0, potassium: 0, selenium: 0, sodium: 0, zinc: 0,
-    fiber: 0, cholesterol: 0, sugar: 0, saturated_fats: 0, omega_3: 0, omega_6: 0
-  };
-  
-  // Protein-rich foods (meat, fish, eggs)
-  if (foodName.includes('chicken') || foodName.includes('beef') || foodName.includes('pork') || 
-      foodName.includes('meat') || foodName.includes('steak')) {
-    nutrients.vitamin_B3 = protein * 0.3;
-    nutrients.vitamin_B6 = protein * 0.02;
-    nutrients.vitamin_B12 = protein * 0.1;
-    nutrients.iron = protein * 0.1;
-    nutrients.zinc = protein * 0.05;
-    nutrients.phosphorus = protein * 8;
-    nutrients.selenium = protein * 0.6;
-    nutrients.cholesterol = fat * 5;
-    nutrients.saturated_fats = fat * 0.3;
-  }
-  
-  // Fish
-  else if (foodName.includes('fish') || foodName.includes('salmon') || foodName.includes('tuna')) {
-    nutrients.vitamin_D = protein * 0.4;
-    nutrients.vitamin_B12 = protein * 0.15;
-    nutrients.omega_3 = fat * 100;
-    nutrients.selenium = protein * 1.5;
-    nutrients.phosphorus = protein * 10;
-    nutrients.iodine = protein * 0.5;
-  }
-  
-  // Vegetables
-  else if (foodName.includes('broccoli') || foodName.includes('spinach') || foodName.includes('kale') ||
-           foodName.includes('vegetable') || foodName.includes('green')) {
-    nutrients.vitamin_A = carbs * 50;
-    nutrients.vitamin_C = carbs * 10;
-    nutrients.vitamin_K = carbs * 20;
-    nutrients.vitamin_B9 = carbs * 8;
-    nutrients.iron = carbs * 0.3;
-    nutrients.calcium = carbs * 5;
-    nutrients.magnesium = carbs * 3;
-    nutrients.potassium = carbs * 20;
-    nutrients.fiber = carbs * 0.3;
-  }
-  
-  // Fruits
-  else if (foodName.includes('apple') || foodName.includes('banana') || foodName.includes('orange') ||
-           foodName.includes('berry') || foodName.includes('fruit') || foodName.includes('pineapple') ||
-           foodName.includes('watermelon') || foodName.includes('melon') || foodName.includes('grape') ||
-           foodName.includes('strawberry') || foodName.includes('mango') || foodName.includes('kiwi') ||
-           foodName.includes('peach') || foodName.includes('pear') || foodName.includes('cherry')) {
-    nutrients.vitamin_C = carbs * 3;
-    nutrients.vitamin_A = carbs * 2;
-    nutrients.potassium = carbs * 15;
-    nutrients.fiber = carbs * 0.2;
-    nutrients.sugar = carbs * 0.7;
-    nutrients.vitamin_B6 = carbs * 0.02;
-    
-    // Special cases for specific fruits
-    if (foodName.includes('pineapple')) {
-      nutrients.vitamin_C = carbs * 4; // Pineapple is high in vitamin C
-      nutrients.manganese = carbs * 0.1;
-    }
-    if (foodName.includes('watermelon')) {
-      nutrients.vitamin_A = carbs * 3; // Watermelon has more vitamin A
-      nutrients.vitamin_C = carbs * 1; // But less vitamin C
-    }
-  }
-  
-  // Grains and starches
-  else if (foodName.includes('rice') || foodName.includes('bread') || foodName.includes('pasta') ||
-           foodName.includes('potato') || foodName.includes('grain')) {
-    nutrients.vitamin_B1 = carbs * 0.03;
-    nutrients.vitamin_B3 = carbs * 0.2;
-    nutrients.iron = carbs * 0.15;
-    nutrients.magnesium = carbs * 1;
-    nutrients.phosphorus = carbs * 4;
-    nutrients.fiber = carbs * 0.1;
-    nutrients.manganese = carbs * 0.05;
-  }
-  
-  // Dairy
-  else if (foodName.includes('cheese') || foodName.includes('milk') || foodName.includes('yogurt')) {
-    nutrients.calcium = protein * 40;
-    nutrients.vitamin_B12 = protein * 0.2;
-    nutrients.vitamin_B2 = protein * 0.08;
-    nutrients.phosphorus = protein * 30;
-    nutrients.zinc = protein * 0.15;
-    nutrients.saturated_fats = fat * 0.6;
-  }
-  
-  // General estimates based on macronutrients for unknown foods
-  else {
-    nutrients.vitamin_C = Math.max(1, carbs * 0.5);
-    nutrients.iron = Math.max(0.1, (protein + carbs) * 0.05);
-    nutrients.calcium = Math.max(5, protein * 2);
-    nutrients.potassium = Math.max(50, (protein + carbs) * 5);
-    nutrients.magnesium = Math.max(5, calories * 0.1);
-    nutrients.phosphorus = Math.max(20, protein * 5);
-    nutrients.fiber = Math.max(0.5, carbs * 0.1);
-  }
-  
-  // Ensure reasonable minimums for essential nutrients
-  nutrients.vitamin_B1 = Math.max(0.01, nutrients.vitamin_B1);
-  nutrients.vitamin_B2 = Math.max(0.01, nutrients.vitamin_B2);
-  nutrients.vitamin_B3 = Math.max(0.1, nutrients.vitamin_B3);
-  nutrients.iron = Math.max(0.1, nutrients.iron);
-  nutrients.calcium = Math.max(5, nutrients.calcium);
-  
-  return nutrients;
-}
-
 // Process image and analyze with OpenAI using TEXT format instead of JSON (avoids parsing errors)
 async function processAndAnalyzeImage(jobId, userId, image) {
   try {
@@ -335,8 +174,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // SIMPLIFIED prompt that's more reliable for JSON generation
-    const systemPrompt = `You are a nutrition expert. Analyze this food image and identify the main food items.
+    // COMPREHENSIVE prompt that asks OpenAI for ALL real nutritional data
+    const systemPrompt = `You are a nutrition expert with access to comprehensive USDA and nutritional databases. Analyze this food image and provide complete nutritional information.
 
 Return ONLY valid JSON with this EXACT structure (no extra text):
 
@@ -350,20 +189,53 @@ Return ONLY valid JSON with this EXACT structure (no extra text):
       "protein_g": 5,
       "fat_g": 2,
       "carbs_g": 20,
+      "vitamin_A": 500,
       "vitamin_C": 25,
+      "vitamin_D": 2,
+      "vitamin_E": 3,
+      "vitamin_K": 15,
+      "vitamin_B1": 0.3,
+      "vitamin_B2": 0.4,
+      "vitamin_B3": 4,
+      "vitamin_B5": 1.2,
+      "vitamin_B6": 0.5,
+      "vitamin_B7": 8,
+      "vitamin_B9": 50,
+      "vitamin_B12": 1.5,
+      "calcium": 120,
+      "chloride": 100,
+      "chromium": 2,
+      "copper": 200,
+      "fluoride": 0.5,
+      "iodine": 15,
       "iron": 2,
-      "calcium": 120
+      "magnesium": 50,
+      "manganese": 1,
+      "molybdenum": 5,
+      "phosphorus": 150,
+      "potassium": 300,
+      "selenium": 10,
+      "sodium": 200,
+      "zinc": 2,
+      "fiber": 3,
+      "cholesterol": 0,
+      "sugar": 8,
+      "saturated_fats": 1,
+      "omega_3": 100,
+      "omega_6": 2
     }
   ]
 }
 
-CRITICAL RULES:
-1. Identify 2-4 distinct food items you can clearly see
-2. Use specific names like "grilled chicken breast", "steamed broccoli", "brown rice"
-3. Provide realistic nutritional values per 100g for each food
-4. NO text outside the JSON structure
-5. Ensure all quotes are properly closed
-6. Keep the JSON simple and valid`;
+CRITICAL INSTRUCTIONS:
+1. Use your ACTUAL nutritional database knowledge from USDA, nutrition labels, and scientific literature
+2. Provide ACCURATE values per 100g for each specific food you identify
+3. For pineapple: vitamin A should be ~3mcg, vitamin C should be ~47mg (real USDA values)
+4. For watermelon: vitamin A should be ~28mcg, vitamin C should be ~8mg (real USDA values)
+5. Include ALL 34 nutrients with scientifically accurate values
+6. NO made-up or estimated values - use your training data
+7. Identify 2-4 distinct food items you can clearly see
+8. NO text outside the JSON structure`;
 
     let finalResponse = null;
     
@@ -427,9 +299,8 @@ CRITICAL RULES:
             if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
               console.log(`Detected ${jsonResponse.ingredients.length} ingredients for job ${jobId}`);
               
-              // Expand simple response to full nutrient profile using real nutritional knowledge
-              const expandedResponse = expandToFullNutrients(jsonResponse);
-              finalResponse = processVisionResponse(expandedResponse);
+              // Process OpenAI's complete response directly - no fake expansion needed
+              finalResponse = processVisionResponse(jsonResponse);
               
               // Update job status with success
               await updateJobStatus(jobId, {
@@ -484,9 +355,8 @@ CRITICAL RULES:
                 console.log('Cleaned JSON parsed successfully!');
                 
                 if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
-                  // Expand simple response to full nutrient profile using real nutritional knowledge
-                  const expandedResponse = expandToFullNutrients(jsonResponse);
-                  finalResponse = processVisionResponse(expandedResponse);
+                  // Process OpenAI's complete response directly - no fake expansion needed
+                  finalResponse = processVisionResponse(jsonResponse);
                   
                   await updateJobStatus(jobId, {
                     status: 'completed',
@@ -1009,8 +879,8 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // SIMPLIFIED prompt that's more reliable for JSON generation
-      const systemPrompt = `You are a nutrition expert. Analyze this food image and identify the main food items.
+      // COMPREHENSIVE prompt that asks OpenAI for ALL real nutritional data
+      const systemPrompt = `You are a nutrition expert with access to comprehensive USDA and nutritional databases. Analyze this food image and provide complete nutritional information.
 
 Return ONLY valid JSON with this EXACT structure (no extra text):
 
@@ -1024,20 +894,53 @@ Return ONLY valid JSON with this EXACT structure (no extra text):
       "protein_g": 5,
       "fat_g": 2,
       "carbs_g": 20,
+      "vitamin_A": 500,
       "vitamin_C": 25,
+      "vitamin_D": 2,
+      "vitamin_E": 3,
+      "vitamin_K": 15,
+      "vitamin_B1": 0.3,
+      "vitamin_B2": 0.4,
+      "vitamin_B3": 4,
+      "vitamin_B5": 1.2,
+      "vitamin_B6": 0.5,
+      "vitamin_B7": 8,
+      "vitamin_B9": 50,
+      "vitamin_B12": 1.5,
+      "calcium": 120,
+      "chloride": 100,
+      "chromium": 2,
+      "copper": 200,
+      "fluoride": 0.5,
+      "iodine": 15,
       "iron": 2,
-      "calcium": 120
+      "magnesium": 50,
+      "manganese": 1,
+      "molybdenum": 5,
+      "phosphorus": 150,
+      "potassium": 300,
+      "selenium": 10,
+      "sodium": 200,
+      "zinc": 2,
+      "fiber": 3,
+      "cholesterol": 0,
+      "sugar": 8,
+      "saturated_fats": 1,
+      "omega_3": 100,
+      "omega_6": 2
     }
   ]
 }
 
-CRITICAL RULES:
-1. Identify 2-4 distinct food items you can clearly see
-2. Use specific names like "grilled chicken breast", "steamed broccoli", "brown rice"
-3. Provide realistic nutritional values per 100g for each food
-4. NO text outside the JSON structure
-5. Ensure all quotes are properly closed
-6. Keep the JSON simple and valid`;
+CRITICAL INSTRUCTIONS:
+1. Use your ACTUAL nutritional database knowledge from USDA, nutrition labels, and scientific literature
+2. Provide ACCURATE values per 100g for each specific food you identify
+3. For pineapple: vitamin A should be ~3mcg, vitamin C should be ~47mg (real USDA values)
+4. For watermelon: vitamin A should be ~28mcg, vitamin C should be ~8mg (real USDA values)
+5. Include ALL 34 nutrients with scientifically accurate values
+6. NO made-up or estimated values - use your training data
+7. Identify 2-4 distinct food items you can clearly see
+8. NO text outside the JSON structure`;
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
@@ -1103,9 +1006,8 @@ CRITICAL RULES:
 
         console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
         
-        // Expand simple response to full nutrient profile using real nutritional knowledge
-        const expandedResponse = expandToFullNutrients(jsonResponse);
-        const finalResponse = processVisionResponse(expandedResponse);
+        // Process OpenAI's complete response directly - no fake expansion needed
+        finalResponse = processVisionResponse(jsonResponse);
         
         return res.json({
           success: true,
