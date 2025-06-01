@@ -924,33 +924,6 @@ INSTRUCTIONS:
           console.log('LEGACY ENDPOINT - Raw response preview (first 1000 chars):', content.substring(0, 1000));
           console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
           
-          // Try to parse the JSON directly first
-          const jsonResponse = JSON.parse(content);
-          console.log('LEGACY ENDPOINT - JSON parsed successfully!');
-          console.log('LEGACY ENDPOINT - Response structure:', {
-            hasIngredients: !!jsonResponse.ingredients,
-            ingredientCount: jsonResponse.ingredients?.length || 0,
-            hasMealName: !!jsonResponse.meal_name
-          });
-          
-          if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
-            console.log(`LEGACY ENDPOINT - Processing ${jsonResponse.ingredients.length} ingredients`);
-            const result = processVisionResponse(jsonResponse);
-            return res.json({
-              success: true,
-              data: result
-            });
-          } else {
-            console.log('LEGACY ENDPOINT - No ingredients found in response');
-            return res.status(500).json({
-              success: false,
-              error: 'No ingredients detected in the image'
-            });
-          }
-        } catch (parseError) {
-          console.error(`LEGACY ENDPOINT - JSON PARSE ERROR: ${parseError.message}`);
-          console.log('LEGACY ENDPOINT - Full raw response:', content);
-          
           // Try to fix the specific unterminated string issue
           try {
             console.log('LEGACY ENDPOINT - Attempting to fix unterminated strings...');
@@ -960,63 +933,17 @@ INSTRUCTIONS:
             repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
             repairedContent = repairedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
             
-            // Fix unterminated strings by finding lines with odd number of quotes
-            const lines = repairedContent.split('\n');
-            const repairedLines = [];
-            
-            for (let i = 0; i < lines.length; i++) {
-              let line = lines[i];
-              
-              // Skip empty lines or lines that are just whitespace/braces
-              if (!line.trim() || /^\s*[{}\[\],]*\s*$/.test(line)) {
-                repairedLines.push(line);
-                continue;
-              }
-              
-              // Count unescaped quotes in the line
-              let quoteCount = 0;
-              let inEscape = false;
-              
-              for (let j = 0; j < line.length; j++) {
-                if (inEscape) {
-                  inEscape = false;
-                  continue;
-                }
-                if (line[j] === '\\') {
-                  inEscape = true;
-                  continue;
-                }
-                if (line[j] === '"') {
-                  quoteCount++;
-                }
-              }
-              
-              // If odd number of quotes, we have an unterminated string
-              if (quoteCount % 2 === 1) {
-                console.log(`LEGACY ENDPOINT - Fixing unterminated string on line ${i + 1}: ${line.substring(0, 50)}...`);
-                
-                // Find where to add the closing quote
-                if (line.endsWith(',')) {
-                  line = line.slice(0, -1) + '",';
-                } else if (line.endsWith('}') || line.endsWith(']')) {
-                  const lastChar = line.slice(-1);
-                  line = line.slice(0, -1) + '"' + lastChar;
-                } else {
-                  line += '"';
-                }
-              }
-              
-              repairedLines.push(line);
-            }
-            
-            repairedContent = repairedLines.join('\n');
-            
-            // Basic cleanup - the issue is likely just formatting
+            // SIMPLE BUT EFFECTIVE: Fix the most common JSON issues
             repairedContent = repairedContent
               .replace(/,\s*}/g, '}')     // Remove trailing commas before }
-              .replace(/,\s*]/g, ']');    // Remove trailing commas before ]
+              .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
+              .replace(/"\s*:\s*([^",}\]]+)(?=\s*\n\s*[}\]])/g, '": "$1"')  // Add quotes around unquoted values
+              .replace(/:\s*([0-9.]+)\s*\n\s*}/g, ': $1\n      }')  // Fix number formatting
+              .replace(/:\s*"([^"]*)\n/g, ': "$1"\n');  // Fix unterminated strings
             
             console.log('LEGACY ENDPOINT - Attempting to parse repaired JSON...');
+            
+            // Try to parse the repaired JSON
             const repairedJson = JSON.parse(repairedContent);
             console.log('LEGACY ENDPOINT - Repaired JSON parsed successfully!');
             
@@ -1061,6 +988,12 @@ INSTRUCTIONS:
             }
           }
           
+          return res.status(500).json({
+            success: false,
+            error: `JSON parsing failed: ${parseError.message}`
+          });
+        } catch (parseError) {
+          console.error(`LEGACY ENDPOINT - JSON PARSE ERROR: ${parseError.message}`);
           return res.status(500).json({
             success: false,
             error: `JSON parsing failed: ${parseError.message}`
