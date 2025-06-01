@@ -574,7 +574,22 @@ CRITICAL RULES:
 
 // Process Vision API response into our expected format
 function processVisionResponse(visionResponse) {
+  console.log('🔄 Processing vision response with ingredients:', visionResponse.ingredients?.length || 0);
+  
   const { ingredients, total } = visionResponse;
+  
+  if (!ingredients || !Array.isArray(ingredients)) {
+    console.error('❌ No valid ingredients array in vision response');
+    return null;
+  }
+  
+  console.log('🔄 Converting flat nutrients to nested format...');
+  
+  // Convert the flat nutrient structure to nested structure expected by app
+  const convertedIngredients = convertFlatNutrientsToNested(ingredients);
+  
+  console.log('✅ Converted ingredients:', convertedIngredients.length);
+  console.log('🔍 First ingredient vitamins keys:', Object.keys(convertedIngredients[0]?.vitamins || {}));
   
   // Helper function to clean ingredient names
   function cleanIngredientName(name) {
@@ -750,7 +765,7 @@ function processVisionResponse(visionResponse) {
   }
   
   // Map ingredients to our format with comprehensive nutrition data and clean names
-  const mappedIngredients = ingredients.map(item => {
+  const mappedIngredients = convertedIngredients.map(item => {
     const cleanName = cleanIngredientName(item.name);
     const weight = item.weight_g || 100.0;
     const calories = item.calories || 0;
