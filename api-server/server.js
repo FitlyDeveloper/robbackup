@@ -174,8 +174,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // SIMPLE and RELIABLE prompt that avoids JSON parsing errors
-    const systemPrompt = `Analyze this food image and identify 2-3 main food items you can see.
+    // RELIABLE prompt - get food names and let server generate nutrients
+    const systemPrompt = `Analyze this food image and identify the main food items you can see.
 
 Return ONLY this JSON structure with NO extra text:
 
@@ -184,26 +184,20 @@ Return ONLY this JSON structure with NO extra text:
     {
       "name": "pineapple",
       "calories": 50,
-      "protein_g": 1,
-      "fat_g": 0,
-      "carbs_g": 13,
-      "vitamin_C": 47,
-      "vitamin_A": 3,
-      "potassium": 109,
-      "fiber": 1.4,
-      "sugar": 10
+      "weight_g": 100
+    },
+    {
+      "name": "watermelon", 
+      "calories": 30,
+      "weight_g": 100
     }
   ]
 }
 
 Rules:
-- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli"
-- Include only the most important 5-6 nutrients per food
-- For fruits: focus on vitamin C, vitamin A, fiber, sugar, potassium
-- For vegetables: focus on vitamin A, vitamin K, vitamin C, fiber, folate
-- For meats: focus on protein, iron, zinc, vitamin B12, cholesterol
-- Return 2-3 ingredients maximum
-- Keep it simple to avoid JSON errors
+- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli", "rice", "salmon"
+- Provide realistic calories per 100g for each food
+- Return 2-4 ingredients maximum
 - NO explanations, NO markdown, ONLY the JSON`;
 
     let finalResponse = null;
@@ -832,8 +826,8 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // SIMPLE and RELIABLE prompt that avoids JSON parsing errors
-      const systemPrompt = `Analyze this food image and identify 2-3 main food items you can see.
+      // RELIABLE prompt - get food names and let server generate nutrients
+      const systemPrompt = `Analyze this food image and identify the main food items you can see.
 
 Return ONLY this JSON structure with NO extra text:
 
@@ -842,26 +836,20 @@ Return ONLY this JSON structure with NO extra text:
     {
       "name": "pineapple",
       "calories": 50,
-      "protein_g": 1,
-      "fat_g": 0,
-      "carbs_g": 13,
-      "vitamin_C": 47,
-      "vitamin_A": 3,
-      "potassium": 109,
-      "fiber": 1.4,
-      "sugar": 10
+      "weight_g": 100
+    },
+    {
+      "name": "watermelon", 
+      "calories": 30,
+      "weight_g": 100
     }
   ]
 }
 
 Rules:
-- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli"
-- Include only the most important 5-6 nutrients per food
-- For fruits: focus on vitamin C, vitamin A, fiber, sugar, potassium
-- For vegetables: focus on vitamin A, vitamin K, vitamin C, fiber, folate
-- For meats: focus on protein, iron, zinc, vitamin B12, cholesterol
-- Return 2-3 ingredients maximum
-- Keep it simple to avoid JSON errors
+- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli", "rice", "salmon"
+- Provide realistic calories per 100g for each food
+- Return 2-4 ingredients maximum
 - NO explanations, NO markdown, ONLY the JSON`;
 
       // Make OpenAI API call with timeout
@@ -959,22 +947,20 @@ Rules:
   }
 });
 
-// Convert simple OpenAI response to full format with all nutrients
+// Convert simple OpenAI response to full format with ALL 34 nutrients
 function convertSimpleToFullFormat(simpleIngredients) {
-  const fullIngredients = simpleIngredients.map(ingredient => {
-    const name = ingredient.name || 'Food Item';
-    const calories = ingredient.calories || 150;
+  
+  // Comprehensive nutrient database by food type
+  function getNutrientsForFood(foodName, calories) {
+    const name = foodName.toLowerCase();
     
-    // Start with the actual values from OpenAI
-    const result = {
-      name: name,
-      weight_g: 100,
-      calories: calories,
-      protein_g: ingredient.protein_g || 0,
-      fat_g: ingredient.fat_g || 0,
-      carbs_g: ingredient.carbs_g || 0,
-      vitamin_A: ingredient.vitamin_A || 0,
-      vitamin_C: ingredient.vitamin_C || 0,
+    // Base macronutrients and micronutrients - will be overridden by specific foods
+    let nutrients = {
+      protein_g: 0,
+      fat_g: 0,
+      carbs_g: 0,
+      vitamin_A: 0,
+      vitamin_C: 0,
       vitamin_D: 0,
       vitamin_E: 0,
       vitamin_K: 0,
@@ -997,48 +983,185 @@ function convertSimpleToFullFormat(simpleIngredients) {
       manganese: 0,
       molybdenum: 0,
       phosphorus: 0,
-      potassium: ingredient.potassium || 0,
+      potassium: 0,
       selenium: 0,
       sodium: 0,
       zinc: 0,
-      fiber: ingredient.fiber || 0,
-      cholesterol: ingredient.cholesterol || 0,
-      sugar: ingredient.sugar || 0,
+      fiber: 0,
+      cholesterol: 0,
+      sugar: 0,
       saturated_fats: 0,
       omega_3: 0,
       omega_6: 0
     };
 
-    // Add intelligent defaults based on food type
-    const foodName = name.toLowerCase();
+    // FRUITS
+    if (name.includes('pineapple')) {
+      nutrients = {
+        protein_g: 0.5, fat_g: 0.1, carbs_g: 13,
+        vitamin_A: 3, vitamin_C: 47, vitamin_D: 0, vitamin_E: 0.02, vitamin_K: 0.7,
+        vitamin_B1: 0.08, vitamin_B2: 0.03, vitamin_B3: 0.5, vitamin_B5: 0.2, vitamin_B6: 0.1,
+        vitamin_B7: 1, vitamin_B9: 18, vitamin_B12: 0,
+        calcium: 13, chloride: 1, chromium: 0.1, copper: 110, fluoride: 0.1,
+        iodine: 1, iron: 0.3, magnesium: 12, manganese: 0.9, molybdenum: 1,
+        phosphorus: 8, potassium: 109, selenium: 0.1, sodium: 1, zinc: 0.1,
+        fiber: 1.4, cholesterol: 0, sugar: 10, saturated_fats: 0, omega_3: 0, omega_6: 0
+      };
+    } else if (name.includes('watermelon')) {
+      nutrients = {
+        protein_g: 0.6, fat_g: 0.2, carbs_g: 8,
+        vitamin_A: 28, vitamin_C: 8, vitamin_D: 0, vitamin_E: 0.05, vitamin_K: 0.1,
+        vitamin_B1: 0.03, vitamin_B2: 0.02, vitamin_B3: 0.2, vitamin_B5: 0.2, vitamin_B6: 0.05,
+        vitamin_B7: 1, vitamin_B9: 3, vitamin_B12: 0,
+        calcium: 7, chloride: 1, chromium: 0.1, copper: 42, fluoride: 0.1,
+        iodine: 1, iron: 0.2, magnesium: 10, manganese: 0.04, molybdenum: 1,
+        phosphorus: 11, potassium: 112, selenium: 0.4, sodium: 1, zinc: 0.1,
+        fiber: 0.4, cholesterol: 0, sugar: 6, saturated_fats: 0.1, omega_3: 0, omega_6: 0.1
+      };
+    } else if (name.includes('apple')) {
+      nutrients = {
+        protein_g: 0.3, fat_g: 0.2, carbs_g: 14,
+        vitamin_A: 3, vitamin_C: 5, vitamin_D: 0, vitamin_E: 0.18, vitamin_K: 2.2,
+        vitamin_B1: 0.02, vitamin_B2: 0.03, vitamin_B3: 0.1, vitamin_B5: 0.06, vitamin_B6: 0.04,
+        vitamin_B7: 1, vitamin_B9: 3, vitamin_B12: 0,
+        calcium: 6, chloride: 1, chromium: 0.1, copper: 27, fluoride: 0.1,
+        iodine: 1, iron: 0.1, magnesium: 5, manganese: 0.04, molybdenum: 1,
+        phosphorus: 11, potassium: 107, selenium: 0, sodium: 1, zinc: 0.04,
+        fiber: 2.4, cholesterol: 0, sugar: 10, saturated_fats: 0.03, omega_3: 9, omega_6: 0.04
+      };
+    } else if (name.includes('banana')) {
+      nutrients = {
+        protein_g: 1.1, fat_g: 0.3, carbs_g: 23,
+        vitamin_A: 3, vitamin_C: 9, vitamin_D: 0, vitamin_E: 0.1, vitamin_K: 0.5,
+        vitamin_B1: 0.03, vitamin_B2: 0.07, vitamin_B3: 0.7, vitamin_B5: 0.3, vitamin_B6: 0.4,
+        vitamin_B7: 2, vitamin_B9: 20, vitamin_B12: 0,
+        calcium: 5, chloride: 1, chromium: 0.1, copper: 78, fluoride: 0.1,
+        iodine: 1, iron: 0.3, magnesium: 27, manganese: 0.3, molybdenum: 1,
+        phosphorus: 22, potassium: 358, selenium: 1, sodium: 1, zinc: 0.2,
+        fiber: 2.6, cholesterol: 0, sugar: 12, saturated_fats: 0.1, omega_3: 27, omega_6: 0.05
+      };
+    }
     
-    if (foodName.includes('pineapple') || foodName.includes('orange') || foodName.includes('citrus')) {
-      result.vitamin_C = result.vitamin_C || 47;
-      result.vitamin_A = result.vitamin_A || 3;
-      result.potassium = result.potassium || 109;
-      result.fiber = result.fiber || 1.4;
-      result.sugar = result.sugar || 10;
-    } else if (foodName.includes('watermelon') || foodName.includes('melon')) {
-      result.vitamin_C = result.vitamin_C || 8;
-      result.vitamin_A = result.vitamin_A || 28;
-      result.potassium = result.potassium || 112;
-      result.fiber = result.fiber || 0.4;
-      result.sugar = result.sugar || 6;
-    } else if (foodName.includes('chicken') || foodName.includes('meat')) {
-      result.protein_g = result.protein_g || 25;
-      result.vitamin_B12 = result.vitamin_B12 || 2.4;
-      result.iron = result.iron || 8;
-      result.zinc = result.zinc || 4;
-      result.cholesterol = result.cholesterol || 70;
-    } else if (foodName.includes('broccoli') || foodName.includes('vegetable')) {
-      result.vitamin_A = result.vitamin_A || 623;
-      result.vitamin_C = result.vitamin_C || 89;
-      result.vitamin_K = result.vitamin_K || 102;
-      result.fiber = result.fiber || 2.6;
-      result.vitamin_B9 = result.vitamin_B9 || 63;
+    // VEGETABLES
+    else if (name.includes('broccoli')) {
+      nutrients = {
+        protein_g: 2.8, fat_g: 0.4, carbs_g: 7,
+        vitamin_A: 623, vitamin_C: 89, vitamin_D: 0, vitamin_E: 0.78, vitamin_K: 102,
+        vitamin_B1: 0.07, vitamin_B2: 0.12, vitamin_B3: 0.6, vitamin_B5: 0.6, vitamin_B6: 0.2,
+        vitamin_B7: 1.5, vitamin_B9: 63, vitamin_B12: 0,
+        calcium: 47, chloride: 1, chromium: 0.1, copper: 49, fluoride: 0.1,
+        iodine: 1, iron: 0.7, magnesium: 21, manganese: 0.2, molybdenum: 1,
+        phosphorus: 66, potassium: 316, selenium: 2.5, sodium: 33, zinc: 0.4,
+        fiber: 2.6, cholesterol: 0, sugar: 1.5, saturated_fats: 0.1, omega_3: 21, omega_6: 0.1
+      };
+    } else if (name.includes('carrot')) {
+      nutrients = {
+        protein_g: 0.9, fat_g: 0.2, carbs_g: 10,
+        vitamin_A: 835, vitamin_C: 6, vitamin_D: 0, vitamin_E: 0.66, vitamin_K: 13,
+        vitamin_B1: 0.07, vitamin_B2: 0.06, vitamin_B3: 1, vitamin_B5: 0.3, vitamin_B6: 0.1,
+        vitamin_B7: 2.5, vitamin_B9: 19, vitamin_B12: 0,
+        calcium: 33, chloride: 1, chromium: 0.1, copper: 45, fluoride: 0.1,
+        iodine: 1, iron: 0.3, magnesium: 12, manganese: 0.1, molybdenum: 1,
+        phosphorus: 35, potassium: 320, selenium: 0.1, sodium: 69, zinc: 0.2,
+        fiber: 2.8, cholesterol: 0, sugar: 4.7, saturated_fats: 0.04, omega_3: 2, omega_6: 0.1
+      };
+    }
+    
+    // PROTEINS
+    else if (name.includes('chicken')) {
+      nutrients = {
+        protein_g: 25, fat_g: 14, carbs_g: 0,
+        vitamin_A: 6, vitamin_C: 1.6, vitamin_D: 0.2, vitamin_E: 0.27, vitamin_K: 0.4,
+        vitamin_B1: 0.07, vitamin_B2: 0.12, vitamin_B3: 8.5, vitamin_B5: 0.8, vitamin_B6: 0.5,
+        vitamin_B7: 10, vitamin_B9: 4, vitamin_B12: 0.3,
+        calcium: 15, chloride: 1, chromium: 0.1, copper: 76, fluoride: 0.1,
+        iodine: 1, iron: 1, magnesium: 20, manganese: 0.02, molybdenum: 1,
+        phosphorus: 147, potassium: 189, selenium: 14, sodium: 70, zinc: 1.3,
+        fiber: 0, cholesterol: 75, sugar: 0, saturated_fats: 4, omega_3: 62, omega_6: 2.5
+      };
+    } else if (name.includes('salmon') || name.includes('fish')) {
+      nutrients = {
+        protein_g: 25, fat_g: 11, carbs_g: 0,
+        vitamin_A: 12, vitamin_C: 0, vitamin_D: 11, vitamin_E: 1.22, vitamin_K: 0.1,
+        vitamin_B1: 0.23, vitamin_B2: 0.15, vitamin_B3: 8.5, vitamin_B5: 1.7, vitamin_B6: 0.6,
+        vitamin_B7: 5, vitamin_B9: 25, vitamin_B12: 2.8,
+        calcium: 9, chloride: 1, chromium: 0.1, copper: 90, fluoride: 0.1,
+        iodine: 1, iron: 0.3, magnesium: 30, manganese: 0.02, molybdenum: 1,
+        phosphorus: 200, potassium: 363, selenium: 36, sodium: 44, zinc: 0.4,
+        fiber: 0, cholesterol: 55, sugar: 0, saturated_fats: 1.8, omega_3: 2260, omega_6: 0.13
+      };
+    } else if (name.includes('beef') || name.includes('steak')) {
+      nutrients = {
+        protein_g: 26, fat_g: 15, carbs_g: 0,
+        vitamin_A: 0, vitamin_C: 0, vitamin_D: 0.1, vitamin_E: 0.6, vitamin_K: 1.6,
+        vitamin_B1: 0.04, vitamin_B2: 0.18, vitamin_B3: 4.4, vitamin_B5: 0.6, vitamin_B6: 0.4,
+        vitamin_B7: 3, vitamin_B9: 6, vitamin_B12: 2.6,
+        calcium: 18, chloride: 1, chromium: 0.1, copper: 73, fluoride: 0.1,
+        iodine: 1, iron: 2.9, magnesium: 21, manganese: 0.01, molybdenum: 1,
+        phosphorus: 198, potassium: 318, selenium: 14.2, sodium: 72, zinc: 4.8,
+        fiber: 0, cholesterol: 90, sugar: 0, saturated_fats: 6, omega_3: 84, omega_6: 0.5
+      };
+    }
+    
+    // GRAINS
+    else if (name.includes('rice')) {
+      nutrients = {
+        protein_g: 2.7, fat_g: 0.3, carbs_g: 23,
+        vitamin_A: 0, vitamin_C: 0, vitamin_D: 0, vitamin_E: 0.11, vitamin_K: 0.1,
+        vitamin_B1: 0.07, vitamin_B2: 0.05, vitamin_B3: 1.6, vitamin_B5: 1, vitamin_B6: 0.16,
+        vitamin_B7: 2, vitamin_B9: 8, vitamin_B12: 0,
+        calcium: 28, chloride: 1, chromium: 0.1, copper: 220, fluoride: 0.1,
+        iodine: 1, iron: 0.8, magnesium: 25, manganese: 1.1, molybdenum: 1,
+        phosphorus: 115, potassium: 115, selenium: 15, sodium: 5, zinc: 1.1,
+        fiber: 0.4, cholesterol: 0, sugar: 0.1, saturated_fats: 0.1, omega_3: 5, omega_6: 0.1
+      };
+    }
+    
+    // DEFAULT for unknown foods - use calories to estimate
+    else {
+      const calorieRatio = calories / 100; // Scale based on calories
+      nutrients = {
+        protein_g: Math.round(calorieRatio * 3),
+        fat_g: Math.round(calorieRatio * 2),
+        carbs_g: Math.round(calorieRatio * 15),
+        vitamin_A: Math.round(calorieRatio * 10),
+        vitamin_C: Math.round(calorieRatio * 5),
+        vitamin_D: 0, vitamin_E: Math.round(calorieRatio * 0.5), vitamin_K: Math.round(calorieRatio * 2),
+        vitamin_B1: Math.round(calorieRatio * 0.1 * 100) / 100,
+        vitamin_B2: Math.round(calorieRatio * 0.1 * 100) / 100,
+        vitamin_B3: Math.round(calorieRatio * 1),
+        vitamin_B5: Math.round(calorieRatio * 0.5 * 100) / 100,
+        vitamin_B6: Math.round(calorieRatio * 0.2 * 100) / 100,
+        vitamin_B7: Math.round(calorieRatio * 2), vitamin_B9: Math.round(calorieRatio * 10), vitamin_B12: 0,
+        calcium: Math.round(calorieRatio * 20), chloride: 1, chromium: 0.1,
+        copper: Math.round(calorieRatio * 50), fluoride: 0.1, iodine: 1,
+        iron: Math.round(calorieRatio * 1), magnesium: Math.round(calorieRatio * 15),
+        manganese: Math.round(calorieRatio * 0.2 * 100) / 100, molybdenum: 1,
+        phosphorus: Math.round(calorieRatio * 50), potassium: Math.round(calorieRatio * 150),
+        selenium: Math.round(calorieRatio * 2), sodium: Math.round(calorieRatio * 10),
+        zinc: Math.round(calorieRatio * 0.5 * 100) / 100,
+        fiber: Math.round(calorieRatio * 2), cholesterol: 0, sugar: Math.round(calorieRatio * 5),
+        saturated_fats: Math.round(calorieRatio * 0.5 * 100) / 100, omega_3: Math.round(calorieRatio * 10), omega_6: Math.round(calorieRatio * 0.2 * 100) / 100
+      };
     }
 
-    return result;
+    return nutrients;
+  }
+
+  const fullIngredients = simpleIngredients.map(ingredient => {
+    const name = ingredient.name || 'Food Item';
+    const calories = ingredient.calories || 100;
+    const weight = ingredient.weight_g || 100;
+    
+    // Get comprehensive nutrients for this food
+    const nutrients = getNutrientsForFood(name, calories);
+    
+    return {
+      name: name,
+      weight_g: weight,
+      calories: calories,
+      ...nutrients
+    };
   });
   
   return {
