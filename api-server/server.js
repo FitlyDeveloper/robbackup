@@ -916,8 +916,27 @@ INSTRUCTIONS:
           console.log('LEGACY ENDPOINT - Raw response preview (first 1000 chars):', content.substring(0, 1000));
           console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
           
-          // Try to parse the JSON directly first
-          const jsonResponse = JSON.parse(content);
+          // Clean the JSON response before parsing
+          let cleanedContent = content.trim();
+          
+          // Remove markdown code blocks if present
+          cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          
+          // Fix common JSON issues
+          cleanedContent = cleanedContent
+            .replace(/,\s*}/g, '}')     // Remove trailing commas before }
+            .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
+            .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
+            .replace(/:\s*,/g, ': null,')       // Fix missing values
+            .replace(/,\s*,/g, ',')             // Fix double commas
+            .replace(/([^\\])"/g, '$1\\"')      // Escape unescaped quotes in strings
+            .replace(/\\"/g, '\\"');            // Ensure quotes are properly escaped
+          
+          console.log('LEGACY ENDPOINT - Cleaned response preview (first 500 chars):', cleanedContent.substring(0, 500));
+          
+          // Try to parse the cleaned JSON
+          const jsonResponse = JSON.parse(cleanedContent);
           console.log('LEGACY ENDPOINT - JSON parsed successfully!');
           console.log('LEGACY ENDPOINT - Response structure:', {
             hasIngredients: !!jsonResponse.ingredients,
@@ -949,6 +968,69 @@ INSTRUCTIONS:
           if (errorMatch) {
             const errorPos = parseInt(errorMatch[1]);
             console.log(`Characters around position ${errorPos}:`, JSON.stringify(content.substring(Math.max(0, errorPos - 20), errorPos + 20)));
+          }
+          
+          // Try a more aggressive fix for unterminated strings
+          try {
+            console.log('LEGACY ENDPOINT - Attempting aggressive JSON repair...');
+            let repairedContent = content.trim();
+            
+            // Remove markdown
+            repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            repairedContent = repairedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            
+            // Fix unterminated strings by finding and closing them
+            const lines = repairedContent.split('\n');
+            const repairedLines = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+              let line = lines[i];
+              
+              // Count quotes in the line
+              const quotes = (line.match(/"/g) || []).length;
+              
+              // If odd number of quotes, the string is unterminated
+              if (quotes % 2 === 1) {
+                // Find the last quote and add a closing quote
+                const lastQuoteIndex = line.lastIndexOf('"');
+                if (lastQuoteIndex !== -1) {
+                  // Add closing quote before any trailing comma or brace
+                  if (line.endsWith(',')) {
+                    line = line.slice(0, -1) + '",';
+                  } else if (line.endsWith('}') || line.endsWith(']')) {
+                    line = line.slice(0, -1) + '"' + line.slice(-1);
+                  } else {
+                    line += '"';
+                  }
+                }
+              }
+              
+              repairedLines.push(line);
+            }
+            
+            repairedContent = repairedLines.join('\n');
+            
+            // Additional cleanup
+            repairedContent = repairedContent
+              .replace(/,\s*}/g, '}')
+              .replace(/,\s*]/g, ']')
+              .replace(/"\s*:\s*,/g, '": null,')
+              .replace(/:\s*,/g, ': null,');
+            
+            console.log('LEGACY ENDPOINT - Repaired content preview:', repairedContent.substring(0, 500));
+            
+            const repairedJson = JSON.parse(repairedContent);
+            console.log('LEGACY ENDPOINT - Repaired JSON parsed successfully!');
+            
+            if (repairedJson.ingredients && repairedJson.ingredients.length > 0) {
+              const result = processVisionResponse(repairedJson);
+              return res.json({
+                success: true,
+                data: result
+              });
+            }
+          } catch (repairError) {
+            console.log('LEGACY ENDPOINT - Repair attempt failed:', repairError.message);
           }
           
           return res.status(500).json({
