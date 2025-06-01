@@ -1011,10 +1011,10 @@ INSTRUCTIONS:
             
             repairedContent = repairedLines.join('\n');
             
-            // Basic cleanup
+            // Basic cleanup - the issue is likely just formatting
             repairedContent = repairedContent
-              .replace(/,\s*}/g, '}')
-              .replace(/,\s*]/g, ']');
+              .replace(/,\s*}/g, '}')     // Remove trailing commas before }
+              .replace(/,\s*]/g, ']');    // Remove trailing commas before ]
             
             console.log('LEGACY ENDPOINT - Attempting to parse repaired JSON...');
             const repairedJson = JSON.parse(repairedContent);
