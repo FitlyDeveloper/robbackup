@@ -481,8 +481,10 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // ULTRA COMPREHENSIVE prompt to detect EVERY ingredient
-    const systemPrompt = `You are a professional food analyst. Examine this image VERY carefully and identify EVERY SINGLE food item, ingredient, component, and element you can see.
+    // COMPREHENSIVE prompt with REALISTIC PORTION ESTIMATION
+    const systemPrompt = `You are a professional food analyst and portion estimation expert. Analyze this food image and identify EVERY food item you can see.
+
+CRITICALLY IMPORTANT: Estimate realistic serving sizes based on what you actually see in the image.
 
 Return ONLY valid JSON:
 
@@ -491,27 +493,35 @@ Return ONLY valid JSON:
   "ingredients": [
     {
       "name": "specific food item",
-      "weight_g": 100,
-      "calories": 50,
-      "protein_g": 2,
-      "fat_g": 1,
-      "carbs_g": 10
+      "weight_g": 150,
+      "calories": 75,
+      "protein_g": 3,
+      "fat_g": 1.5,
+      "carbs_g": 15
     }
   ]
 }
 
-CRITICAL DETECTION RULES:
-1. Look at EVERY part of the image - foreground, background, sides, corners
-2. Identify ALL visible foods: main dishes, sides, garnishes, sauces, seasonings, oils
-3. Break down complex dishes into individual components (e.g., "pasta with tomato sauce" = pasta + tomato sauce + cheese + herbs)
-4. Include small items: herbs, spices, seeds, nuts, garnishes, condiments
-5. Look for partially visible items at edges of plates/bowls
-6. Identify cooking oils, butter, dressings if visible
-7. Include bread, crackers, or other accompaniments
-8. Detect vegetables, fruits, proteins, grains separately even if mixed
-9. Aim for 5-15 ingredients minimum - be thorough!
-10. Use specific names: "cherry tomatoes" not just "tomatoes", "olive oil" not just "oil"
-11. NO extra text outside JSON structure`;
+CRITICAL RULES:
+1. Identify ALL distinct food items visible in the image
+2. Include every ingredient, garnish, sauce, side dish, and component
+3. Use specific food names like "grilled chicken breast", "steamed broccoli", "white rice"
+4. Break down complex dishes into individual components
+5. Include seasonings, oils, and sauces if visible
+
+PORTION ESTIMATION RULES (MOST IMPORTANT):
+- Estimate weight_g based on ACTUAL VISUAL PORTION SIZE you see
+- Main protein portions: 80-200g (palm-sized pieces)
+- Side vegetables: 30-100g (depending on how much is visible)
+- Small garnishes/herbs: 5-20g
+- Sauces/dressings: 10-30g
+- Large vegetables (whole tomato): 80-150g
+- Small vegetables (cherry tomato): 15-25g each
+- If you see a small amount, estimate 20-50g
+- If you see a large portion, estimate 100-250g
+- If you see just a garnish/sprinkle, estimate 5-15g
+
+6. NO extra text outside JSON structure`;
 
     let finalResponse = null;
     
@@ -544,7 +554,7 @@ CRITICAL DETECTION RULES:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Analyze this food image with extreme detail. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items." },
+                  { type: "text", text: "Analyze this food image with extreme detail and estimate REALISTIC PORTION SIZES. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items. MOST IMPORTANTLY: Estimate the actual weight_g based on visual portion size - don't just use 100g for everything!" },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
@@ -1157,29 +1167,47 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // ULTRA SIMPLE prompt to avoid JSON parsing errors
-      const systemPrompt = `Analyze this food image and return ONLY valid JSON:
+      // COMPREHENSIVE prompt with REALISTIC PORTION ESTIMATION
+      const systemPrompt = `You are a professional food analyst and portion estimation expert. Analyze this food image and identify EVERY food item you can see.
+
+CRITICALLY IMPORTANT: Estimate realistic serving sizes based on what you actually see in the image.
+
+Return ONLY valid JSON:
 
 {
-  "meal_name": "Food Name",
+  "meal_name": "Descriptive Meal Name",
   "ingredients": [
     {
-      "name": "food item",
-      "weight_g": 100,
-      "calories": 50,
-      "protein_g": 2,
-      "fat_g": 1,
-      "carbs_g": 10
+      "name": "specific food item",
+      "weight_g": 150,
+      "calories": 75,
+      "protein_g": 3,
+      "fat_g": 1.5,
+      "carbs_g": 15
     }
   ]
 }
 
-Rules:
-1. Identify 1-3 main foods you see clearly
-2. Use simple food names like "pineapple" or "watermelon"
-3. Provide realistic nutrition values per 100g
-4. Keep JSON structure exactly as shown
-5. NO extra text outside JSON`;
+CRITICAL RULES:
+1. Identify ALL distinct food items visible in the image
+2. Include every ingredient, garnish, sauce, side dish, and component
+3. Use specific food names like "grilled chicken breast", "steamed broccoli", "white rice"
+4. Break down complex dishes into individual components
+5. Include seasonings, oils, and sauces if visible
+
+PORTION ESTIMATION RULES (MOST IMPORTANT):
+- Estimate weight_g based on ACTUAL VISUAL PORTION SIZE you see
+- Main protein portions: 80-200g (palm-sized pieces)
+- Side vegetables: 30-100g (depending on how much is visible)
+- Small garnishes/herbs: 5-20g
+- Sauces/dressings: 10-30g
+- Large vegetables (whole tomato): 80-150g
+- Small vegetables (cherry tomato): 15-25g each
+- If you see a small amount, estimate 20-50g
+- If you see a large portion, estimate 100-250g
+- If you see just a garnish/sprinkle, estimate 5-15g
+
+6. NO extra text outside JSON structure`;
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
@@ -1207,7 +1235,7 @@ Rules:
             {
               role: "user",
               content: [
-                { type: "text", text: "Analyze this food image with extreme detail. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items." },
+                { type: "text", text: "Analyze this food image with extreme detail and estimate REALISTIC PORTION SIZES. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items. MOST IMPORTANTLY: Estimate the actual weight_g based on visual portion size - don't just use 100g for everything!" },
                 { type: "image_url", image_url: { url: processedImage } }
               ]
             }
