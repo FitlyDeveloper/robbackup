@@ -107,44 +107,44 @@ function convertFlatNutrientsToNested(ingredients) {
       fat_g: ingredient.fat_g || 0,
       carbs_g: ingredient.carbs_g || 0,
       vitamins: {
-        vitamin_A_mcg: ingredient.vitamin_A || 0,
-        vitamin_C_mg: ingredient.vitamin_C || 0,
-        vitamin_D_mcg: ingredient.vitamin_D || 0,
-        vitamin_E_mg: ingredient.vitamin_E || 0,
-        vitamin_K_mcg: ingredient.vitamin_K || 0,
-        vitamin_B1_mg: ingredient.vitamin_B1 || 0,
-        vitamin_B2_mg: ingredient.vitamin_B2 || 0,
-        vitamin_B3_mg: ingredient.vitamin_B3 || 0,
-        vitamin_B5_mg: ingredient.vitamin_B5 || 0,
-        vitamin_B6_mg: ingredient.vitamin_B6 || 0,
-        vitamin_B7_mcg: ingredient.vitamin_B7 || 0,
-        vitamin_B9_mcg: ingredient.vitamin_B9 || 0,
-        vitamin_B12_mcg: ingredient.vitamin_B12 || 0
+        vitamin_A_mcg: ingredient.vitamin_A || 0,        // 0/700 mcg
+        vitamin_C_mg: ingredient.vitamin_C || 0,         // 0/75 mg
+        vitamin_D_mcg: ingredient.vitamin_D || 0,        // 0/15 mcg
+        vitamin_E_mg: ingredient.vitamin_E || 0,         // 0/15 mg
+        vitamin_K_mcg: ingredient.vitamin_K || 0,        // 0/90 mcg
+        vitamin_B1_mg: ingredient.vitamin_B1 || 0,       // 0/1.1 mg
+        vitamin_B2_mg: ingredient.vitamin_B2 || 0,       // 0/1.1 mg
+        vitamin_B3_mg: ingredient.vitamin_B3 || 0,       // 0/14 mg
+        vitamin_B5_mg: ingredient.vitamin_B5 || 0,       // 0/5 mg
+        vitamin_B6_mg: ingredient.vitamin_B6 || 0,       // 0/1.3 mg
+        vitamin_B7_mcg: ingredient.vitamin_B7 || 0,      // 0/30 mcg
+        vitamin_B9_mcg: ingredient.vitamin_B9 || 0,      // 0/400 mcg
+        vitamin_B12_mcg: ingredient.vitamin_B12 || 0     // 0/2.4 mcg
       },
       minerals: {
-        calcium_mg: ingredient.calcium || 0,
-        chloride_mg: ingredient.chloride || 0,
-        chromium_mcg: ingredient.chromium || 0,
-        copper_mcg: ingredient.copper || 0,
-        fluoride_mg: ingredient.fluoride || 0,
-        iodine_mcg: ingredient.iodine || 0,
-        iron_mg: ingredient.iron || 0,
-        magnesium_mg: ingredient.magnesium || 0,
-        manganese_mg: ingredient.manganese || 0,
-        molybdenum_mcg: ingredient.molybdenum || 0,
-        phosphorus_mg: ingredient.phosphorus || 0,
-        potassium_mg: ingredient.potassium || 0,
-        selenium_mcg: ingredient.selenium || 0,
-        sodium_mg: ingredient.sodium || 0,
-        zinc_mg: ingredient.zinc || 0
+        calcium_mg: ingredient.calcium || 0,            // 0/1000 mg
+        chloride_mg: ingredient.chloride || 0,          // 0/2300 mg
+        chromium_mcg: ingredient.chromium || 0,         // 0/35 mcg
+        copper_mcg: ingredient.copper || 0,             // 0/900 mcg
+        fluoride_mg: ingredient.fluoride || 0,          // 0/4 mg
+        iodine_mcg: ingredient.iodine || 0,             // 0/150 mcg
+        iron_mg: ingredient.iron || 0,                  // 0/18 mg
+        magnesium_mg: ingredient.magnesium || 0,        // 0/400 mg
+        manganese_mg: ingredient.manganese || 0,        // 0/2.3 mg
+        molybdenum_mcg: ingredient.molybdenum || 0,     // 0/45 mcg
+        phosphorus_mg: ingredient.phosphorus || 0,      // 0/700 mg
+        potassium_mg: ingredient.potassium || 0,        // 0/3500 mg
+        selenium_mcg: ingredient.selenium || 0,         // 0/55 mcg
+        sodium_mg: ingredient.sodium || 0,              // 0/2300 mg
+        zinc_mg: ingredient.zinc || 0                   // 0/11 mg
       },
       other: {
-        fiber_g: ingredient.fiber || 0,
-        cholesterol_mg: ingredient.cholesterol || 0,
-        sugar_g: ingredient.sugar || 0,
-        saturated_fats_g: ingredient.saturated_fats || 0,
-        omega_3_mg: ingredient.omega_3 || 0,
-        omega_6_g: ingredient.omega_6 || 0
+        fiber_g: ingredient.fiber || 0,                 // 0/30 g
+        cholesterol_mg: ingredient.cholesterol || 0,    // 0/300 mg
+        sugar_g: ingredient.sugar || 0,                 // 0/100 g
+        saturated_fats_g: ingredient.saturated_fats || 0, // 0/22 g
+        omega_3_mg: ingredient.omega_3 || 0,            // 0/1500 mg
+        omega_6_g: ingredient.omega_6 || 0              // 0/14 g
       }
     };
     
@@ -198,111 +198,212 @@ function getRealUSDANutrients(foodName, carbs, protein, fat) {
     fiber: 0, cholesterol: 0, sugar: 0, saturated_fats: 0, omega_3: 0, omega_6: 0
   };
   
-  // Real USDA values for specific foods (per 100g)
+  // COMPREHENSIVE USDA FOOD DATABASE (per 100g)
+  
+  // FRUITS
   if (foodName.includes('pineapple')) {
-    nutrients.vitamin_A = 3; // mcg
-    nutrients.vitamin_C = 47.8; // mg
-    nutrients.vitamin_K = 0.7; // mcg
-    nutrients.vitamin_B1 = 0.079; // mg
-    nutrients.vitamin_B6 = 0.112; // mg
-    nutrients.vitamin_B9 = 18; // mcg
-    nutrients.calcium = 13; // mg
-    nutrients.iron = 0.29; // mg
-    nutrients.magnesium = 12; // mg
-    nutrients.phosphorus = 8; // mg
-    nutrients.potassium = 109; // mg
-    nutrients.sodium = 1; // mg
-    nutrients.zinc = 0.12; // mg
-    nutrients.fiber = 1.4; // g
-    nutrients.sugar = 9.85; // g
+    nutrients.vitamin_A = 3; nutrients.vitamin_C = 47.8; nutrients.vitamin_K = 0.7;
+    nutrients.vitamin_B1 = 0.079; nutrients.vitamin_B6 = 0.112; nutrients.vitamin_B9 = 18;
+    nutrients.calcium = 13; nutrients.iron = 0.29; nutrients.magnesium = 12;
+    nutrients.phosphorus = 8; nutrients.potassium = 109; nutrients.sodium = 1;
+    nutrients.zinc = 0.12; nutrients.fiber = 1.4; nutrients.sugar = 9.85;
   }
   else if (foodName.includes('watermelon')) {
-    nutrients.vitamin_A = 28; // mcg
-    nutrients.vitamin_C = 8.1; // mg
-    nutrients.vitamin_B1 = 0.033; // mg
-    nutrients.vitamin_B5 = 0.221; // mg
-    nutrients.vitamin_B6 = 0.045; // mg
-    nutrients.calcium = 7; // mg
-    nutrients.iron = 0.24; // mg
-    nutrients.magnesium = 10; // mg
-    nutrients.phosphorus = 11; // mg
-    nutrients.potassium = 112; // mg
-    nutrients.sodium = 1; // mg
-    nutrients.zinc = 0.1; // mg
-    nutrients.fiber = 0.4; // g
-    nutrients.sugar = 6.2; // g
+    nutrients.vitamin_A = 28; nutrients.vitamin_C = 8.1; nutrients.vitamin_B1 = 0.033;
+    nutrients.vitamin_B5 = 0.221; nutrients.vitamin_B6 = 0.045; nutrients.calcium = 7;
+    nutrients.iron = 0.24; nutrients.magnesium = 10; nutrients.phosphorus = 11;
+    nutrients.potassium = 112; nutrients.sodium = 1; nutrients.zinc = 0.1;
+    nutrients.fiber = 0.4; nutrients.sugar = 6.2;
   }
   else if (foodName.includes('apple')) {
-    nutrients.vitamin_A = 3; // mcg
-    nutrients.vitamin_C = 4.6; // mg
-    nutrients.vitamin_K = 2.2; // mcg
-    nutrients.calcium = 6; // mg
-    nutrients.iron = 0.12; // mg
-    nutrients.magnesium = 5; // mg
-    nutrients.phosphorus = 11; // mg
-    nutrients.potassium = 107; // mg
-    nutrients.fiber = 2.4; // g
-    nutrients.sugar = 10.4; // g
+    nutrients.vitamin_A = 3; nutrients.vitamin_C = 4.6; nutrients.vitamin_K = 2.2;
+    nutrients.calcium = 6; nutrients.iron = 0.12; nutrients.magnesium = 5;
+    nutrients.phosphorus = 11; nutrients.potassium = 107; nutrients.fiber = 2.4;
+    nutrients.sugar = 10.4;
   }
   else if (foodName.includes('banana')) {
-    nutrients.vitamin_A = 3; // mcg
-    nutrients.vitamin_C = 8.7; // mg
-    nutrients.vitamin_B6 = 0.367; // mg
-    nutrients.calcium = 5; // mg
-    nutrients.iron = 0.26; // mg
-    nutrients.magnesium = 27; // mg
-    nutrients.phosphorus = 22; // mg
-    nutrients.potassium = 358; // mg
-    nutrients.fiber = 2.6; // g
-    nutrients.sugar = 12.2; // g
+    nutrients.vitamin_A = 3; nutrients.vitamin_C = 8.7; nutrients.vitamin_B6 = 0.367;
+    nutrients.calcium = 5; nutrients.iron = 0.26; nutrients.magnesium = 27;
+    nutrients.phosphorus = 22; nutrients.potassium = 358; nutrients.fiber = 2.6;
+    nutrients.sugar = 12.2;
   }
   else if (foodName.includes('orange')) {
-    nutrients.vitamin_A = 11; // mcg
-    nutrients.vitamin_C = 53.2; // mg
-    nutrients.vitamin_B1 = 0.087; // mg
-    nutrients.vitamin_B9 = 40; // mcg
-    nutrients.calcium = 40; // mg
-    nutrients.iron = 0.1; // mg
-    nutrients.magnesium = 10; // mg
-    nutrients.phosphorus = 14; // mg
-    nutrients.potassium = 181; // mg
-    nutrients.fiber = 2.4; // g
-    nutrients.sugar = 9.4; // g
+    nutrients.vitamin_A = 11; nutrients.vitamin_C = 53.2; nutrients.vitamin_B1 = 0.087;
+    nutrients.vitamin_B9 = 40; nutrients.calcium = 40; nutrients.iron = 0.1;
+    nutrients.magnesium = 10; nutrients.phosphorus = 14; nutrients.potassium = 181;
+    nutrients.fiber = 2.4; nutrients.sugar = 9.4;
   }
-  // Add more specific foods as needed...
+  else if (foodName.includes('strawberry') || foodName.includes('strawberries')) {
+    nutrients.vitamin_A = 1; nutrients.vitamin_C = 58.8; nutrients.vitamin_K = 2.2;
+    nutrients.vitamin_B9 = 24; nutrients.calcium = 16; nutrients.iron = 0.41;
+    nutrients.magnesium = 13; nutrients.phosphorus = 24; nutrients.potassium = 153;
+    nutrients.fiber = 2.0; nutrients.sugar = 4.9;
+  }
+  else if (foodName.includes('grape') || foodName.includes('grapes')) {
+    nutrients.vitamin_A = 3; nutrients.vitamin_C = 10.8; nutrients.vitamin_K = 14.6;
+    nutrients.calcium = 10; nutrients.iron = 0.36; nutrients.magnesium = 7;
+    nutrients.phosphorus = 20; nutrients.potassium = 191; nutrients.fiber = 0.9;
+    nutrients.sugar = 16.25;
+  }
   
-  // Generic estimates for food categories if specific food not found
+  // VEGETABLES
+  else if (foodName.includes('broccoli')) {
+    nutrients.vitamin_A = 31; nutrients.vitamin_C = 89.2; nutrients.vitamin_K = 101.6;
+    nutrients.vitamin_B9 = 63; nutrients.calcium = 47; nutrients.iron = 0.73;
+    nutrients.magnesium = 21; nutrients.phosphorus = 66; nutrients.potassium = 316;
+    nutrients.fiber = 2.6; nutrients.sugar = 1.5;
+  }
+  else if (foodName.includes('spinach')) {
+    nutrients.vitamin_A = 469; nutrients.vitamin_C = 28.1; nutrients.vitamin_K = 483;
+    nutrients.vitamin_B9 = 194; nutrients.calcium = 99; nutrients.iron = 2.71;
+    nutrients.magnesium = 79; nutrients.phosphorus = 49; nutrients.potassium = 558;
+    nutrients.fiber = 2.2; nutrients.sugar = 0.4;
+  }
+  else if (foodName.includes('carrot')) {
+    nutrients.vitamin_A = 835; nutrients.vitamin_C = 5.9; nutrients.vitamin_K = 13.2;
+    nutrients.calcium = 33; nutrients.iron = 0.3; nutrients.magnesium = 12;
+    nutrients.phosphorus = 35; nutrients.potassium = 320; nutrients.fiber = 2.8;
+    nutrients.sugar = 4.7;
+  }
+  else if (foodName.includes('tomato')) {
+    nutrients.vitamin_A = 42; nutrients.vitamin_C = 13.7; nutrients.vitamin_K = 7.9;
+    nutrients.calcium = 10; nutrients.iron = 0.27; nutrients.magnesium = 11;
+    nutrients.phosphorus = 24; nutrients.potassium = 237; nutrients.fiber = 1.2;
+    nutrients.sugar = 2.6;
+  }
+  else if (foodName.includes('pepper') || foodName.includes('bell pepper')) {
+    nutrients.vitamin_A = 157; nutrients.vitamin_C = 127.7; nutrients.vitamin_K = 4.9;
+    nutrients.calcium = 7; nutrients.iron = 0.34; nutrients.magnesium = 10;
+    nutrients.phosphorus = 20; nutrients.potassium = 175; nutrients.fiber = 1.7;
+    nutrients.sugar = 2.4;
+  }
+  
+  // PROTEINS
+  else if (foodName.includes('chicken')) {
+    nutrients.vitamin_B3 = 8.5; nutrients.vitamin_B6 = 0.5; nutrients.vitamin_B12 = 0.3;
+    nutrients.phosphorus = 200; nutrients.selenium = 22; nutrients.iron = 0.9;
+    nutrients.zinc = 1.3; nutrients.magnesium = 25; nutrients.potassium = 256;
+    if (foodName.includes('breast')) {
+      nutrients.protein_g = 31; nutrients.fat_g = 3.6;
+    }
+  }
+  else if (foodName.includes('beef')) {
+    nutrients.vitamin_B3 = 5.8; nutrients.vitamin_B12 = 2.6; nutrients.iron = 2.6;
+    nutrients.zinc = 4.8; nutrients.phosphorus = 198; nutrients.selenium = 14.2;
+    nutrients.magnesium = 21; nutrients.potassium = 318;
+  }
+  else if (foodName.includes('salmon')) {
+    nutrients.vitamin_D = 11; nutrients.vitamin_B12 = 3.2; nutrients.omega_3 = 2260;
+    nutrients.selenium = 36.5; nutrients.phosphorus = 252; nutrients.magnesium = 30;
+    nutrients.potassium = 363; nutrients.iron = 0.8;
+  }
+  else if (foodName.includes('tuna')) {
+    nutrients.vitamin_D = 5.7; nutrients.vitamin_B12 = 9.4; nutrients.omega_3 = 1280;
+    nutrients.selenium = 90.6; nutrients.phosphorus = 254; nutrients.magnesium = 30;
+    nutrients.potassium = 252; nutrients.iron = 1.0;
+  }
+  else if (foodName.includes('egg')) {
+    nutrients.vitamin_A = 160; nutrients.vitamin_D = 2; nutrients.vitamin_B12 = 0.9;
+    nutrients.vitamin_B2 = 0.4; nutrients.selenium = 30.7; nutrients.phosphorus = 198;
+    nutrients.iron = 1.75; nutrients.zinc = 1.3; nutrients.cholesterol = 372;
+  }
+  
+  // GRAINS & STARCHES
+  else if (foodName.includes('rice')) {
+    nutrients.vitamin_B1 = 0.07; nutrients.vitamin_B3 = 1.6; nutrients.iron = 0.8;
+    nutrients.magnesium = 25; nutrients.phosphorus = 115; nutrients.potassium = 115;
+    nutrients.zinc = 1.1; nutrients.fiber = 1.3;
+    if (foodName.includes('brown')) {
+      nutrients.fiber = 1.8; nutrients.magnesium = 43;
+    }
+  }
+  else if (foodName.includes('potato')) {
+    nutrients.vitamin_C = 19.7; nutrients.vitamin_B6 = 0.3; nutrients.potassium = 429;
+    nutrients.phosphorus = 57; nutrients.magnesium = 23; nutrients.iron = 0.8;
+    nutrients.fiber = 2.1;
+  }
+  else if (foodName.includes('bread')) {
+    nutrients.vitamin_B1 = 0.5; nutrients.vitamin_B3 = 4.3; nutrients.iron = 3.6;
+    nutrients.calcium = 149; nutrients.magnesium = 22; nutrients.phosphorus = 89;
+    nutrients.zinc = 0.7; nutrients.fiber = 2.7;
+  }
+  else if (foodName.includes('pasta')) {
+    nutrients.vitamin_B1 = 0.1; nutrients.vitamin_B3 = 1.7; nutrients.iron = 1.3;
+    nutrients.magnesium = 18; nutrients.phosphorus = 58; nutrients.potassium = 44;
+    nutrients.fiber = 1.8;
+  }
+  
+  // DAIRY
+  else if (foodName.includes('milk')) {
+    nutrients.vitamin_A = 46; nutrients.vitamin_D = 1.3; nutrients.vitamin_B12 = 0.4;
+    nutrients.calcium = 113; nutrients.phosphorus = 84; nutrients.potassium = 132;
+    nutrients.magnesium = 10; nutrients.zinc = 0.4;
+  }
+  else if (foodName.includes('cheese')) {
+    nutrients.vitamin_A = 337; nutrients.vitamin_B12 = 0.8; nutrients.calcium = 721;
+    nutrients.phosphorus = 512; nutrients.zinc = 3.1; nutrients.selenium = 14.5;
+    nutrients.saturated_fats = 18.9;
+  }
+  else if (foodName.includes('yogurt')) {
+    nutrients.vitamin_B12 = 0.5; nutrients.calcium = 110; nutrients.phosphorus = 135;
+    nutrients.potassium = 141; nutrients.magnesium = 11; nutrients.zinc = 0.6;
+  }
+  
+  // NUTS & SEEDS
+  else if (foodName.includes('almond')) {
+    nutrients.vitamin_E = 25.6; nutrients.calcium = 269; nutrients.magnesium = 270;
+    nutrients.phosphorus = 481; nutrients.potassium = 733; nutrients.iron = 3.9;
+    nutrients.zinc = 3.1; nutrients.fiber = 12.5;
+  }
+  else if (foodName.includes('walnut')) {
+    nutrients.omega_3 = 9080; nutrients.omega_6 = 38100; nutrients.magnesium = 158;
+    nutrients.phosphorus = 346; nutrients.potassium = 441; nutrients.iron = 2.9;
+    nutrients.zinc = 3.1; nutrients.fiber = 6.7;
+  }
+  
+  // OILS & FATS
+  else if (foodName.includes('olive oil')) {
+    nutrients.vitamin_E = 14.4; nutrients.vitamin_K = 60.2;
+  }
+  else if (foodName.includes('avocado')) {
+    nutrients.vitamin_K = 21; nutrients.vitamin_E = 2.1; nutrients.vitamin_C = 10;
+    nutrients.vitamin_B9 = 81; nutrients.potassium = 485; nutrients.magnesium = 29;
+    nutrients.fiber = 6.7; nutrients.omega_3 = 111;
+  }
+  
+  // Generic estimates for unmatched foods
   else if (foodName.includes('fruit') || foodName.includes('berry')) {
-    nutrients.vitamin_C = carbs * 2; // Fruits are high in vitamin C
-    nutrients.vitamin_A = carbs * 1.5;
-    nutrients.potassium = carbs * 10;
-    nutrients.fiber = carbs * 0.3;
-    nutrients.sugar = carbs * 0.8;
+    nutrients.vitamin_C = Math.max(carbs * 2, 10);
+    nutrients.vitamin_A = Math.max(carbs * 1.5, 5);
+    nutrients.potassium = Math.max(carbs * 10, 100);
+    nutrients.fiber = Math.max(carbs * 0.3, 1);
+    nutrients.sugar = Math.max(carbs * 0.8, 5);
   }
-  else if (foodName.includes('vegetable') || foodName.includes('broccoli') || foodName.includes('spinach')) {
-    nutrients.vitamin_A = carbs * 5; // Vegetables high in vitamin A
-    nutrients.vitamin_C = carbs * 3;
-    nutrients.vitamin_K = carbs * 2;
-    nutrients.iron = protein * 0.5;
-    nutrients.calcium = carbs * 8;
-    nutrients.fiber = carbs * 0.4;
+  else if (foodName.includes('vegetable') || foodName.includes('green')) {
+    nutrients.vitamin_A = Math.max(carbs * 5, 20);
+    nutrients.vitamin_C = Math.max(carbs * 3, 15);
+    nutrients.vitamin_K = Math.max(carbs * 2, 10);
+    nutrients.iron = Math.max(protein * 0.5, 0.5);
+    nutrients.calcium = Math.max(carbs * 8, 20);
+    nutrients.fiber = Math.max(carbs * 0.4, 2);
   }
-  else if (foodName.includes('meat') || foodName.includes('chicken') || foodName.includes('beef')) {
-    nutrients.vitamin_B12 = protein * 0.3; // Meat high in B12
-    nutrients.vitamin_B3 = protein * 1.5;
-    nutrients.iron = protein * 0.4;
-    nutrients.zinc = protein * 0.3;
-    nutrients.phosphorus = protein * 8;
-    nutrients.selenium = protein * 2;
+  else if (foodName.includes('meat') || foodName.includes('protein')) {
+    nutrients.vitamin_B12 = Math.max(protein * 0.3, 1);
+    nutrients.vitamin_B3 = Math.max(protein * 1.5, 5);
+    nutrients.iron = Math.max(protein * 0.4, 1);
+    nutrients.zinc = Math.max(protein * 0.3, 1);
+    nutrients.phosphorus = Math.max(protein * 8, 150);
+    nutrients.selenium = Math.max(protein * 2, 10);
   }
-  else if (foodName.includes('fish') || foodName.includes('salmon')) {
-    nutrients.vitamin_D = protein * 0.5; // Fish high in vitamin D
-    nutrients.vitamin_B12 = protein * 0.4;
-    nutrients.omega_3 = fat * 50; // Fish high in omega-3
-    nutrients.selenium = protein * 3;
-    nutrients.phosphorus = protein * 10;
+  else if (foodName.includes('fish') || foodName.includes('seafood')) {
+    nutrients.vitamin_D = Math.max(protein * 0.5, 2);
+    nutrients.vitamin_B12 = Math.max(protein * 0.4, 2);
+    nutrients.omega_3 = Math.max(fat * 50, 500);
+    nutrients.selenium = Math.max(protein * 3, 20);
+    nutrients.phosphorus = Math.max(protein * 10, 200);
   }
   
+  console.log(`🔬 Generated ${Object.keys(nutrients).filter(k => nutrients[k] > 0).length} nutrients for ${foodName}`);
   return nutrients;
 }
 
@@ -328,8 +429,8 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // ULTRA SIMPLE prompt to avoid JSON parsing errors
-    const systemPrompt = `Analyze this food image and return ONLY valid JSON:
+    // COMPREHENSIVE prompt to detect ALL ingredients
+    const systemPrompt = `Analyze this food image and identify EVERY food item you can see. Return ONLY valid JSON:
 
 {
   "meal_name": "Food Name",
@@ -345,12 +446,15 @@ async function processAndAnalyzeImage(jobId, userId, image) {
   ]
 }
 
-Rules:
-1. Identify 1-3 main foods you see clearly
-2. Use simple food names like "pineapple" or "watermelon"
-3. Provide realistic nutrition values per 100g
-4. Keep JSON structure exactly as shown
-5. NO extra text outside JSON`;
+CRITICAL RULES:
+1. Identify ALL distinct food items visible in the image (not just 1-3)
+2. Include every ingredient, garnish, sauce, side dish, and component
+3. Use specific food names like "grilled chicken breast", "steamed broccoli", "white rice"
+4. Provide realistic nutrition values per 100g for each item
+5. If you see a complex dish, break it down into individual components
+6. Include seasonings, oils, and sauces if visible
+7. Keep JSON structure exactly as shown
+8. NO extra text outside JSON`;
 
     let finalResponse = null;
     
@@ -383,12 +487,12 @@ Rules:
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Analyze this food image. Identify each distinct ingredient and return the exact JSON structure specified. Include ALL nutrients for every ingredient." },
+                  { type: "text", text: "Identify ALL foods in this image - every ingredient, component, and item you can see." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
             ],
-            max_tokens: 1200
+            max_tokens: 800
       })
     });
 
