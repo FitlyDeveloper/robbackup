@@ -913,283 +913,47 @@ INSTRUCTIONS:
         try {
           // Log the raw response for debugging
           console.log('LEGACY ENDPOINT - Raw OpenAI response length:', content.length);
-          console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
+          console.log('LEGACY ENDPOINT - Raw response preview (first 1000 chars):', content.substring(0, 1000));
+          console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
           
-          // Check for position 3711 specifically where the error occurs
-          if (content.length > 3711) {
-            console.log('LEGACY ENDPOINT - Character at position 3711:', JSON.stringify(content.charAt(3711)));
-            console.log('LEGACY ENDPOINT - Context around position 3711:', JSON.stringify(content.substring(3700, 3720)));
-          }
+          // Try to parse the JSON directly first
+          const jsonResponse = JSON.parse(content);
+          console.log('LEGACY ENDPOINT - JSON parsed successfully!');
+          console.log('LEGACY ENDPOINT - Response structure:', {
+            hasIngredients: !!jsonResponse.ingredients,
+            ingredientCount: jsonResponse.ingredients?.length || 0,
+            hasMealName: !!jsonResponse.meal_name
+          });
           
-          // Try to clean the response first
-          let cleanedContent = content.trim();
-          
-          // Remove markdown code blocks if present
-          cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-          
-          // Fix common JSON syntax errors
-          cleanedContent = cleanedContent
-            .replace(/,\s*}/g, '}')     // Remove trailing commas before }
-            .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
-            .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
-            .replace(/:\s*,/g, ': null,')       // Fix missing values
-            .replace(/,\s*,/g, ',');            // Fix double commas
-          
-          console.log('LEGACY ENDPOINT - Cleaned response preview (first 500 chars):', cleanedContent.substring(0, 500));
-          
-          // Try to find the ingredients array and extract complete ingredients
-          const ingredientsMatch = cleanedContent.match(/"ingredients":\s*\[(.*?)\]/s);
-          if (ingredientsMatch) {
-            console.log('LEGACY ENDPOINT - Found ingredients array, attempting to parse...');
-            
-            try {
-              // Try to parse just the ingredients array first
-              const ingredientsArrayStr = `[${ingredientsMatch[1]}]`;
-              const cleanedIngredientsStr = ingredientsArrayStr
-                .replace(/,\s*}/g, '}')
-                .replace(/,\s*]/g, ']')
-                .replace(/"\s*:\s*,/g, '": null,')
-                .replace(/:\s*,/g, ': null,');
-              
-              const ingredientsArray = JSON.parse(cleanedIngredientsStr);
-              
-              if (ingredientsArray && ingredientsArray.length > 0) {
-                console.log(`LEGACY ENDPOINT - Successfully parsed ${ingredientsArray.length} ingredients`);
-                
-                // Calculate totals from ingredients
-                let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
-                
-                ingredientsArray.forEach(ingredient => {
-                  totalCalories += ingredient.calories || 0;
-                  totalProtein += ingredient.protein_g || 0;
-                  totalFat += ingredient.fat_g || 0;
-                  totalCarbs += ingredient.carbs_g || 0;
-                });
-                
-                const repairedResponse = {
-                  ingredients: ingredientsArray,
-                  total: {
-                    calories: totalCalories,
-                    protein_g: totalProtein,
-                    fat_g: totalFat,
-                    carbs_g: totalCarbs
-                  }
-                };
-                
-                console.log('LEGACY ENDPOINT - JSON repair successful via ingredients array!');
-                const result = processVisionResponse(repairedResponse);
+          if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
+            console.log(`LEGACY ENDPOINT - Processing ${jsonResponse.ingredients.length} ingredients`);
+            const result = processVisionResponse(jsonResponse);
             return res.json({
               success: true,
               data: result
             });
-              }
-            } catch (ingredientsError) {
-              console.log('LEGACY ENDPOINT - Ingredients array parsing failed:', ingredientsError.message);
-            }
-          }
-          
-          // Alternative approach: find individual ingredient objects
-          const ingredientMatches = cleanedContent.match(/\{\s*"name":\s*"[^"]+",[\s\S]*?\}/g);
-          if (ingredientMatches && ingredientMatches.length > 0) {
-            console.log(`LEGACY ENDPOINT - Found ${ingredientMatches.length} individual ingredient objects`);
-            
-            const validIngredients = [];
-            
-            for (const ingredientStr of ingredientMatches) {
-              try {
-                const cleanedIngredientStr = ingredientStr
-                  .replace(/,\s*}/g, '}')
-                  .replace(/"\s*:\s*,/g, '": null,')
-                  .replace(/:\s*,/g, ': null,');
-                
-                const ingredient = JSON.parse(cleanedIngredientStr);
-                if (ingredient.name) {
-                  validIngredients.push(ingredient);
-                }
-              } catch (ingredientError) {
-                console.log('LEGACY ENDPOINT - Failed to parse individual ingredient:', ingredientError.message);
-              }
-            }
-            
-            if (validIngredients.length > 0) {
-              console.log(`LEGACY ENDPOINT - Successfully parsed ${validIngredients.length} individual ingredients`);
-              
-              // Calculate totals
-              let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
-              
-              validIngredients.forEach(ingredient => {
-                totalCalories += ingredient.calories || 0;
-                totalProtein += ingredient.protein_g || 0;
-                totalFat += ingredient.fat_g || 0;
-                totalCarbs += ingredient.carbs_g || 0;
-              });
-              
-              const repairedResponse = {
-                ingredients: validIngredients,
-                total: {
-                  calories: totalCalories,
-                  protein_g: totalProtein,
-                  fat_g: totalFat,
-                  carbs_g: totalCarbs
-                }
-              };
-              
-              console.log('LEGACY ENDPOINT - JSON repair successful via individual ingredients!');
-              const result = processVisionResponse(repairedResponse);
-              return res.json({
-                success: true,
-                data: result
+          } else {
+            console.log('LEGACY ENDPOINT - No ingredients found in response');
+            return res.status(500).json({
+              success: false,
+              error: 'No ingredients detected in the image'
             });
           }
-          }
-          
-          return res.status(500).json({
-            success: false,
-            error: 'Invalid response format from image analysis'
-          });
         } catch (parseError) {
-          console.error(`LEGACY ENDPOINT - Error parsing API response: ${parseError}`);
-          console.log('LEGACY ENDPOINT - Raw response length:', content.length);
-          console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
-          console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
+          console.error(`LEGACY ENDPOINT - JSON PARSE ERROR: ${parseError.message}`);
+          console.log('LEGACY ENDPOINT - Full raw response:', content);
+          console.log('LEGACY ENDPOINT - Response character codes at error position:');
           
-          // ROBUST JSON REPAIR LOGIC
-          try {
-            console.log('LEGACY ENDPOINT - Starting robust JSON repair...');
-            
-            let repairedContent = content.trim();
-            
-            // Remove markdown blocks
-            if (repairedContent.startsWith('```json')) {
-              repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            } else if (repairedContent.startsWith('```')) {
-              repairedContent = repairedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
-            }
-            
-            // Clean whitespace but preserve structure
-            repairedContent = repairedContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-            
-            // Fix common JSON syntax errors
-            repairedContent = repairedContent
-              .replace(/,\s*}/g, '}')     // Remove trailing commas before }
-              .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
-              .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
-              .replace(/:\s*,/g, ': null,')       // Fix missing values
-              .replace(/,\s*,/g, ',');            // Fix double commas
-            
-            // Try to find the ingredients array and extract complete ingredients
-            const ingredientsMatch = repairedContent.match(/"ingredients":\s*\[(.*?)\]/s);
-            if (ingredientsMatch) {
-              console.log('LEGACY ENDPOINT - Found ingredients array, attempting to parse...');
-              
-              try {
-                // Try to parse just the ingredients array first
-                const ingredientsArrayStr = `[${ingredientsMatch[1]}]`;
-                const cleanedIngredientsStr = ingredientsArrayStr
-                  .replace(/,\s*}/g, '}')
-                  .replace(/,\s*]/g, ']')
-                  .replace(/"\s*:\s*,/g, '": null,')
-                  .replace(/:\s*,/g, ': null,');
-                
-                const ingredientsArray = JSON.parse(cleanedIngredientsStr);
-              
-                if (ingredientsArray && ingredientsArray.length > 0) {
-                  console.log(`LEGACY ENDPOINT - Successfully parsed ${ingredientsArray.length} ingredients`);
-                
-                // Calculate totals from ingredients
-                let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
-                
-                  ingredientsArray.forEach(ingredient => {
-                  totalCalories += ingredient.calories || 0;
-                  totalProtein += ingredient.protein_g || 0;
-                  totalFat += ingredient.fat_g || 0;
-                  totalCarbs += ingredient.carbs_g || 0;
-                });
-                
-                  const repairedResponse = {
-                    ingredients: ingredientsArray,
-                    total: {
-                  calories: totalCalories,
-                  protein_g: totalProtein,
-                  fat_g: totalFat,
-                  carbs_g: totalCarbs
-                    }
-                };
-                
-                  console.log('LEGACY ENDPOINT - JSON repair successful via ingredients array!');
-                  const result = processVisionResponse(repairedResponse);
-                return res.json({
-                  success: true,
-                  data: result
-                });
-              }
-              } catch (ingredientsError) {
-                console.log('LEGACY ENDPOINT - Ingredients array parsing failed:', ingredientsError.message);
-              }
-            }
-            
-            // Alternative approach: find individual ingredient objects
-            const ingredientMatches = repairedContent.match(/\{\s*"name":\s*"[^"]+",[\s\S]*?\}/g);
-            if (ingredientMatches && ingredientMatches.length > 0) {
-              console.log(`LEGACY ENDPOINT - Found ${ingredientMatches.length} individual ingredient objects`);
-              
-              const validIngredients = [];
-              
-              for (const ingredientStr of ingredientMatches) {
-                try {
-                  const cleanedIngredientStr = ingredientStr
-                    .replace(/,\s*}/g, '}')
-                    .replace(/"\s*:\s*,/g, '": null,')
-                    .replace(/:\s*,/g, ': null,');
-                  
-                  const ingredient = JSON.parse(cleanedIngredientStr);
-                  if (ingredient.name) {
-                    validIngredients.push(ingredient);
-                  }
-                } catch (ingredientError) {
-                  console.log('LEGACY ENDPOINT - Failed to parse individual ingredient:', ingredientError.message);
-                }
-              }
-              
-              if (validIngredients.length > 0) {
-                console.log(`LEGACY ENDPOINT - Successfully parsed ${validIngredients.length} individual ingredients`);
-                
-                // Calculate totals
-                let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
-                
-                validIngredients.forEach(ingredient => {
-                  totalCalories += ingredient.calories || 0;
-                  totalProtein += ingredient.protein_g || 0;
-                  totalFat += ingredient.fat_g || 0;
-                  totalCarbs += ingredient.carbs_g || 0;
-              });
-              
-                const repairedResponse = {
-                  ingredients: validIngredients,
-                total: {
-                    calories: totalCalories,
-                    protein_g: totalProtein,
-                    fat_g: totalFat,
-                    carbs_g: totalCarbs
-                }
-              };
-              
-                console.log('LEGACY ENDPOINT - JSON repair successful via individual ingredients!');
-                const result = processVisionResponse(repairedResponse);
-              return res.json({
-                success: true,
-                data: result
-              });
-              }
-            }
-            
-          } catch (repairError) {
-            console.log('LEGACY ENDPOINT - JSON repair failed:', repairError.message);
+          // Find the error position if available
+          const errorMatch = parseError.message.match(/position (\d+)/);
+          if (errorMatch) {
+            const errorPos = parseInt(errorMatch[1]);
+            console.log(`Characters around position ${errorPos}:`, JSON.stringify(content.substring(Math.max(0, errorPos - 20), errorPos + 20)));
           }
           
           return res.status(500).json({
             success: false,
-            error: 'Invalid response format from image analysis'
+            error: `JSON parsing failed: ${parseError.message}`
           });
         }
       } else {
