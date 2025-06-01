@@ -570,7 +570,7 @@ function processVisionResponse(visionResponse) {
     const calories = item.calories || 0;
     
     const ingredient = {
-      name: `${cleanName} - ${weight}g - ${calories} kcal`,
+      name: cleanName,
       weight_g: weight,
       calories: calories,
       protein_g: item.protein_g || 0,
@@ -602,10 +602,7 @@ function processVisionResponse(visionResponse) {
   });
   
   // Generate appropriate meal name
-  const foodNames = mappedIngredients.map(item => {
-    // Extract clean name from the formatted name (before the first " - ")
-    return item.name.split(' - ')[0];
-  });
+  const foodNames = mappedIngredients.map(item => item.name);
   const mealName = generateMealName(foodNames);
   
   // Build comprehensive response with all nutrition data
