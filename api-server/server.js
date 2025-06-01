@@ -174,71 +174,37 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // System prompt for accurate food recognition - ULTRA SIMPLIFIED TO AVOID JSON ERRORS
-    const systemPrompt = `You are a food analyst. Analyze the image and identify the main food items visible.
+    // SIMPLE and RELIABLE prompt that avoids JSON parsing errors
+    const systemPrompt = `Analyze this food image and identify 2-3 main food items you can see.
 
-Return ONLY valid JSON with this EXACT structure (no extra text):
+Return ONLY this JSON structure with NO extra text:
 
 {
-  "meal_name": "Descriptive Meal Name",
   "ingredients": [
     {
-      "name": "specific food name",
-      "weight_g": 100,
-      "calories": 150,
-      "protein_g": 5,
-      "fat_g": 2,
-      "carbs_g": 20,
-      "vitamin_A": 500,
-      "vitamin_C": 25,
-      "vitamin_D": 2,
-      "vitamin_E": 3,
-      "vitamin_K": 15,
-      "vitamin_B1": 0.3,
-      "vitamin_B2": 0.4,
-      "vitamin_B3": 4,
-      "vitamin_B5": 1.2,
-      "vitamin_B6": 0.5,
-      "vitamin_B7": 8,
-      "vitamin_B9": 50,
-      "vitamin_B12": 1.5,
-      "calcium": 120,
-      "chloride": 150,
-      "chromium": 3,
-      "copper": 150,
-      "fluoride": 0.3,
-      "iodine": 25,
-      "iron": 6,
-      "magnesium": 80,
-      "manganese": 1.2,
-      "molybdenum": 12,
-      "phosphorus": 200,
-      "potassium": 350,
-      "selenium": 15,
-      "sodium": 120,
-      "zinc": 3,
-      "fiber": 8,
-      "cholesterol": 15,
-      "sugar": 12,
-      "saturated_fats": 1.5,
-      "omega_3": 200,
-      "omega_6": 1.8
+      "name": "pineapple",
+      "calories": 50,
+      "protein_g": 1,
+      "fat_g": 0,
+      "carbs_g": 13,
+      "vitamin_C": 47,
+      "vitamin_A": 3,
+      "potassium": 109,
+      "fiber": 1.4,
+      "sugar": 10
     }
   ]
 }
 
-CRITICAL RULES:
-1. Identify 2-4 distinct food items you can clearly see
-2. Use specific names: "grilled chicken breast", "steamed broccoli", "brown rice", "mixed salad"
-3. ALL numeric values must be realistic for that specific food type
-4. For fruits: high vitamin C, moderate vitamin A, low protein
-5. For vegetables: high vitamin A/K, moderate vitamin C, high fiber
-6. For meats: high protein, B vitamins, iron, zinc, some cholesterol
-7. For grains: B vitamins, fiber, moderate protein
-8. NO text outside the JSON structure
-9. Ensure all quotes are properly closed
-10. Do NOT include any explanations or markdown
-11. Include ALL nutrients for each ingredient with REALISTIC values based on the food type`;
+Rules:
+- Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli"
+- Include only the most important 5-6 nutrients per food
+- For fruits: focus on vitamin C, vitamin A, fiber, sugar, potassium
+- For vegetables: focus on vitamin A, vitamin K, vitamin C, fiber, folate
+- For meats: focus on protein, iron, zinc, vitamin B12, cholesterol
+- Return 2-3 ingredients maximum
+- Keep it simple to avoid JSON errors
+- NO explanations, NO markdown, ONLY the JSON`;
 
     let finalResponse = null;
     
@@ -866,7 +832,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // ULTRA SIMPLE prompt that focuses on just getting food names
+      // SIMPLE and RELIABLE prompt that avoids JSON parsing errors
       const systemPrompt = `Analyze this food image and identify 2-3 main food items you can see.
 
 Return ONLY this JSON structure with NO extra text:
@@ -874,57 +840,28 @@ Return ONLY this JSON structure with NO extra text:
 {
   "ingredients": [
     {
-      "name": "specific food name",
-      "calories": 150,
-      "protein_g": 5,
-      "fat_g": 2,
-      "carbs_g": 20,
-      "vitamin_A": 500,
-      "vitamin_C": 25,
-      "vitamin_D": 2,
-      "vitamin_E": 3,
-      "vitamin_K": 15,
-      "vitamin_B1": 0.3,
-      "vitamin_B2": 0.4,
-      "vitamin_B3": 4,
-      "vitamin_B5": 1.2,
-      "vitamin_B6": 0.5,
-      "vitamin_B7": 8,
-      "vitamin_B9": 50,
-      "vitamin_B12": 1.5,
-      "calcium": 120,
-      "chloride": 150,
-      "chromium": 3,
-      "copper": 150,
-      "fluoride": 0.3,
-      "iodine": 25,
-      "iron": 6,
-      "magnesium": 80,
-      "manganese": 1.2,
-      "molybdenum": 12,
-      "phosphorus": 200,
-      "potassium": 350,
-      "selenium": 15,
-      "sodium": 120,
-      "zinc": 3,
-      "fiber": 8,
-      "cholesterol": 15,
-      "sugar": 12,
-      "saturated_fats": 1.5,
-      "omega_3": 200,
-      "omega_6": 1.8
+      "name": "pineapple",
+      "calories": 50,
+      "protein_g": 1,
+      "fat_g": 0,
+      "carbs_g": 13,
+      "vitamin_C": 47,
+      "vitamin_A": 3,
+      "potassium": 109,
+      "fiber": 1.4,
+      "sugar": 10
     }
   ]
 }
 
 Rules:
 - Use specific food names like "pineapple", "watermelon", "chicken breast", "broccoli"
-- ALL numeric values must be realistic for that specific food type
-- For fruits: high vitamin C, moderate vitamin A, low protein, natural sugars
-- For vegetables: high vitamin A/K, moderate vitamin C, high fiber, low calories
-- For meats: high protein, B vitamins, iron, zinc, some cholesterol
-- For grains: B vitamins, fiber, moderate protein
+- Include only the most important 5-6 nutrients per food
+- For fruits: focus on vitamin C, vitamin A, fiber, sugar, potassium
+- For vegetables: focus on vitamin A, vitamin K, vitamin C, fiber, folate
+- For meats: focus on protein, iron, zinc, vitamin B12, cholesterol
 - Return 2-3 ingredients maximum
+- Keep it simple to avoid JSON errors
 - NO explanations, NO markdown, ONLY the JSON`;
 
       // Make OpenAI API call with timeout
@@ -1028,8 +965,8 @@ function convertSimpleToFullFormat(simpleIngredients) {
     const name = ingredient.name || 'Food Item';
     const calories = ingredient.calories || 150;
     
-    // Use the actual micronutrient values from OpenAI instead of calculating from calories
-    return {
+    // Start with the actual values from OpenAI
+    const result = {
       name: name,
       weight_g: 100,
       calories: calories,
@@ -1038,39 +975,70 @@ function convertSimpleToFullFormat(simpleIngredients) {
       carbs_g: ingredient.carbs_g || 0,
       vitamin_A: ingredient.vitamin_A || 0,
       vitamin_C: ingredient.vitamin_C || 0,
-      vitamin_D: ingredient.vitamin_D || 0,
-      vitamin_E: ingredient.vitamin_E || 0,
-      vitamin_K: ingredient.vitamin_K || 0,
-      vitamin_B1: ingredient.vitamin_B1 || 0,
-      vitamin_B2: ingredient.vitamin_B2 || 0,
-      vitamin_B3: ingredient.vitamin_B3 || 0,
-      vitamin_B5: ingredient.vitamin_B5 || 0,
-      vitamin_B6: ingredient.vitamin_B6 || 0,
-      vitamin_B7: ingredient.vitamin_B7 || 0,
-      vitamin_B9: ingredient.vitamin_B9 || 0,
-      vitamin_B12: ingredient.vitamin_B12 || 0,
-      calcium: ingredient.calcium || 0,
-      chloride: ingredient.chloride || 0,
-      chromium: ingredient.chromium || 0,
-      copper: ingredient.copper || 0,
-      fluoride: ingredient.fluoride || 0,
-      iodine: ingredient.iodine || 0,
-      iron: ingredient.iron || 0,
-      magnesium: ingredient.magnesium || 0,
-      manganese: ingredient.manganese || 0,
-      molybdenum: ingredient.molybdenum || 0,
-      phosphorus: ingredient.phosphorus || 0,
+      vitamin_D: 0,
+      vitamin_E: 0,
+      vitamin_K: 0,
+      vitamin_B1: 0,
+      vitamin_B2: 0,
+      vitamin_B3: 0,
+      vitamin_B5: 0,
+      vitamin_B6: 0,
+      vitamin_B7: 0,
+      vitamin_B9: 0,
+      vitamin_B12: 0,
+      calcium: 0,
+      chloride: 0,
+      chromium: 0,
+      copper: 0,
+      fluoride: 0,
+      iodine: 0,
+      iron: 0,
+      magnesium: 0,
+      manganese: 0,
+      molybdenum: 0,
+      phosphorus: 0,
       potassium: ingredient.potassium || 0,
-      selenium: ingredient.selenium || 0,
-      sodium: ingredient.sodium || 0,
-      zinc: ingredient.zinc || 0,
+      selenium: 0,
+      sodium: 0,
+      zinc: 0,
       fiber: ingredient.fiber || 0,
       cholesterol: ingredient.cholesterol || 0,
       sugar: ingredient.sugar || 0,
-      saturated_fats: ingredient.saturated_fats || 0,
-      omega_3: ingredient.omega_3 || 0,
-      omega_6: ingredient.omega_6 || 0
+      saturated_fats: 0,
+      omega_3: 0,
+      omega_6: 0
     };
+
+    // Add intelligent defaults based on food type
+    const foodName = name.toLowerCase();
+    
+    if (foodName.includes('pineapple') || foodName.includes('orange') || foodName.includes('citrus')) {
+      result.vitamin_C = result.vitamin_C || 47;
+      result.vitamin_A = result.vitamin_A || 3;
+      result.potassium = result.potassium || 109;
+      result.fiber = result.fiber || 1.4;
+      result.sugar = result.sugar || 10;
+    } else if (foodName.includes('watermelon') || foodName.includes('melon')) {
+      result.vitamin_C = result.vitamin_C || 8;
+      result.vitamin_A = result.vitamin_A || 28;
+      result.potassium = result.potassium || 112;
+      result.fiber = result.fiber || 0.4;
+      result.sugar = result.sugar || 6;
+    } else if (foodName.includes('chicken') || foodName.includes('meat')) {
+      result.protein_g = result.protein_g || 25;
+      result.vitamin_B12 = result.vitamin_B12 || 2.4;
+      result.iron = result.iron || 8;
+      result.zinc = result.zinc || 4;
+      result.cholesterol = result.cholesterol || 70;
+    } else if (foodName.includes('broccoli') || foodName.includes('vegetable')) {
+      result.vitamin_A = result.vitamin_A || 623;
+      result.vitamin_C = result.vitamin_C || 89;
+      result.vitamin_K = result.vitamin_K || 102;
+      result.fiber = result.fiber || 2.6;
+      result.vitamin_B9 = result.vitamin_B9 || 63;
+    }
+
+    return result;
   });
   
   return {
