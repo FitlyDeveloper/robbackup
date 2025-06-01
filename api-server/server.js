@@ -950,13 +950,115 @@ INSTRUCTIONS:
         } catch (parseError) {
           console.error(`LEGACY ENDPOINT - JSON PARSE ERROR: ${parseError.message}`);
           console.log('LEGACY ENDPOINT - Full raw response:', content);
-          console.log('LEGACY ENDPOINT - Response character codes at error position:');
           
-          // Find the error position if available
-          const errorMatch = parseError.message.match(/position (\d+)/);
-          if (errorMatch) {
-            const errorPos = parseInt(errorMatch[1]);
-            console.log(`Characters around position ${errorPos}:`, JSON.stringify(content.substring(Math.max(0, errorPos - 20), errorPos + 20)));
+          // Try to fix the specific unterminated string issue
+          try {
+            console.log('LEGACY ENDPOINT - Attempting to fix unterminated strings...');
+            let repairedContent = content.trim();
+            
+            // Remove markdown blocks
+            repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            repairedContent = repairedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            
+            // Fix unterminated strings by finding lines with odd number of quotes
+            const lines = repairedContent.split('\n');
+            const repairedLines = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+              let line = lines[i];
+              
+              // Skip empty lines or lines that are just whitespace/braces
+              if (!line.trim() || /^\s*[{}\[\],]*\s*$/.test(line)) {
+                repairedLines.push(line);
+                continue;
+              }
+              
+              // Count unescaped quotes in the line
+              let quoteCount = 0;
+              let inEscape = false;
+              
+              for (let j = 0; j < line.length; j++) {
+                if (inEscape) {
+                  inEscape = false;
+                  continue;
+                }
+                if (line[j] === '\\') {
+                  inEscape = true;
+                  continue;
+                }
+                if (line[j] === '"') {
+                  quoteCount++;
+                }
+              }
+              
+              // If odd number of quotes, we have an unterminated string
+              if (quoteCount % 2 === 1) {
+                console.log(`LEGACY ENDPOINT - Fixing unterminated string on line ${i + 1}: ${line.substring(0, 50)}...`);
+                
+                // Find where to add the closing quote
+                if (line.endsWith(',')) {
+                  line = line.slice(0, -1) + '",';
+                } else if (line.endsWith('}') || line.endsWith(']')) {
+                  const lastChar = line.slice(-1);
+                  line = line.slice(0, -1) + '"' + lastChar;
+                } else {
+                  line += '"';
+                }
+              }
+              
+              repairedLines.push(line);
+            }
+            
+            repairedContent = repairedLines.join('\n');
+            
+            // Basic cleanup
+            repairedContent = repairedContent
+              .replace(/,\s*}/g, '}')
+              .replace(/,\s*]/g, ']');
+            
+            console.log('LEGACY ENDPOINT - Attempting to parse repaired JSON...');
+            const repairedJson = JSON.parse(repairedContent);
+            console.log('LEGACY ENDPOINT - Repaired JSON parsed successfully!');
+            
+            if (repairedJson.ingredients && repairedJson.ingredients.length > 0) {
+              const result = processVisionResponse(repairedJson);
+              return res.json({
+                success: true,
+                data: result
+              });
+            } else {
+              return res.status(500).json({
+                success: false,
+                error: 'No ingredients found in repaired response'
+              });
+            }
+          } catch (repairError) {
+            console.log('LEGACY ENDPOINT - Repair attempt failed:', repairError.message);
+            
+            // Last resort: try to extract just the ingredients array
+            try {
+              console.log('LEGACY ENDPOINT - Attempting to extract ingredients array...');
+              const ingredientsMatch = content.match(/"ingredients":\s*\[([\s\S]*?)\]/);
+              if (ingredientsMatch) {
+                const ingredientsStr = `[${ingredientsMatch[1]}]`;
+                const ingredients = JSON.parse(ingredientsStr);
+                
+                if (ingredients && ingredients.length > 0) {
+                  const mockResponse = {
+                    meal_name: "Mixed Plate",
+                    ingredients: ingredients
+                  };
+                  
+                  const result = processVisionResponse(mockResponse);
+                  return res.json({
+                    success: true,
+                    data: result
+                  });
+                }
+              }
+            } catch (extractError) {
+              console.log('LEGACY ENDPOINT - Ingredient extraction failed:', extractError.message);
+            }
           }
           
           return res.status(500).json({
