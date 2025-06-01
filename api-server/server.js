@@ -119,13 +119,15 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
     // System prompt for accurate food recognition - ULTRA SIMPLIFIED TO AVOID JSON ERRORS
-    const systemPrompt = `You are a food analyst. Return ONLY valid JSON with this EXACT structure:
+    const systemPrompt = `You are a food analyst. Analyze the image and identify the main food items visible.
+
+Return ONLY valid JSON with this EXACT structure (no extra text):
 
 {
-  "meal_name": "Food Name",
+  "meal_name": "Descriptive Meal Name",
   "ingredients": [
     {
-      "name": "ingredient1",
+      "name": "specific food name",
       "weight_g": 100,
       "calories": 150,
       "protein_g": 5,
@@ -138,12 +140,13 @@ async function processAndAnalyzeImage(jobId, userId, image) {
   ]
 }
 
-RULES:
-1. Identify 2-3 food items in the image
-2. Use simple names (chicken, rice, vegetables)
-3. ALL numbers must be integers or simple decimals
-4. Return ONLY the JSON, no other text
-5. Do NOT use quotes inside string values`;
+CRITICAL RULES:
+1. Identify 2-4 distinct food items you can clearly see
+2. Use specific names: "grilled chicken breast", "steamed broccoli", "brown rice", "mixed salad"
+3. ALL numeric values must be valid numbers (integers or decimals)
+4. NO text outside the JSON structure
+5. Ensure all quotes are properly closed
+6. Do NOT include any explanations or markdown`;
 
     let finalResponse = null;
     
@@ -783,13 +786,15 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // System prompt for accurate food recognition - ULTRA SIMPLIFIED TO AVOID JSON ERRORS
-      const systemPrompt = `You are a food analyst. Return ONLY valid JSON with this EXACT structure:
+      const systemPrompt = `You are a food analyst. Analyze the image and identify the main food items visible.
+
+Return ONLY valid JSON with this EXACT structure (no extra text):
 
 {
-  "meal_name": "Food Name",
+  "meal_name": "Descriptive Meal Name",
   "ingredients": [
     {
-      "name": "ingredient1",
+      "name": "specific food name",
       "weight_g": 100,
       "calories": 150,
       "protein_g": 5,
@@ -802,12 +807,13 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
   ]
 }
 
-RULES:
-1. Identify 2-3 food items in the image
-2. Use simple names (chicken, rice, vegetables)
-3. ALL numbers must be integers or simple decimals
-4. Return ONLY the JSON, no other text
-5. Do NOT use quotes inside string values`;
+CRITICAL RULES:
+1. Identify 2-4 distinct food items you can clearly see
+2. Use specific names: "grilled chicken breast", "steamed broccoli", "brown rice", "mixed salad"
+3. ALL numeric values must be valid numbers (integers or decimals)
+4. NO text outside the JSON structure
+5. Ensure all quotes are properly closed
+6. Do NOT include any explanations or markdown`;
 
       // Make OpenAI API call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -845,94 +851,64 @@ RULES:
         try {
           // Log the raw response for debugging
           console.log('LEGACY ENDPOINT - Raw OpenAI response length:', content.length);
-          console.log('LEGACY ENDPOINT - Raw response preview (first 1000 chars):', content.substring(0, 1000));
-          console.log('LEGACY ENDPOINT - Raw response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
+          console.log('LEGACY ENDPOINT - Raw response preview (first 500 chars):', content.substring(0, 500));
           
-          // Try to fix the specific unterminated string issue
+          // FIRST: Try to parse the original response directly
           try {
-            console.log('LEGACY ENDPOINT - Attempting to fix unterminated strings...');
-            let repairedContent = content.trim();
+            const originalJson = JSON.parse(content);
+            console.log('LEGACY ENDPOINT - Original JSON parsed successfully!');
             
-            // Remove markdown blocks
-            repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            repairedContent = repairedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
-            
-            // AGGRESSIVE JSON CLEANING
-            repairedContent = repairedContent
-              .replace(/,\s*}/g, '}')     // Remove trailing commas before }
-              .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
-              .replace(/"\s*:\s*([^",}\]]+)(?=\s*[,}\]])/g, '": "$1"')  // Quote unquoted values
-              .replace(/:\s*([0-9.]+)\s*([,}\]])/g, ': $1$2')  // Fix number formatting
-              .replace(/:\s*"([^"]*)\n/g, ': "$1",\n')  // Fix unterminated strings
-              .replace(/"\s*:\s*"([^"]*)"([^,}\]]*)/g, '": "$1"')  // Fix broken quotes
-              .replace(/([^\\])"/g, '$1\\"')  // Escape unescaped quotes
-              .replace(/\\"/g, '"')  // Unescape quotes we just escaped
-              .replace(/([{,]\s*)"([^"]*)"(\s*:\s*)"([^"]*)"([^,}\]]*)/g, '$1"$2"$3"$4"$5'); // Fix quote issues
-            
-            console.log('LEGACY ENDPOINT - Attempting to parse repaired JSON...');
-            
-            // Try to parse the repaired JSON
-            const repairedJson = JSON.parse(repairedContent);
-            console.log('LEGACY ENDPOINT - Repaired JSON parsed successfully!');
-            
-            if (repairedJson.ingredients && repairedJson.ingredients.length > 0) {
-              const result = processVisionResponse(repairedJson);
+            if (originalJson.ingredients && originalJson.ingredients.length > 0) {
+              const result = processVisionResponse(originalJson);
               return res.json({
                 success: true,
                 data: result
               });
             } else {
-              return res.status(500).json({
-                success: false,
-                error: 'No ingredients found in repaired response'
-              });
+              console.log('LEGACY ENDPOINT - No ingredients found in original response');
             }
-          } catch (repairError) {
-            console.log('LEGACY ENDPOINT - Repair attempt failed:', repairError.message);
-            
-            // FINAL FALLBACK: Return a basic response
-            console.log('LEGACY ENDPOINT - Using fallback response...');
-            const fallbackResponse = {
-              meal_name: "Mixed Plate",
-              ingredients: [
-                {
-                  name: "Food Item",
-                  weight_g: 100,
-                  calories: 150,
-                  protein_g: 5,
-                  fat_g: 3,
-                  carbs_g: 20,
-                  vitamins: {
-                    vitamin_A_mcg: 10, vitamin_C_mg: 5, vitamin_D_mcg: 0, vitamin_E_mg: 1, 
-                    vitamin_K_mcg: 2, vitamin_B1_mg: 0.1, vitamin_B2_mg: 0.1, vitamin_B3_mg: 1, 
-                    vitamin_B5_mg: 0.5, vitamin_B6_mg: 0.2, vitamin_B7_mcg: 2, vitamin_B9_mcg: 20, 
-                    vitamin_B12_mcg: 0
-                  },
-                  minerals: {
-                    calcium_mg: 50, chloride_mg: 100, chromium_mcg: 1, copper_mcg: 100, 
-                    fluoride_mg: 0.1, iodine_mcg: 10, iron_mg: 2, magnesium_mg: 25, 
-                    manganese_mg: 0.5, molybdenum_mcg: 5, phosphorus_mg: 80, potassium_mg: 200, 
-                    selenium_mcg: 5, sodium_mg: 50, zinc_mg: 1
-                  },
-                  other: {
-                    fiber_g: 3, cholesterol_mg: 0, sugar_g: 5, saturated_fats_g: 0.5, 
-                    omega_3_mg: 50, omega_6_g: 0.2
-                  }
-                }
-              ]
-            };
-            
-            const result = processVisionResponse(fallbackResponse);
-            return res.json({
-              success: true,
-              data: result,
-              note: "Fallback response used due to parsing issues"
-            });
+          } catch (originalError) {
+            console.log('LEGACY ENDPOINT - Original JSON parse failed:', originalError.message);
           }
+          
+          // SECOND: Try simple JSON cleaning
+          console.log('LEGACY ENDPOINT - Attempting simple JSON cleaning...');
+          let cleanedContent = content.trim();
+          
+          // Remove markdown blocks
+          cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          
+          // Simple cleaning only
+          cleanedContent = cleanedContent
+            .replace(/,\s*}/g, '}')     // Remove trailing commas before }
+            .replace(/,\s*]/g, ']');    // Remove trailing commas before ]
+          
+          try {
+            const cleanedJson = JSON.parse(cleanedContent);
+            console.log('LEGACY ENDPOINT - Cleaned JSON parsed successfully!');
+            
+            if (cleanedJson.ingredients && cleanedJson.ingredients.length > 0) {
+              const result = processVisionResponse(cleanedJson);
+              return res.json({
+                success: true,
+                data: result
+              });
+            } else {
+              console.log('LEGACY ENDPOINT - No ingredients found in cleaned response');
+            }
+          } catch (cleanError) {
+            console.log('LEGACY ENDPOINT - Cleaned JSON parse failed:', cleanError.message);
+          }
+          
+          // THIRD: Log the actual error and return failure
+          console.error('LEGACY ENDPOINT - All JSON parsing attempts failed');
+          console.log('LEGACY ENDPOINT - Raw response (first 1000 chars):', content.substring(0, 1000));
+          console.log('LEGACY ENDPOINT - Raw response (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
           
           return res.status(500).json({
             success: false,
-            error: `JSON parsing failed: Unable to repair malformed JSON`
+            error: 'OpenAI generated invalid JSON that could not be repaired. Please try again.'
           });
         } catch (parseError) {
           console.error(`LEGACY ENDPOINT - JSON PARSE ERROR: ${parseError.message}`);
