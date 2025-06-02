@@ -266,9 +266,18 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       var fat = ingredient['fat'] ?? '0';
       var carbs = ingredient['carbs'] ?? '0';
 
-      print(
-          '[$i] $name - $amount - $calories kcal (${calories.runtimeType}) - ' +
-              'P: $protein, F: $fat, C: $carbs');
+      // Create a copy to avoid modifying the original ingredient map
+      Map<String, dynamic> printableIngredient = Map.from(ingredient);
+      // Remove potentially large/complex fields before printing keys
+      printableIngredient.remove('vitamins');
+      printableIngredient.remove('minerals');
+      printableIngredient.remove('other');
+      printableIngredient
+          .remove('imageBase64'); // Assuming this might be a key for image data
+      printableIngredient.remove('imageBytes'); // Another potential key
+
+      print('[$i] $name - $amount - $calories kcal (${calories.runtimeType}) - ' +
+          'P: $protein, F: $fat, C: $carbs. Other keys: ${printableIngredient.keys.join(', ')}');
     }
 
     print('===========================================\n');
@@ -667,9 +676,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       if (widget.ingredients == null || widget.ingredients!.isEmpty) {
         // Load ingredients array
         final ingredientsJson = prefs.getString('food_ingredients_$foodId');
-        print('Loaded ingredients JSON: $ingredientsJson');
-
         if (ingredientsJson != null) {
+          print(
+              'Loaded ingredients JSON (first 200 chars): ${ingredientsJson.length > 200 ? ingredientsJson.substring(0, 200) + "..." : ingredientsJson}');
           try {
             final List<dynamic> decoded = jsonDecode(ingredientsJson);
             _ingredients = [];
