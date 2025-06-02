@@ -709,6 +709,66 @@ class _SnapFoodState extends State<SnapFood> {
         });
         print('🔍 ================================================\n');
 
+        // 🔧 CONVERT UNITS TO MATCH NUTRITION.DART EXPECTATIONS
+        Map<String, dynamic> correctedMicronutrients = {};
+        allMicronutrients.forEach((key, value) {
+          double numValue = double.tryParse(value.toString()) ?? 0.0;
+
+          // Convert vitamins that should be in mcg (OpenAI gives them in mg)
+          if (key == 'vitamin_a') {
+            // OpenAI: 750mg -> Nutrition.dart expects: 750mcg
+            correctedMicronutrients[key] =
+                (numValue / 1000).toStringAsFixed(1); // mg to mcg conversion
+          } else if (key == 'vitamin_d' ||
+              key == 'vitamin_k' ||
+              key == 'vitamin_b7' ||
+              key == 'vitamin_b9' ||
+              key == 'vitamin_b12') {
+            // These should be in mcg, OpenAI gives mg
+            correctedMicronutrients[key] =
+                (numValue / 1000).toStringAsFixed(1); // mg to mcg
+          } else if (key == 'selenium') {
+            // Selenium should be in mcg, OpenAI gives mg
+            correctedMicronutrients[key] =
+                (numValue / 1000).toStringAsFixed(1); // mg to mcg
+          } else {
+            // Keep other nutrients as-is (already in correct units)
+            correctedMicronutrients[key] = value.toString();
+          }
+        });
+
+        print('🔧 CORRECTED UNITS FOR NUTRITION.DART:');
+        print('📊 CORRECTED VITAMINS:');
+        correctedMicronutrients.forEach((key, value) {
+          if (key.startsWith('vitamin_')) {
+            print('  • $key: ${value}${_getUnitForVitamin(key)}');
+          }
+        });
+        print('⚗️ CORRECTED MINERALS:');
+        [
+          'calcium',
+          'chloride',
+          'chromium',
+          'copper',
+          'fluoride',
+          'iodine',
+          'iron',
+          'magnesium',
+          'manganese',
+          'molybdenum',
+          'phosphorus',
+          'potassium',
+          'selenium',
+          'sodium',
+          'zinc'
+        ].forEach((key) {
+          if (correctedMicronutrients.containsKey(key)) {
+            print(
+                '  • $key: ${correctedMicronutrients[key]}${_getUnitForMineral(key)}');
+          }
+        });
+        print('🔧 ================================================\n');
+
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
 
@@ -1001,7 +1061,7 @@ class _SnapFoodState extends State<SnapFood> {
           ingredientsList,
           healthScore,
           scanId, // Pass the scanId parameter
-          allMicronutrients, // Pass all 34 extracted micronutrients
+          correctedMicronutrients, // Pass unit-corrected micronutrients
         );
 
         // Mark navigation as handled
