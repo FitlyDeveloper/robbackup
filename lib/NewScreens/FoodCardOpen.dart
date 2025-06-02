@@ -7317,13 +7317,15 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     if (widget.additionalNutrients != null &&
         widget.additionalNutrients!.isNotEmpty) {
       totalNutrition.addAll(widget.additionalNutrients!);
+      // SAFER PRINTING:
       print(
-          "Using original OpenAI micronutrient values: ${widget.additionalNutrients}");
+          "Using original OpenAI micronutrient values. Keys: ${widget.additionalNutrients?.keys.join(', ') ?? 'N/A'}. Count: ${widget.additionalNutrients?.length ?? 0}");
     } else {
       // Fallback: Calculate from ingredients only if no original values available
       totalNutrition = _extractOtherNutrients();
+      // SAFER PRINTING:
       print(
-          "Fallback: Extracted additional nutrients from ingredients: $totalNutrition");
+          "Fallback: Extracted additional nutrients from ingredients. Keys: ${totalNutrition.keys.join(', ') ?? 'N/A'}. Count: ${totalNutrition.length ?? 0}");
     }
 
     // Add macros using the correct variable names
