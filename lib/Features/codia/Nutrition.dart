@@ -972,24 +972,20 @@ class _CodiaPage extends State<CodiaPage>
         finalAmount = finalAmount < 0 ? 0 : finalAmount;
       }
 
-      // Use the terminal values directly - these represent actual meal content
       String currentValue = vitamins[vitaminKey]!.value;
       String unit = _extractUnit(currentValue);
-
-      // Display the actual terminal value as both current and target
-      // This shows the real micronutrient content from the scanned meal
-      double displayValue = finalAmount;
-      double progress =
-          1.0; // Always show as complete since this is actual content
-      int percentage = 100; // Always 100% since this is the actual content
-      Color progressColor = greenColor; // Always green for actual content
+      double targetValue = _extractTargetValue(currentValue);
+      double progress = targetValue > 0 ? (finalAmount / targetValue) : 0;
+      int percentage = (progress * 100).round();
+      Color progressColor = _getColorBasedOnProgress(progress);
 
       if (mounted) {
         setState(() {
           vitamins[vitaminKey] = NutrientInfo(
               name: vitaminKey,
-              value: "${displayValue.toStringAsFixed(1)} $unit",
-              percent: "Actual Content",
+              value:
+                  "${finalAmount.toStringAsFixed(1)}/${targetValue.toStringAsFixed(1)} $unit",
+              percent: "$percentage%",
               progress: progress,
               progressColor: progressColor);
         });
@@ -1009,24 +1005,20 @@ class _CodiaPage extends State<CodiaPage>
         finalAmount = finalAmount < 0 ? 0 : finalAmount;
       }
 
-      // Use the terminal values directly - these represent actual meal content
       String currentValue = minerals[mineralKey]!.value;
       String unit = _extractUnit(currentValue);
-
-      // Display the actual terminal value as both current and target
-      // This shows the real micronutrient content from the scanned meal
-      double displayValue = finalAmount;
-      double progress =
-          1.0; // Always show as complete since this is actual content
-      int percentage = 100; // Always 100% since this is the actual content
-      Color progressColor = greenColor; // Always green for actual content
+      double targetValue = _extractTargetValue(currentValue);
+      double progress = targetValue > 0 ? (finalAmount / targetValue) : 0;
+      int percentage = (progress * 100).round();
+      Color progressColor = _getColorBasedOnProgress(progress);
 
       if (mounted) {
         setState(() {
           minerals[mineralKey] = NutrientInfo(
               name: mineralKey,
-              value: "${displayValue.toStringAsFixed(1)} $unit",
-              percent: "Actual Content",
+              value:
+                  "${finalAmount.toStringAsFixed(1)}/${targetValue.toStringAsFixed(1)} $unit",
+              percent: "$percentage%",
               progress: progress,
               progressColor: progressColor);
         });
@@ -1046,24 +1038,20 @@ class _CodiaPage extends State<CodiaPage>
         finalAmount = finalAmount < 0 ? 0 : finalAmount;
       }
 
-      // Use the terminal values directly - these represent actual meal content
       String currentValue = other[nutrientKey]!.value;
       String unit = _extractUnit(currentValue);
-
-      // Display the actual terminal value as both current and target
-      // This shows the real micronutrient content from the scanned meal
-      double displayValue = finalAmount;
-      double progress =
-          1.0; // Always show as complete since this is actual content
-      int percentage = 100; // Always 100% since this is the actual content
-      Color progressColor = greenColor; // Always green for actual content
+      double targetValue = _extractTargetValue(currentValue);
+      double progress = targetValue > 0 ? (finalAmount / targetValue) : 0;
+      int percentage = (progress * 100).round();
+      Color progressColor = _getColorBasedOnProgress(progress);
 
       if (mounted) {
         setState(() {
           other[nutrientKey] = NutrientInfo(
               name: nutrientKey,
-              value: "${displayValue.toStringAsFixed(1)} $unit",
-              percent: "Actual Content",
+              value:
+                  "${finalAmount.toStringAsFixed(1)}/${targetValue.toStringAsFixed(1)} $unit",
+              percent: "$percentage%",
               progress: progress,
               progressColor: progressColor);
         });
