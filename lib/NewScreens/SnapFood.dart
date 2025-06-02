@@ -819,6 +819,60 @@ class _SnapFoodState extends State<SnapFood> {
           if (processedIngredient.isNotEmpty &&
               processedIngredient['name'] != null) {
             ingredientsList.add(processedIngredient);
+
+            // 🔬 LOG DETAILED MICRONUTRIENTS FOR EACH INGREDIENT
+            String ingredientName = processedIngredient['name'];
+            String ingredientAmount = processedIngredient['amount'] ?? '100g';
+            int ingredientCalories = processedIngredient['calories'] ?? 0;
+
+            print(
+                '\n🍽️ ===== INGREDIENT: $ingredientName ($ingredientAmount) - ${ingredientCalories}kcal =====');
+
+            // Log macronutrients
+            print('📊 MACRONUTRIENTS:');
+            print('  🥩 Protein: ${processedIngredient['protein'] ?? 0}g');
+            print('  🧈 Fat: ${processedIngredient['fat'] ?? 0}g');
+            print('  🍞 Carbs: ${processedIngredient['carbs'] ?? 0}g');
+
+            // Log vitamins if available
+            if (processedIngredient.containsKey('vitamins') &&
+                processedIngredient['vitamins'] is Map) {
+              Map<String, dynamic> vitamins = processedIngredient['vitamins'];
+              print('💊 VITAMINS (${vitamins.length}):');
+              vitamins.forEach((key, value) {
+                print('  • $key: ${value}${_getUnitForVitamin(key)}');
+              });
+            } else {
+              print('💊 VITAMINS: No detailed vitamin data available');
+            }
+
+            // Log minerals if available
+            if (processedIngredient.containsKey('minerals') &&
+                processedIngredient['minerals'] is Map) {
+              Map<String, dynamic> minerals = processedIngredient['minerals'];
+              print('⚗️ MINERALS (${minerals.length}):');
+              minerals.forEach((key, value) {
+                print('  • $key: ${value}${_getUnitForMineral(key)}');
+              });
+            } else {
+              print('⚗️ MINERALS: No detailed mineral data available');
+            }
+
+            // Log other nutrients if available
+            if (processedIngredient.containsKey('other') &&
+                processedIngredient['other'] is Map) {
+              Map<String, dynamic> other = processedIngredient['other'];
+              print('🥗 OTHER NUTRIENTS (${other.length}):');
+              other.forEach((key, value) {
+                print('  • $key: ${value}${_getUnitForNutrient(key)}');
+              });
+            } else {
+              print(
+                  '🥗 OTHER NUTRIENTS: No detailed other nutrient data available');
+            }
+
+            print('🔬 ================================================\n');
+
             print('Added valid ingredient: ${processedIngredient['name']}');
           }
         }

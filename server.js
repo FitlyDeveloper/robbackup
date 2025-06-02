@@ -99,21 +99,30 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
               type: 'text',
               text: `Please analyze this food image and return a JSON object with complete nutritional information. Include:
 
-1. Basic info: meal_name, ingredients (with weights), calories, protein, fat, carbs
+1. Basic info: meal_name, ingredients (with realistic weights), calories, protein, fat, carbs
 2. All 13 vitamins: A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12 (with proper units)
 3. All 15 minerals: calcium, chloride, chromium, copper, fluoride, iodine, iron, magnesium, manganese, molybdenum, phosphorus, potassium, selenium, sodium, zinc (with proper units)
 4. Other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6 (with proper units)
 5. Health score (1-10)
+
+IMPORTANT PORTION REQUIREMENTS:
+- Use REALISTIC portion sizes based on what you see in the image
+- Portions should vary: 25g, 75g, 120g, 150g, 200g, etc. (not just 50g/100g)
+- Estimate actual serving sizes from the visual proportions
+- Small garnishes: 5-15g, vegetables: 30-80g, proteins: 80-200g, starches: 60-150g
+
+INGREDIENT FORMAT: "Name (realistic_weight) realistic_calories"
+Examples: "Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal", "Rice (120g) 156kcal"
 
 Use realistic nutritional values based on standard food databases. Return only valid JSON.
 
 Example format:
 {
   "meal_name": "Food Name",
-  "ingredients": ["Item1 (100g) 200kcal", "Item2 (50g) 150kcal"],
-  "calories": "350kcal",
-  "protein": "15g",
-  "fat": "12g", 
+  "ingredients": ["Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal", "Rice (120g) 156kcal"],
+  "calories": "416kcal",
+  "protein": "35g",
+  "fat": "8g", 
   "carbs": "45g",
   "vitamin_a": "500mcg",
   "vitamin_c": "30mg",
