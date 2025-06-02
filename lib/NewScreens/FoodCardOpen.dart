@@ -266,20 +266,42 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       var fat = ingredient['fat'] ?? '0';
       var carbs = ingredient['carbs'] ?? '0';
 
-      // Create a copy to avoid modifying the original ingredient map
       Map<String, dynamic> printableIngredient = Map.from(ingredient);
-      // Remove potentially large/complex fields before printing keys
       printableIngredient.remove('vitamins');
       printableIngredient.remove('minerals');
       printableIngredient.remove('other');
-      printableIngredient
-          .remove('imageBase64'); // Assuming this might be a key for image data
-      printableIngredient.remove('imageBytes'); // Another potential key
+      printableIngredient.remove('imageBase64');
+      printableIngredient.remove('imageBytes');
 
       print('[$i] $name - $amount - $calories kcal (${calories.runtimeType}) - ' +
           'P: $protein, F: $fat, C: $carbs. Other keys: ${printableIngredient.keys.join(', ')}');
-    }
 
+      // More detailed log for the FIRST ingredient's micronutrients
+      if (i == 0) {
+        String vitaminKeys = "N/A";
+        if (ingredient.containsKey('vitamins') &&
+            ingredient['vitamins'] is Map) {
+          vitaminKeys = (ingredient['vitamins'] as Map).keys.join(', ');
+          if (vitaminKeys.isEmpty) vitaminKeys = "empty map";
+        }
+        print('  [$i] Vitamins keys: $vitaminKeys');
+
+        String mineralKeys = "N/A";
+        if (ingredient.containsKey('minerals') &&
+            ingredient['minerals'] is Map) {
+          mineralKeys = (ingredient['minerals'] as Map).keys.join(', ');
+          if (mineralKeys.isEmpty) mineralKeys = "empty map";
+        }
+        print('  [$i] Minerals keys: $mineralKeys');
+
+        String otherNutrientKeys = "N/A";
+        if (ingredient.containsKey('other') && ingredient['other'] is Map) {
+          otherNutrientKeys = (ingredient['other'] as Map).keys.join(', ');
+          if (otherNutrientKeys.isEmpty) otherNutrientKeys = "empty map";
+        }
+        print('  [$i] OtherNutrients keys: $otherNutrientKeys');
+      }
+    }
     print('===========================================\n');
   }
 
