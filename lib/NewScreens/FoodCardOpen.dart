@@ -7304,12 +7304,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     // Calculate total nutrition from current ingredients
     Map<String, dynamic> totalNutrition = _extractOtherNutrients();
 
-    // Add the current additionalNutrients (which have been updated after ingredient deletion)
-    if (widget.additionalNutrients != null) {
-      totalNutrition.addAll(widget.additionalNutrients!);
-      print(
-          "Adding additional nutrients from widget parameter: ${widget.additionalNutrients}");
-    }
+    // REMOVED: Do NOT add widget.additionalNutrients as it overrides calculated ingredient values
+    // The _extractOtherNutrients() method already calculates the correct micronutrients from ingredients
+    print("Extracted additional nutrients from ingredients: $totalNutrition");
 
     // Add macros using the correct variable names
     totalNutrition['protein'] = _protein;
