@@ -481,10 +481,10 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-    // COMPREHENSIVE prompt with REALISTIC PORTION ESTIMATION
-    const systemPrompt = `You are a professional food analyst and portion estimation expert. Analyze this food image and identify EVERY food item you can see.
+    // CLEAN prompt - let OpenAI analyze the actual image
+    const systemPrompt = `You are a professional food analyst. Examine this image and identify every ingredient you can see.
 
-CRITICALLY IMPORTANT: Estimate realistic serving sizes based on what you actually see in the image.
+Estimate the actual serving size of each item based on what you observe in the image.
 
 Return ONLY valid JSON:
 
@@ -502,25 +502,12 @@ Return ONLY valid JSON:
   ]
 }
 
-CRITICAL RULES:
-1. Identify ALL distinct food items visible in the image
-2. Include every ingredient, garnish, sauce, side dish, and component
-3. Use specific food names like "grilled chicken breast", "steamed broccoli", "white rice"
-4. Break down complex dishes into individual components
-5. Include seasonings, oils, and sauces if visible
-
-PORTION ESTIMATION RULES (MOST IMPORTANT):
-- Estimate weight_g based on ACTUAL VISUAL PORTION SIZE you see
-- Main protein portions: 80-200g (palm-sized pieces)
-- Side vegetables: 30-100g (depending on how much is visible)
-- Small garnishes/herbs: 5-20g
-- Sauces/dressings: 10-30g
-- Large vegetables (whole tomato): 80-150g
-- Small vegetables (cherry tomato): 15-25g each
-- If you see a small amount, estimate 20-50g
-- If you see a large portion, estimate 100-250g
-- If you see just a garnish/sprinkle, estimate 5-15g
-
+Rules:
+1. Identify ALL food items visible in the image
+2. Estimate weight_g based on the actual portion size you see
+3. Use specific food names
+4. Break down complex dishes into components
+5. Include all visible ingredients, garnishes, and components
 6. NO extra text outside JSON structure`;
 
     let finalResponse = null;
@@ -554,7 +541,7 @@ PORTION ESTIMATION RULES (MOST IMPORTANT):
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Analyze this food image with extreme detail and estimate REALISTIC PORTION SIZES. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items. MOST IMPORTANTLY: Estimate the actual weight_g based on visual portion size - don't just use 100g for everything!" },
+                  { type: "text", text: "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
@@ -1167,10 +1154,10 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // COMPREHENSIVE prompt with REALISTIC PORTION ESTIMATION
-      const systemPrompt = `You are a professional food analyst and portion estimation expert. Analyze this food image and identify EVERY food item you can see.
+      // CLEAN prompt - let OpenAI analyze the actual image
+      const systemPrompt = `You are a professional food analyst. Examine this image and identify every ingredient you can see.
 
-CRITICALLY IMPORTANT: Estimate realistic serving sizes based on what you actually see in the image.
+Estimate the actual serving size of each item based on what you observe in the image.
 
 Return ONLY valid JSON:
 
@@ -1188,25 +1175,12 @@ Return ONLY valid JSON:
   ]
 }
 
-CRITICAL RULES:
-1. Identify ALL distinct food items visible in the image
-2. Include every ingredient, garnish, sauce, side dish, and component
-3. Use specific food names like "grilled chicken breast", "steamed broccoli", "white rice"
-4. Break down complex dishes into individual components
-5. Include seasonings, oils, and sauces if visible
-
-PORTION ESTIMATION RULES (MOST IMPORTANT):
-- Estimate weight_g based on ACTUAL VISUAL PORTION SIZE you see
-- Main protein portions: 80-200g (palm-sized pieces)
-- Side vegetables: 30-100g (depending on how much is visible)
-- Small garnishes/herbs: 5-20g
-- Sauces/dressings: 10-30g
-- Large vegetables (whole tomato): 80-150g
-- Small vegetables (cherry tomato): 15-25g each
-- If you see a small amount, estimate 20-50g
-- If you see a large portion, estimate 100-250g
-- If you see just a garnish/sprinkle, estimate 5-15g
-
+Rules:
+1. Identify ALL food items visible in the image
+2. Estimate weight_g based on the actual portion size you see
+3. Use specific food names
+4. Break down complex dishes into components
+5. Include all visible ingredients, garnishes, and components
 6. NO extra text outside JSON structure`;
 
       // Make OpenAI API call with timeout
@@ -1235,7 +1209,7 @@ PORTION ESTIMATION RULES (MOST IMPORTANT):
             {
               role: "user",
               content: [
-                { type: "text", text: "Analyze this food image with extreme detail and estimate REALISTIC PORTION SIZES. Look at every corner, every plate, every bowl. Identify EVERY ingredient you can see - aim for at least 5-15 items. Break down complex dishes into components. Include seasonings, oils, garnishes, and small items. MOST IMPORTANTLY: Estimate the actual weight_g based on visual portion size - don't just use 100g for everything!" },
+                { type: "text", text: "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image." },
                 { type: "image_url", image_url: { url: processedImage } }
               ]
             }
