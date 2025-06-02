@@ -97,69 +97,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
           content: [
             {
               type: 'text',
-              text: `Please analyze this food image and return a JSON object with complete nutritional information. Include:
-
-1. Basic info: meal_name, ingredients (with realistic weights), calories, protein, fat, carbs
-2. All 13 vitamins: A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12 (with proper units)
-3. All 15 minerals: calcium, chloride, chromium, copper, fluoride, iodine, iron, magnesium, manganese, molybdenum, phosphorus, potassium, selenium, sodium, zinc (with proper units)
-4. Other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6 (with proper units)
-5. Health score (1-10)
-
-IMPORTANT PORTION REQUIREMENTS:
-- Use REALISTIC portion sizes based on what you see in the image
-- Portions should vary: 25g, 75g, 120g, 150g, 200g, etc. (not just 50g/100g)
-- Estimate actual serving sizes from the visual proportions
-- Small garnishes: 5-15g, vegetables: 30-80g, proteins: 80-200g, starches: 60-150g
-
-INGREDIENT FORMAT: "Name (realistic_weight) realistic_calories"
-Examples: "Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal", "Rice (120g) 156kcal"
-
-Use realistic nutritional values based on standard food databases. Return only valid JSON.
-
-Example format:
-{
-  "meal_name": "Food Name",
-  "ingredients": ["Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal", "Rice (120g) 156kcal"],
-  "calories": "416kcal",
-  "protein": "35g",
-  "fat": "8g", 
-  "carbs": "45g",
-  "vitamin_a": "500mcg",
-  "vitamin_c": "30mg",
-  "vitamin_d": "2mcg",
-  "vitamin_e": "5mg",
-  "vitamin_k": "15mcg",
-  "vitamin_b1": "0.8mg",
-  "vitamin_b2": "0.6mg",
-  "vitamin_b3": "8mg",
-  "vitamin_b5": "3mg",
-  "vitamin_b6": "1mg",
-  "vitamin_b7": "20mcg",
-  "vitamin_b9": "150mcg",
-  "vitamin_b12": "1mcg",
-  "calcium": "200mg",
-  "chloride": "300mg",
-  "chromium": "5mcg",
-  "copper": "200mcg",
-  "fluoride": "0.5mg",
-  "iodine": "20mcg",
-  "iron": "3mg",
-  "magnesium": "80mg",
-  "manganese": "1mg",
-  "molybdenum": "10mcg",
-  "phosphorus": "150mg",
-  "potassium": "400mg",
-  "selenium": "15mcg",
-  "sodium": "500mg",
-  "zinc": "2mg",
-  "fiber": "8g",
-  "cholesterol": "50mg",
-  "sugar": "20g",
-  "saturated_fats": "4g",
-  "omega_3": "200mg",
-  "omega_6": "1g",
-  "health_score": "7/10"
-}`
+              text: `Please analyze this food image and return a JSON object with REALISTIC nutritional information. Use your knowledge of actual food nutrition data.\n\nIMPORTANT NUTRITION GUIDELINES:\n- Vitamin A: Most foods have 0-200 mcg (not mg!), fruits typically 0-50 mcg\n- Vitamin C: Fruits 10-100mg, vegetables 5-50mg, meats 0-5mg\n- Vitamin D: Most foods have 0-5 mcg, only fatty fish/fortified foods have more\n- B vitamins: Usually 0.1-5mg each, B12 mostly in animal products\n- Minerals: Calcium 10-300mg, Iron 0.5-5mg, Potassium 100-800mg\n- Omega-6: Nuts/oils 1-10g, fruits/vegetables 0-0.5g\n- Fiber: Fruits 1-5g per 100g, vegetables 2-8g per 100g\n\nReturn JSON with:\n1. meal_name, ingredients (with realistic weights), calories, protein, fat, carbs\n2. All 13 vitamins with REALISTIC values in proper units (mcg for A,D,K,B7,B9,B12; mg for others)\n3. All 15 minerals with REALISTIC values in mg (except selenium in mcg)\n4. Other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6\n5. Health score (1-10)\n\nUSE REALISTIC PORTION SIZES:\n- Single serving portions (not 500g of meat)\n- Typical meal components (100-200g protein, 50-150g vegetables)\n- Accurate weights based on visual assessment\n\nEXAMPLE REALISTIC VALUES:\n- 100g apple: vitamin_c=5mg, fiber=2g, vitamin_a=3mcg\n- 100g chicken: protein=25g, vitamin_b3=8mg, iron=1mg\n- 100g broccoli: vitamin_c=90mg, fiber=3g, calcium=50mg\n\nDO NOT HALLUCINATE - use actual nutrition knowledge!`
             },
             {
               type: 'image_url',
