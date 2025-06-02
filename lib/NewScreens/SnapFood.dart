@@ -801,17 +801,78 @@ class _SnapFoodState extends State<SnapFood> {
                 print('    • $key: ${value}${_getUnitForNutrient(key)}');
               });
             } else {
-              // Create default other nutrients if missing
-              Map<String, dynamic> otherMap = {
-                'fiber': 2.0,
-                'cholesterol': 10.0,
-                'sugar': 5.0,
-                'saturated_fats': 1.0,
-                'omega_3': 0.2,
-                'omega_6': 0.5,
-              };
+              // FALLBACK: Generate individual ingredient micronutrients from total meal values
+              // This distributes the total micronutrients proportionally based on calories
+              double totalMealCalories = double.tryParse(calories) ?? 1.0;
+              double ingredientCalories =
+                  processedIngredient['calories']?.toDouble() ?? 100.0;
+              double proportion = ingredientCalories / totalMealCalories;
 
-              processedIngredient['other'] = otherMap;
+              print(
+                  '\n🔄 FALLBACK: Generating micronutrients for ${processedIngredient['name']} (${(proportion * 100).toStringAsFixed(1)}% of meal)');
+
+              // Generate vitamins proportionally
+              Map<String, dynamic> generatedVitamins = {};
+              allMicronutrients.forEach((key, value) {
+                if (key.startsWith('vitamin_')) {
+                  double totalValue = double.tryParse(value.toString()) ?? 0.0;
+                  double ingredientValue = totalValue * proportion;
+                  generatedVitamins[key] = ingredientValue.toStringAsFixed(1);
+                }
+              });
+              processedIngredient['vitamins'] = generatedVitamins;
+
+              // Generate minerals proportionally
+              Map<String, dynamic> generatedMinerals = {};
+              List<String> mineralKeys = [
+                'calcium',
+                'chloride',
+                'chromium',
+                'copper',
+                'fluoride',
+                'iodine',
+                'iron',
+                'magnesium',
+                'manganese',
+                'molybdenum',
+                'phosphorus',
+                'potassium',
+                'selenium',
+                'sodium',
+                'zinc'
+              ];
+              mineralKeys.forEach((key) {
+                if (allMicronutrients.containsKey(key)) {
+                  double totalValue =
+                      double.tryParse(allMicronutrients[key].toString()) ?? 0.0;
+                  double ingredientValue = totalValue * proportion;
+                  generatedMinerals[key] = ingredientValue.toStringAsFixed(1);
+                }
+              });
+              processedIngredient['minerals'] = generatedMinerals;
+
+              // Generate other nutrients proportionally
+              Map<String, dynamic> generatedOther = {};
+              List<String> otherKeys = [
+                'fiber',
+                'cholesterol',
+                'sugar',
+                'saturated_fats',
+                'omega_3',
+                'omega_6'
+              ];
+              otherKeys.forEach((key) {
+                if (allMicronutrients.containsKey(key)) {
+                  double totalValue =
+                      double.tryParse(allMicronutrients[key].toString()) ?? 0.0;
+                  double ingredientValue = totalValue * proportion;
+                  generatedOther[key] = ingredientValue.toStringAsFixed(1);
+                }
+              });
+              processedIngredient['other'] = generatedOther;
+
+              print(
+                  '✅ Generated ${generatedVitamins.length} vitamins, ${generatedMinerals.length} minerals, ${generatedOther.length} other nutrients');
             }
           }
 
