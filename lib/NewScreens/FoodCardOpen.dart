@@ -14,12 +14,7 @@ import 'dart:async';
 import 'package:fitness_app/NewScreens/food_helper_methods.dart';
 import 'package:provider/provider.dart';
 import 'dialog_helper.dart';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
-import '../Features/codia/Nutrition.dart' as Nutrition;
-
-// Import the codia_page to access NutritionTracker
-// import '../Features/codia/codia_page.dart' as main_codia;
+import '../Features/codia/Nutrition.dart' as nutrition;
 
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
@@ -87,6 +82,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Keep a backup of original ingredients for restoring if changes are discarded
   List<Map<String, dynamic>> _originalIngredients = [];
+
+  // Keep a backup of original additionalNutrients for restoring if changes are discarded
+  Map<String, dynamic>? _originalAdditionalNutrients;
 
   late AnimationController _bookmarkController;
   late Animation<double> _bookmarkScaleAnimation;
@@ -186,6 +184,17 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       _originalIngredients.add(Map<String, dynamic>.from(ingredient));
     }
     print('Backed up ${_originalIngredients.length} original ingredients');
+
+    // Also backup the original additionalNutrients
+    if (widget.additionalNutrients != null) {
+      _originalAdditionalNutrients =
+          Map<String, dynamic>.from(widget.additionalNutrients!);
+      print(
+          'Backed up ${_originalAdditionalNutrients!.length} original additional nutrients');
+    } else {
+      _originalAdditionalNutrients = null;
+      print('No original additional nutrients to backup');
+    }
   }
 
   // Restore original ingredients when discarding changes
@@ -195,6 +204,51 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       _ingredients.add(Map<String, dynamic>.from(ingredient));
     }
     print('Restored ${_ingredients.length} original ingredients');
+
+    // Also restore the original additionalNutrients
+    if (_originalAdditionalNutrients != null) {
+      widget.additionalNutrients?.clear();
+      widget.additionalNutrients?.addAll(_originalAdditionalNutrients!);
+      print(
+          'Restored ${_originalAdditionalNutrients!.length} original additional nutrients');
+    } else {
+      widget.additionalNutrients?.clear();
+      print('Cleared additional nutrients (no original backup)');
+    }
+
+    // CRITICAL: Clear cached nutrition data in SharedPreferences to force fresh load
+    _clearCachedNutritionData();
+  }
+
+  // Clear cached nutrition data to force fresh load from restored values
+  Future<void> _clearCachedNutritionData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
+      String foodSpecificScanId = "food_nutrition_${foodName}";
+
+      // Clear all possible cached nutrition data keys
+      List<String> keysToRemove = [
+        'nutrition_data_$foodSpecificScanId',
+        'food_nutrition_data_$foodSpecificScanId',
+        'backup_nutrition_$foodSpecificScanId',
+        'nutrition_${foodSpecificScanId}_final',
+        'NUTRITION_DATA_$foodName',
+        'NUTRITION_SCREEN_DATA',
+        'PERMANENT_GLOBAL_NUTRITION_DATA',
+      ];
+
+      for (String key in keysToRemove) {
+        if (prefs.containsKey(key)) {
+          await prefs.remove(key);
+          print('Cleared cached nutrition data: $key');
+        }
+      }
+
+      print('Cleared all cached nutrition data for fresh restore');
+    } catch (e) {
+      print('Error clearing cached nutrition data: $e');
+    }
   }
 
   // Debug method to print ingredient details
@@ -259,9 +313,11 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         'Initializing food data. Current name: $_foodName, ingredients count: ${_ingredients.length}');
 
     // Skip all initialization if we already have ingredients loaded from SharedPreferences
-    if (_ingredients.isNotEmpty) {
+    // BUT only if we don't have fresh ingredients from the API
+    if (_ingredients.isNotEmpty &&
+        (widget.ingredients == null || widget.ingredients!.isEmpty)) {
       print(
-          'Ingredients already loaded from SharedPreferences, skipping initialization');
+          'Ingredients already loaded from SharedPreferences and no fresh API data, skipping initialization');
       return;
     }
 
@@ -340,29 +396,67 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           if (parts.length >= 2) {
             // Add first part with original amount and calories
             if (parts[0].isNotEmpty && parts[0].length <= 16) {
-              _ingredients.add({
+              Map<String, dynamic> firstIngredient = {
                 'name': parts[0].trim(),
                 'amount': amount, // Keep original amount
                 'calories': calories, // Keep original calories
                 'protein': protein,
                 'fat': fat,
                 'carbs': carbs
-              });
+              };
+
+              // PRESERVE MICRONUTRIENT DATA - copy vitamins, minerals, other if they exist
+              if (ingredient.containsKey('vitamins')) {
+                firstIngredient['vitamins'] =
+                    Map<String, dynamic>.from(ingredient['vitamins']);
+                print(
+                    '  Preserved vitamins for ${parts[0].trim()}: ${firstIngredient['vitamins'].keys.toList()}');
+              }
+              if (ingredient.containsKey('minerals')) {
+                firstIngredient['minerals'] =
+                    Map<String, dynamic>.from(ingredient['minerals']);
+                print(
+                    '  Preserved minerals for ${parts[0].trim()}: ${firstIngredient['minerals'].keys.toList()}');
+              }
+              if (ingredient.containsKey('other')) {
+                firstIngredient['other'] =
+                    Map<String, dynamic>.from(ingredient['other']);
+                print(
+                    '  Preserved other nutrients for ${parts[0].trim()}: ${firstIngredient['other'].keys.toList()}');
+              }
+
+              _ingredients.add(firstIngredient);
             } else if (parts[0].isNotEmpty) {
               // First part exceeds 16 characters, truncate with ellipsis
-              _ingredients.add({
+              Map<String, dynamic> firstIngredient = {
                 'name': parts[0].trim().substring(0, 13) + "...",
                 'amount': amount,
                 'calories': calories,
                 'protein': protein,
                 'fat': fat,
                 'carbs': carbs
-              });
+              };
+
+              // PRESERVE MICRONUTRIENT DATA
+              if (ingredient.containsKey('vitamins')) {
+                firstIngredient['vitamins'] =
+                    Map<String, dynamic>.from(ingredient['vitamins']);
+              }
+              if (ingredient.containsKey('minerals')) {
+                firstIngredient['minerals'] =
+                    Map<String, dynamic>.from(ingredient['minerals']);
+              }
+              if (ingredient.containsKey('other')) {
+                firstIngredient['other'] =
+                    Map<String, dynamic>.from(ingredient['other']);
+              }
+
+              _ingredients.add(firstIngredient);
             }
 
             // Add second part
             if (parts[1].isNotEmpty && parts[1].length <= 16) {
-              _ingredients.add({
+              Map<String, dynamic> secondIngredient = {
                 'name': parts[1].trim(),
                 'amount': amount, // Keep original amount
                 'calories':
@@ -370,17 +464,73 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                 'protein': protein / 2,
                 'fat': fat / 2,
                 'carbs': carbs / 2
-              });
+              };
+
+              // PRESERVE MICRONUTRIENT DATA (split proportionally)
+              if (ingredient.containsKey('vitamins')) {
+                Map<String, dynamic> vitamins =
+                    Map<String, dynamic>.from(ingredient['vitamins']);
+                vitamins.forEach((key, value) {
+                  if (value is num) vitamins[key] = value / 2;
+                });
+                secondIngredient['vitamins'] = vitamins;
+              }
+              if (ingredient.containsKey('minerals')) {
+                Map<String, dynamic> minerals =
+                    Map<String, dynamic>.from(ingredient['minerals']);
+                minerals.forEach((key, value) {
+                  if (value is num) minerals[key] = value / 2;
+                });
+                secondIngredient['minerals'] = minerals;
+              }
+              if (ingredient.containsKey('other')) {
+                Map<String, dynamic> other =
+                    Map<String, dynamic>.from(ingredient['other']);
+                other.forEach((key, value) {
+                  if (value is num) other[key] = value / 2;
+                });
+                secondIngredient['other'] = other;
+              }
+
+              _ingredients.add(secondIngredient);
             } else if (parts[1].isNotEmpty) {
               // Second part exceeds 16 characters, truncate with ellipsis
-              _ingredients.add({
+              Map<String, dynamic> secondIngredient = {
                 'name': parts[1].trim().substring(0, 13) + "...",
                 'amount': amount,
                 'calories': calories / 2,
                 'protein': protein / 2,
                 'fat': fat / 2,
                 'carbs': carbs / 2
-              });
+              };
+
+              // PRESERVE MICRONUTRIENT DATA (split proportionally)
+              if (ingredient.containsKey('vitamins')) {
+                Map<String, dynamic> vitamins =
+                    Map<String, dynamic>.from(ingredient['vitamins']);
+                vitamins.forEach((key, value) {
+                  if (value is num) vitamins[key] = value / 2;
+                });
+                secondIngredient['vitamins'] = vitamins;
+              }
+              if (ingredient.containsKey('minerals')) {
+                Map<String, dynamic> minerals =
+                    Map<String, dynamic>.from(ingredient['minerals']);
+                minerals.forEach((key, value) {
+                  if (value is num) minerals[key] = value / 2;
+                });
+                secondIngredient['minerals'] = minerals;
+              }
+              if (ingredient.containsKey('other')) {
+                Map<String, dynamic> other =
+                    Map<String, dynamic>.from(ingredient['other']);
+                other.forEach((key, value) {
+                  if (value is num) other[key] = value / 2;
+                });
+                secondIngredient['other'] = other;
+              }
+
+              _ingredients.add(secondIngredient);
             }
           }
           continue; // Skip the rest of the loop
@@ -388,66 +538,57 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
         // Check if name exceeds 16 characters
         if (name.length > 16) {
-          // Split the name by spaces
-          List<String> words = name.split(' ');
-          String currentSegment = '';
+          // Don't split single ingredients - just truncate with ellipsis
+          Map<String, dynamic> newIngredient = {
+            'name': name.substring(0, 13) + "...",
+            'amount': amount,
+            'calories': calories,
+            'protein': protein,
+            'fat': fat,
+            'carbs': carbs
+          };
 
-          for (var word in words) {
-            // If adding this word would exceed limit, create a new ingredient with current segment
-            if (currentSegment.isNotEmpty &&
-                (currentSegment.length + word.length + 1) > 16) {
-              _ingredients.add({
-                'name': currentSegment.trim(),
-                'amount': amount, // Keep original amount
-                'calories': calories, // Keep original calories
-                'protein': protein,
-                'fat': fat,
-                'carbs': carbs
-              });
-              currentSegment = word;
-            } else {
-              // Add word to current segment
-              if (currentSegment.isEmpty) {
-                currentSegment = word;
-              } else {
-                currentSegment += ' $word';
-              }
-            }
+          // PRESERVE MICRONUTRIENT DATA
+          if (ingredient.containsKey('vitamins')) {
+            newIngredient['vitamins'] =
+                Map<String, dynamic>.from(ingredient['vitamins']);
+          }
+          if (ingredient.containsKey('minerals')) {
+            newIngredient['minerals'] =
+                Map<String, dynamic>.from(ingredient['minerals']);
+          }
+          if (ingredient.containsKey('other')) {
+            newIngredient['other'] =
+                Map<String, dynamic>.from(ingredient['other']);
           }
 
-          // Add remaining segment as an ingredient
-          if (currentSegment.isNotEmpty) {
-            if (currentSegment.length <= 16) {
-              _ingredients.add({
-                'name': currentSegment.trim(),
-                'amount': amount, // Keep original amount
-                'calories': calories, // Keep original calories
-                'protein': protein,
-                'fat': fat,
-                'carbs': carbs
-              });
-            } else {
-              // Truncate with ellipsis if still too long
-              _ingredients.add({
-                'name': currentSegment.trim().substring(0, 13) + "...",
-                'amount': amount,
-                'calories': calories,
-                'protein': protein,
-                'fat': fat,
-                'carbs': carbs
-              });
-            }
-          }
+          _ingredients.add(newIngredient);
         } else {
           // Name is within limit, add as is with original values
-          _ingredients.add({
+          Map<String, dynamic> newIngredient = {
             'name': name,
             'amount': amount,
             'calories': calories,
             'protein': protein,
             'fat': fat,
             'carbs': carbs
-          });
+          };
+
+          // PRESERVE MICRONUTRIENT DATA
+          if (ingredient.containsKey('vitamins')) {
+            newIngredient['vitamins'] =
+                Map<String, dynamic>.from(ingredient['vitamins']);
+          }
+          if (ingredient.containsKey('minerals')) {
+            newIngredient['minerals'] =
+                Map<String, dynamic>.from(ingredient['minerals']);
+          }
+          if (ingredient.containsKey('other')) {
+            newIngredient['other'] =
+                Map<String, dynamic>.from(ingredient['other']);
+          }
+
+          _ingredients.add(newIngredient);
         }
       }
 
@@ -522,122 +663,112 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       print('Attempting to load saved data for foodId: $foodId');
 
-      // Load ingredients array
-      final ingredientsJson = prefs.getString('food_ingredients_$foodId');
-      print('Loaded ingredients JSON: $ingredientsJson');
+      // ONLY load ingredients if we don't have fresh API data
+      if (widget.ingredients == null || widget.ingredients!.isEmpty) {
+        // Load ingredients array
+        final ingredientsJson = prefs.getString('food_ingredients_$foodId');
+        print('Loaded ingredients JSON: $ingredientsJson');
 
-      if (ingredientsJson != null) {
-        try {
-          final List<dynamic> decoded = jsonDecode(ingredientsJson);
-          _ingredients = [];
+        if (ingredientsJson != null) {
+          try {
+            final List<dynamic> decoded = jsonDecode(ingredientsJson);
+            _ingredients = [];
 
-          // Process each item in the decoded list
-          for (var item in decoded) {
-            // Handle both object and string formats
-            if (item is Map) {
-              // Skip malformed ingredients that are actually JSON field names
-              String itemName = item['name']?.toString() ?? '';
-              if (itemName.contains(':') ||
-                  itemName.contains('{') ||
-                  itemName.contains('}') ||
-                  itemName.startsWith('weight_g') ||
-                  itemName.startsWith('calories') ||
-                  itemName.startsWith('protein_g') ||
-                  itemName.startsWith('fat_g') ||
-                  itemName.startsWith('carbs_g')) {
-                print('Skipping malformed saved ingredient: $itemName');
-                continue; // Skip this malformed ingredient
-              }
-
-              // Make sure all required fields exist
-              if (!item.containsKey('name') ||
-                  !item.containsKey('amount') ||
-                  !item.containsKey('calories')) {
-                // Add missing fields with defaults
-                item['name'] = item['name'] ?? 'Ingredient';
-                item['amount'] = item['amount'] ?? '1 serving';
-                item['calories'] = item['calories'] ?? 0;
-              }
-
-              // Ensure macronutrient values are properly converted to doubles
-              double protein = 0.0;
-              double fat = 0.0;
-              double carbs = 0.0;
-
-              // Process protein value
-              if (item.containsKey('protein')) {
-                var proteinValue = item['protein'];
-                if (proteinValue is String) {
-                  protein = double.tryParse(proteinValue) ?? 0.0;
-                } else if (proteinValue is num) {
-                  protein = proteinValue.toDouble();
+            // Process each item in the decoded list
+            for (var item in decoded) {
+              // Handle both object and string formats
+              if (item is Map) {
+                // Make sure all required fields exist
+                if (!item.containsKey('name') ||
+                    !item.containsKey('amount') ||
+                    !item.containsKey('calories')) {
+                  // Add missing fields with defaults
+                  item['name'] = item['name'] ?? 'Ingredient';
+                  item['amount'] = item['amount'] ?? '1 serving';
+                  item['calories'] = item['calories'] ?? 0;
                 }
-              }
 
-              // Process fat value
-              if (item.containsKey('fat')) {
-                var fatValue = item['fat'];
-                if (fatValue is String) {
-                  fat = double.tryParse(fatValue) ?? 0.0;
-                } else if (fatValue is num) {
-                  fat = fatValue.toDouble();
+                // Ensure macronutrient values are properly converted to doubles
+                double protein = 0.0;
+                double fat = 0.0;
+                double carbs = 0.0;
+
+                // Process protein value
+                if (item.containsKey('protein')) {
+                  var proteinValue = item['protein'];
+                  if (proteinValue is String) {
+                    protein = double.tryParse(proteinValue) ?? 0.0;
+                  } else if (proteinValue is num) {
+                    protein = proteinValue.toDouble();
+                  }
                 }
-              }
 
-              // Process carbs value
-              if (item.containsKey('carbs')) {
-                var carbsValue = item['carbs'];
-                if (carbsValue is String) {
-                  carbs = double.tryParse(carbsValue) ?? 0.0;
-                } else if (carbsValue is num) {
-                  carbs = carbsValue.toDouble();
+                // Process fat value
+                if (item.containsKey('fat')) {
+                  var fatValue = item['fat'];
+                  if (fatValue is String) {
+                    fat = double.tryParse(fatValue) ?? 0.0;
+                  } else if (fatValue is num) {
+                    fat = fatValue.toDouble();
+                  }
                 }
+
+                // Process carbs value
+                if (item.containsKey('carbs')) {
+                  var carbsValue = item['carbs'];
+                  if (carbsValue is String) {
+                    carbs = double.tryParse(carbsValue) ?? 0.0;
+                  } else if (carbsValue is num) {
+                    carbs = carbsValue.toDouble();
+                  }
+                }
+
+                // Also include macro values with fallbacks
+                Map<String, dynamic> validIngredient = {
+                  'name': item['name'] ?? 'Ingredient',
+                  'amount': item['amount'] ?? '1 serving',
+                  'calories': item['calories'] ?? 0,
+                  'protein': protein,
+                  'fat': fat,
+                  'carbs': carbs,
+                };
+
+                // PRESERVE MICRONUTRIENT DATA when saving ingredients
+                if (item.containsKey('vitamins')) {
+                  validIngredient['vitamins'] = item['vitamins'];
+                }
+                if (item.containsKey('minerals')) {
+                  validIngredient['minerals'] = item['minerals'];
+                }
+                if (item.containsKey('other')) {
+                  validIngredient['other'] = item['other'];
+                }
+
+                _ingredients.add(validIngredient);
+              } else if (item is String) {
+                // Handle old format - string-only ingredients
+                // Create default ingredient object
+                Map<String, dynamic> validIngredient = {
+                  'name': item,
+                  'amount': '1 serving',
+                  'calories': 100,
+                  'protein': 5.0,
+                  'fat': 2.0,
+                  'carbs': 15.0,
+                };
+                _ingredients.add(validIngredient);
               }
-
-              // Also include macro values with fallbacks
-              Map<String, dynamic> validIngredient = {
-                'name': item['name'] ?? 'Ingredient',
-                'amount': item['amount'] ?? '1 serving',
-                'calories': item['calories'] ?? 0,
-                'protein': protein,
-                'fat': fat,
-                'carbs': carbs,
-              };
-
-              _ingredients.add(validIngredient);
-            } else if (item is String) {
-              // Handle old format - string-only ingredients
-              // Create default ingredient object
-              Map<String, dynamic> validIngredient = {
-                'name': item,
-                'amount': '1 serving',
-                'calories': 100,
-                'protein': 5.0,
-                'fat': 2.0,
-                'carbs': 15.0,
-              };
-              _ingredients.add(validIngredient);
             }
-          }
-          print(
-              'Loaded and validated ${_ingredients.length} ingredients from SharedPreferences');
-
-          // If we filtered out malformed ingredients, save the cleaned data back
-          if (_ingredients.length < decoded.length) {
             print(
-                'Cleaned ${decoded.length - _ingredients.length} malformed ingredients, saving cleaned data');
-            try {
-              await prefs.setString(
-                  'food_ingredients_$foodId', jsonEncode(_ingredients));
-              print('Saved cleaned ingredients data');
-            } catch (e) {
-              print('Error saving cleaned ingredients: $e');
-            }
+                'Loaded and validated ${_ingredients.length} ingredients from SharedPreferences');
+          } catch (e) {
+            print('Error parsing saved ingredients: $e');
+            _ingredients = []; // Reset to empty on error
           }
-        } catch (e) {
-          print('Error parsing saved ingredients: $e');
-          _ingredients = []; // Reset to empty on error
         }
+      } else {
+        print(
+            'Skipping ingredient loading - using fresh API data with micronutrients');
       }
 
       setState(() {
@@ -721,137 +852,93 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     _debugPrintIngredients('Before save');
 
     try {
-      print('Saving all data to SharedPreferences...');
-
-      // Clean up storage before saving new data
-      await _cleanupStorageIfNeeded();
-
+      print('Saving data to SharedPreferences (optimized)...');
       final prefs = await SharedPreferences.getInstance();
-      String foodId = _foodName.replaceAll(' ', '_').toLowerCase();
+      final String foodId = _foodName.replaceAll(' ', '_').toLowerCase();
 
-      print('Saving all data to SharedPreferences...');
+      // Create a single consolidated data object to minimize storage operations
+      Map<String, dynamic> consolidatedData = {
+        'foodName': _foodName,
+        'calories': _calories,
+        'protein': _protein,
+        'fat': _fat,
+        'carbs': _carbs,
+        'healthScore': _healthScore,
+        'counter': _counter,
+        'isLiked': _isLiked,
+        'isBookmarked': _isBookmarked,
+        'privacyStatus': _privacyStatus,
+        'ingredients': _ingredients,
+        'lastSaved': DateTime.now().millisecondsSinceEpoch,
+      };
 
-      // Save ingredients first - inline the logic instead of calling non-existent method
-      if (_ingredients.isNotEmpty) {
-        print('Saving ${_ingredients.length} ingredients');
-        // Validate that _ingredients contains valid Map objects before saving
-        List<Map<String, dynamic>> validIngredients = [];
-        for (var ingredient in _ingredients) {
-          if (ingredient is Map<String, dynamic>) {
-            // Create a map with all required data to ensure format consistency
-            Map<String, dynamic> validIngredient = {
-              'name': ingredient['name'] ?? 'Ingredient',
-              'amount': ingredient['amount'] ?? '1 serving',
-              'calories': ingredient['calories'] ?? 0,
-              // Include macros with proper type conversion
-              'protein': _convertToDouble(ingredient['protein']),
-              'fat': _convertToDouble(ingredient['fat']),
-              'carbs': _convertToDouble(ingredient['carbs']),
-            };
-            // Copy any micronutrient data that might exist
-            if (ingredient.containsKey('vitamins') &&
-                ingredient['vitamins'] is Map) {
-              validIngredient['vitamins'] =
-                  Map<String, dynamic>.from(ingredient['vitamins']);
-            }
-            if (ingredient.containsKey('minerals') &&
-                ingredient['minerals'] is Map) {
-              validIngredient['minerals'] =
-                  Map<String, dynamic>.from(ingredient['minerals']);
-            }
-            if (ingredient.containsKey('other') && ingredient['other'] is Map) {
-              validIngredient['other'] =
-                  Map<String, dynamic>.from(ingredient['other']);
-            }
-            validIngredients.add(validIngredient);
-          }
-        }
-
-        final ingredientsJson = jsonEncode(validIngredients);
-        await prefs.setString('food_ingredients_$foodId', ingredientsJson);
-        print('Successfully saved ingredients to SharedPreferences');
+      // Add image data if available
+      if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
+        consolidatedData['imageBase64'] = _storedImageBase64;
+      } else if (_imageBytes != null) {
+        consolidatedData['imageBase64'] = base64Encode(_imageBytes!);
       }
 
-      await prefs.setBool('food_liked_$foodId', _isLiked);
-      await prefs.setBool('food_bookmarked_$foodId', _isBookmarked);
-      await prefs.setInt('food_counter_$foodId', _counter);
-      await prefs.setString(
-          'food_privacy_$foodId', _privacyStatus); // Save the privacy setting
-
-      // Save all nutrition values
-      await prefs.setString('food_calories_$foodId', _calories);
-      await prefs.setString('food_protein_$foodId', _protein);
-      await prefs.setString('food_fat_$foodId', _fat);
-      await prefs.setString('food_carbs_$foodId', _carbs);
-      await prefs.setString('food_health_score_$foodId', _healthScore);
-
-      // Save image if available - ensure high quality
-      if (_imageBytes != null || _storedImageBase64 != null) {
-        // Prefer to use the stored base64 string directly if available
-        // This prevents re-encoding which can reduce quality
-        String imageData;
-        if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
-          imageData = _storedImageBase64!;
-          print(
-              'Using original stored image data: ${imageData.length} characters');
-        } else {
-          // Only re-encode if we must
-          imageData = base64Encode(_imageBytes!);
-          print('Re-encoded image data: ${imageData.length} characters');
-        }
-
-        // Store the image
-        await prefs.setString('food_image_$foodId', imageData);
-
-        // Also update the image in the food_cards list to ensure high quality there too
-        final List<String>? storedCards = prefs.getStringList('food_cards');
-        if (storedCards != null && storedCards.isNotEmpty) {
-          List<String> updatedCards = [];
-          bool foundCard = false;
-
-          // Find the correct card and update its image
-          for (String cardJson in storedCards) {
-            try {
-              Map<String, dynamic> cardData = jsonDecode(cardJson);
-              String cardName = cardData['name'] ?? '';
-
-              // If this is our card, update the image
-              if (cardName.toLowerCase() == _foodName.toLowerCase()) {
-                foundCard = true;
-
-                // Update with our high quality image
-                cardData['image'] = imageData;
-
-                // Add the updated card to our list
-                updatedCards.add(jsonEncode(cardData));
-              } else {
-                // Not our card, keep it as is
-                updatedCards.add(cardJson);
-              }
-            } catch (e) {
-              print('Error updating food card image data: $e');
-              // If there was an error, keep the original card
-              updatedCards.add(cardJson);
-            }
-          }
-
-          // Save the updated cards list back to SharedPreferences
-          if (foundCard) {
-            await prefs.setStringList('food_cards', updatedCards);
-            print(
-                'Updated high-quality image in food_cards list for: $_foodName');
-          }
-        }
-      }
+      // Save everything in ONE operation to prevent quota issues
+      String consolidatedJson = jsonEncode(consolidatedData);
+      await prefs.setString('food_data_$foodId', consolidatedJson);
 
       print(
-          'Saved data for $foodId: liked=$_isLiked, bookmarked=$_isBookmarked, counter=$_counter, calories=$_calories, protein=$_protein, fat=$_fat, carbs=$_carbs, healthScore=$_healthScore, ingredients=${_ingredients.length}');
+          'Successfully saved consolidated food data for $foodId (${consolidatedJson.length} bytes)');
+
+      // Only update food_cards if absolutely necessary (not on every save)
+      // This prevents the excessive storage operations
+      if (_hasUnsavedChanges) {
+        await _updateFoodCardsOptimized(prefs, consolidatedData);
+      }
     } catch (e) {
       print('Error saving food data: $e');
+      // If storage fails, at least keep the in-memory data
     }
+  }
 
-    // Invalidate nutrition cache since food data was modified
-    // main_codia.NutritionTracker.invalidateCacheStatic();
+  // Optimized method to update food_cards with minimal storage operations
+  Future<void> _updateFoodCardsOptimized(
+      SharedPreferences prefs, Map<String, dynamic> data) async {
+    try {
+      final List<String>? storedCards = prefs.getStringList('food_cards');
+      if (storedCards == null) return; // Don't create new cards unnecessarily
+
+      List<String> updatedCards = [];
+      bool foundCard = false;
+
+      for (String cardJson in storedCards) {
+        try {
+          Map<String, dynamic> cardData = jsonDecode(cardJson);
+          String cardName = cardData['name'] ?? '';
+
+          if (cardName.toLowerCase() == _foodName.toLowerCase()) {
+            foundCard = true;
+            // Update only essential fields
+            cardData['calories'] = data['calories'];
+            cardData['protein'] = data['protein'];
+            cardData['fat'] = data['fat'];
+            cardData['carbs'] = data['carbs'];
+            cardData['counter'] = data['counter'];
+            cardData['ingredients'] = data['ingredients'];
+
+            if (data.containsKey('imageBase64')) {
+              cardData['image'] = data['imageBase64'];
+            }
+          }
+          updatedCards.add(jsonEncode(cardData));
+        } catch (e) {
+          updatedCards.add(cardJson); // Keep original if error
+        }
+      }
+
+      if (foundCard) {
+        await prefs.setStringList('food_cards', updatedCards);
+        print('Updated food_cards list (optimized)');
+      }
+    } catch (e) {
+      print('Error updating food_cards: $e');
+    }
   }
 
   // Helper method to convert various types to double
@@ -1189,9 +1276,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       if (_counter < 10) {
         _counter++;
         _markAsUnsaved(); // Mark as having unsaved changes
-
-        // Recalculate nutrition values based on the updated counter
-        _calculateTotalNutrition();
+        // Don't save immediately, only mark as unsaved
       }
     });
   }
@@ -1202,9 +1287,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       if (_counter > 1) {
         _counter--;
         _markAsUnsaved(); // Mark as having unsaved changes
-
-        // Recalculate nutrition values based on the updated counter
-        _calculateTotalNutrition();
+        // Don't save immediately, only mark as unsaved
       }
     });
   }
@@ -1546,21 +1629,12 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     if (_imageBytes != null) {
       try {
         print('Optimizing image quality for display...');
-
-        // Store the original high-quality image for saving/storage
+        // Create an optimized image storage if needed
         if (_storedImageBase64 == null || _storedImageBase64!.isEmpty) {
           _storedImageBase64 = base64Encode(_imageBytes!);
           print(
               'Created high-quality image storage: ${_storedImageBase64!.length} characters');
         }
-
-        // For now, just use the original image without compression to avoid display issues
-        print(
-            'Using original image without compression to ensure display works');
-
-        setState(() {
-          // Image is ready for display
-        });
       } catch (e) {
         print('Error optimizing image: $e');
       }
@@ -1717,7 +1791,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
               'operation_type': 'NUTRITION_CALCULATION'
             }),
           )
-          .timeout(const Duration(minutes: 1))
+          .timeout(const Duration(seconds: 30))
           .catchError((error) {
         print('FOOD ANALYZER: Request error caught in catchError: $error');
 
@@ -1726,7 +1800,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           _safelyDismissDialog(localDialogContext, true);
         }
 
-        // Return a proper http.Response object instead of a Map
+        // For caught errors, return a mock response to be handled gracefully
         return http.Response('{"error": true}', 500);
       });
 
@@ -1815,8 +1889,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
               },
               body: jsonEncode(requestBody),
             )
-            .timeout(
-                const Duration(minutes: 1)); // Increased timeout to 1 minute
+            .timeout(const Duration(seconds: 30));
 
         print(
             'FOOD ANALYZER FALLBACK: Received response status: ${response.statusCode}');
@@ -1929,10 +2002,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           if (numericMatch != null) {
             return double.tryParse(numericMatch.group(1) ?? '0') ?? 0.0;
           }
-        } else if (value is Map && value.containsKey('amount')) {
-          var amount = value['amount'];
-          if (amount is num) return amount.toDouble();
-          if (amount is String) return double.tryParse(amount) ?? 0.0;
         }
       }
     }
@@ -2020,100 +2089,19 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // Use the same endpoint as Fix with AI
       final response = await http
           .post(
-        Uri.parse('https://deepseek-uhrc.onrender.com/api/nutrition'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(requestData),
-      )
-          .timeout(const Duration(minutes: 1), onTimeout: () {
-        print('FOOD FIXER: Request timed out');
-        // Safely show error dialog on timeout without navigating away
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _safelyDismissDialog(dialogContext, isDialogShowing);
-            showDialog(
-              context: localContext,
-              barrierDismissible: false,
-              barrierColor: Colors.black.withOpacity(0.75),
-              builder: (BuildContext context) {
-                return Dialog(
-                  backgroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24.0),
-                  ),
-                  child: Container(
-                    width: 311,
-                    padding: EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Service Unavailable',
-                          style: TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'SF Pro Display',
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'The food modification service is currently unavailable. Please try again later.',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontFamily: 'SF Pro Display',
-                            color: Colors.black87,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 32),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            child: Text(
-                              'OK',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.red.shade400,
-                                fontFamily: 'SF Pro Display',
-                              ),
-                            ),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          }
-        });
-
-        // Show error dialog and return error result
-        if (mounted) {
-          _showStandardDialog(
-            title: "Service Timeout",
-            message:
-                "The food modification service timed out. Please try again later.",
-            positiveButtonText: "OK",
-          );
-        }
-
-        // Return error result
-        return http.Response(
-          jsonEncode({
-            'error': true,
-            'message':
-                'The food modification service timed out. Please try again later.'
-          }),
-          408,
-          headers: {'content-type': 'application/json'},
-        );
+            Uri.parse('https://deepseek-uhrc.onrender.com/api/nutrition'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(requestData),
+          )
+          .timeout(const Duration(seconds: 30))
+          .catchError((error) {
+        print('NUTRITION CALCULATOR error: $error');
+        // Always dismiss the loading dialog on error
+        _safelyDismissDialog(dialogContext, isDialogShowing);
+        // Rethrow to be caught by the outer catch block
+        throw error;
       });
 
       print(
@@ -2143,18 +2131,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           nutritionData = responseData;
         }
 
-        // If nutritionData contains a 'nutrition' key, extract from it
-        if (nutritionData.containsKey('nutrition') &&
-            nutritionData['nutrition'] is Map) {
-          nutritionData = Map<String, dynamic>.from(nutritionData['nutrition']);
-        }
-        // If nutritionData contains a 'nutrition_values' key, extract from it
-        if (nutritionData.containsKey('nutrition_values') &&
-            nutritionData['nutrition_values'] is Map) {
-          nutritionData =
-              Map<String, dynamic>.from(nutritionData['nutrition_values']);
-        }
-
         print('NUTRITION CALCULATOR: Parsed nutrition data: $nutritionData');
 
         // Check if the model identified this as an invalid food or serving size
@@ -2170,6 +2146,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
               message:
                   "Sorry, the food name or serving size you entered is not recognized. Please try a more specific name or common serving size.",
               positiveButtonText: "OK",
+              positiveButtonColor: Colors.black,
+              negativeButtonText: "OK",
             );
           }
 
@@ -2210,6 +2188,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           message:
               "We couldn't calculate the nutrition for this ingredient. Using estimated values instead.",
           positiveButtonText: "OK",
+          positiveButtonColor: Colors.black,
+          // Only use one button to avoid confusion
+          negativeButtonText: "OK",
         );
       }
 
@@ -2895,7 +2876,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                           'Fix Manually', 'pencilicon.png'),
                                       _buildMoreOption(
                                           'Fix with AI', 'bulb.png'),
-                                      _buildMoreOption('Publish', 'globe.png'),
                                     ],
                                   ),
                                 ),
@@ -3352,7 +3332,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     // Determine the size for the current icon
     double iconSize = (iconAsset == 'nutrition.png' || iconAsset == 'bulb.png')
         ? largerIconSize
-        : (iconAsset == 'globe.png' ? baseIconSize * 0.9 : baseIconSize);
+        : baseIconSize;
 
     // Check if this is the "Fix Manually" button and we're in edit mode
     bool isFixManuallyInEditMode = title == 'Fix Manually' && _isEditMode;
@@ -3376,9 +3356,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         } else if (title == 'In-Depth Nutrition') {
           // Navigate to the Nutrition screen
           _openNutritionScreen();
-        } else if (title == 'Publish') {
-          // Implement publish meal functionality
-          print('Publish Meal functionality not implemented yet.');
         }
         // Add other handlers for different options if needed
       },
@@ -3407,22 +3384,19 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             SizedBox(
               width: 40, // Keep this width consistent for alignment
               child: Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: iconAsset == 'globe.png'
-                      ? const EdgeInsets.only(left: 1.0)
-                      : EdgeInsets.zero,
-                  child: SizedBox(
-                    width: iconSize,
-                    height: iconSize,
-                    child: Image.asset(
-                      'assets/images/$iconAsset',
-                      width: iconSize,
-                      height: iconSize,
-                      fit: BoxFit.contain,
-                      color:
-                          isFixManuallyInEditMode ? Colors.white : Colors.black,
-                    ),
+                alignment:
+                    Alignment.centerLeft, // Align icon to the left of this box
+                child: SizedBox(
+                  width: iconSize, // Use the calculated size
+                  height: iconSize, // Use the calculated size
+                  child: Image.asset(
+                    'assets/images/$iconAsset',
+                    width: iconSize, // Apply calculated width
+                    height: iconSize, // Apply calculated height
+                    fit: BoxFit.contain,
+                    // Change icon color to white when "Fix Manually" is in edit mode
+                    color:
+                        isFixManuallyInEditMode ? Colors.white : Colors.black,
                   ),
                 ),
               ),
@@ -3751,10 +3725,82 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
             // Function to validate ingredient name
             bool isValidFoodName(String name) {
-              // Allow numbers and percent signs, just check for minimum length and not excessive special chars
+              // Check if name contains at least 3 characters
               if (name.length < 3) return false;
-              // Disallow if there are 3 or more consecutive special characters (not letter, number, space, or %)
-              if (RegExp(r'[^a-zA-Z0-9\s%]{3,}').hasMatch(name)) return false;
+
+              // Check if name contains mostly letters (allowing spaces)
+              final letterRatio = name
+                      .replaceAll(' ', '')
+                      .split('')
+                      .where((char) => RegExp(r'[a-zA-Z]').hasMatch(char))
+                      .length /
+                  name.replaceAll(' ', '').length;
+
+              // Name should be at least 70% letters
+              if (letterRatio < 0.7) return false;
+
+              // Check for common food words (optional check)
+              final commonFoodWords = [
+                'beef',
+                'chicken',
+                'fish',
+                'pork',
+                'rice',
+                'pasta',
+                'bread',
+                'cheese',
+                'egg',
+                'milk',
+                'yogurt',
+                'fruit',
+                'apple',
+                'banana',
+                'orange',
+                'vegetable',
+                'salad',
+                'oil',
+                'butter',
+                'sauce',
+                'soup',
+                'steak',
+                'burger',
+                'pizza',
+                'cake',
+                'chocolate',
+                'coffee',
+                'tea',
+                'juice',
+                'water',
+                'corn',
+                'bean',
+                'nut',
+                'seed',
+                'avocado',
+                'tomato',
+                'potato',
+                'carrot',
+                'onion',
+                'garlic',
+                'herb',
+                'spice',
+                'sugar',
+                'salt',
+                'pepper',
+                'meal',
+                'breakfast',
+                'lunch',
+                'dinner',
+                'snack',
+                'dessert'
+              ];
+
+              // Check if entry has too many numbers or special characters
+              final hasExcessiveNonAlpha =
+                  RegExp(r'[0-9]{2,}').hasMatch(name) ||
+                      RegExp(r'[^a-zA-Z0-9\s]{2,}').hasMatch(name);
+
+              if (hasExcessiveNonAlpha) return false;
+
               return true;
             }
 
@@ -3929,12 +3975,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                     // Don't need to show dialog here - the _calculateNutritionWithAI function already shows it
                     return;
                   }
-                  // If scan failed, do not add ingredient
-                  if (nutritionData.containsKey('scan_failed') &&
-                      nutritionData['scan_failed'] == true) {
-                    print('INGREDIENT ADD: Scan failed, not adding ingredient');
-                    return;
-                  }
 
                   // Extract values with more careful parsing
                   calories =
@@ -4011,6 +4051,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                       message:
                           'We couldn\'t calculate the nutrition for this ingredient. Using estimated values instead.',
                       positiveButtonText: 'OK',
+                      positiveButtonColor: Colors.black,
+                      negativeButtonText:
+                          'OK', // Use same text to show only one button
                     );
                   }
                 }
@@ -4410,11 +4453,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // Calculate total nutrition from all ingredients
       _calculateTotalNutrition();
-
-      // Save the data immediately to ensure it's reflected in the Nutrition screen
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _saveData();
-      });
     } catch (e) {
       print('ERROR adding ingredient to list: $e');
     }
@@ -4422,6 +4460,23 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Calculate total nutrition values from all ingredients
   void _calculateTotalNutrition() {
+    // CRITICAL: If we have fresh API data (from widget parameters), DON'T override it!
+    // Only calculate from ingredients if we don't have API data or if user manually modified ingredients
+    bool hasApiData = widget.calories != null &&
+        widget.calories!.isNotEmpty &&
+        widget.protein != null &&
+        widget.protein!.isNotEmpty &&
+        widget.fat != null &&
+        widget.fat!.isNotEmpty &&
+        widget.carbs != null &&
+        widget.carbs!.isNotEmpty;
+
+    if (hasApiData && !_hasUnsavedChanges) {
+      // We have fresh API data and user hasn't made changes - use API values, don't calculate
+      print('Using API nutrition values, not calculating from ingredients');
+      return;
+    }
+
     if (_ingredients.isEmpty) {
       // If no ingredients, set default values
       String oldCalories = _calories;
@@ -4447,7 +4502,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       return;
     }
 
-    // Sum up all nutritional values from ingredients - use more efficient loops and calculations
+    // Sum up all nutritional values from ingredients
     double totalCalories = 0;
     double totalProtein = 0;
     double totalFat = 0;
@@ -4459,82 +4514,72 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     String oldFat = _fat;
     String oldCarbs = _carbs;
 
-    // Process all ingredients in a single loop - more efficient
-    final int ingredientCount = _ingredients.length;
-    for (int i = 0; i < ingredientCount; i++) {
-      final ingredient = _ingredients[i];
+    for (var ingredient in _ingredients) {
+      // Debug output for each ingredient
+      print('Processing ingredient: ${ingredient['name']}, ' +
+          'Protein: ${ingredient['protein']} (${ingredient['protein'].runtimeType}), ' +
+          'Fat: ${ingredient['fat']} (${ingredient['fat'].runtimeType}), ' +
+          'Carbs: ${ingredient['carbs']} (${ingredient['carbs'].runtimeType})');
 
-      // Add calories - multiply by counter
+      // Add calories
       if (ingredient.containsKey('calories')) {
         var calories = ingredient['calories'];
         if (calories is String) {
-          totalCalories += (double.tryParse(calories) ?? 0) * _counter;
+          totalCalories += double.tryParse(calories) ?? 0;
         } else if (calories is num) {
-          totalCalories += calories.toDouble() * _counter;
+          totalCalories += calories.toDouble();
         }
       }
 
-      // Add protein - multiply by counter
+      // Add protein
       if (ingredient.containsKey('protein')) {
         var protein = ingredient['protein'];
         if (protein is String) {
-          totalProtein += (double.tryParse(protein) ?? 0) * _counter;
+          totalProtein += double.tryParse(protein) ?? 0;
         } else if (protein is num) {
-          totalProtein += protein.toDouble() * _counter;
+          totalProtein += protein.toDouble();
         }
       }
 
-      // Add fat - multiply by counter
+      // Add fat
       if (ingredient.containsKey('fat')) {
         var fat = ingredient['fat'];
         if (fat is String) {
-          totalFat += (double.tryParse(fat) ?? 0) * _counter;
+          totalFat += double.tryParse(fat) ?? 0;
         } else if (fat is num) {
-          totalFat += fat.toDouble() * _counter;
+          totalFat += fat.toDouble();
         }
       }
 
-      // Add carbs - multiply by counter
+      // Add carbs
       if (ingredient.containsKey('carbs')) {
         var carbs = ingredient['carbs'];
         if (carbs is String) {
-          totalCarbs += (double.tryParse(carbs) ?? 0) * _counter;
+          totalCarbs += double.tryParse(carbs) ?? 0;
         } else if (carbs is num) {
-          totalCarbs += carbs.toDouble() * _counter;
+          totalCarbs += carbs.toDouble();
         }
       }
     }
 
     // Update state with calculated totals using standard rounding (0-0.4 down, 0.5-0.9 up)
-    // Calculate new values before setState to minimize state updates
-    final String newCalories = totalCalories.round().toString();
-    final String newProtein = totalProtein.round().toString();
-    final String newFat = totalFat.round().toString();
-    final String newCarbs = totalCarbs.round().toString();
-
-    // When extracting from ingredients, we might have lost units from the API response
-    // This is why macros/proteins aren't being shown correctly on the nutrition screen
-
-    // Check if values actually changed before updating state
-    final bool hasChanged = (newCalories != oldCalories ||
-        newProtein != oldProtein ||
-        newFat != oldFat ||
-        newCarbs != oldCarbs);
-
     setState(() {
-      _calories = newCalories;
-      _protein = newProtein;
-      _fat = newFat;
-      _carbs = newCarbs;
+      _calories = totalCalories.round().toString(); // Round to whole number
+      _protein = totalProtein.round().toString(); // Round to whole number
+      _fat = totalFat.round().toString(); // Round to whole number
+      _carbs = totalCarbs.round().toString(); // Round to whole number
 
       // Only mark as unsaved if values actually changed
-      if (hasChanged) {
+      if (_calories != oldCalories ||
+          _protein != oldProtein ||
+          _fat != oldFat ||
+          _carbs != oldCarbs) {
         print('Nutrition values changed, marking as unsaved');
         _hasUnsavedChanges = true;
       }
     });
 
-              print(
+    print(
         'NUTRITION TOTALS: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
   }
 
@@ -4545,6 +4590,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       message:
           "The food modification service is currently unavailable. Please try again later.",
       positiveButtonText: "OK",
+      positiveButtonColor: Colors.black,
+      negativeButtonText: "OK",
     );
   }
 
@@ -4555,6 +4602,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       message:
           "Please enter a valid food name and serving size that we can calculate nutrition for",
       positiveButtonText: "Try Again",
+      positiveButtonColor: Colors.black,
       positiveButtonIcon:
           'assets/images/edit.png', // Make sure this asset exists
       onPositivePressed: () {
@@ -5760,34 +5808,235 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       String protein, String fat, String carbs) {
     // Find the ingredient in the _ingredients list
     int indexToRemove = -1;
+    Map<String, dynamic>? deletedIngredient;
 
     for (int i = 0; i < _ingredients.length; i++) {
       if (_ingredients[i]['name'] == name &&
           _ingredients[i]['amount'] == amount) {
         indexToRemove = i;
+        deletedIngredient = Map<String, dynamic>.from(_ingredients[i]);
         break;
       }
     }
 
-    if (indexToRemove >= 0) {
+    if (indexToRemove >= 0 && deletedIngredient != null) {
+      print('Found ingredient to delete: $name ($amount)');
+
+      // Debug: Print micronutrients BEFORE deletion
+      print('=== MICRONUTRIENTS BEFORE DELETION ===');
+      _debugPrintMicronutrients();
+
+      // CRITICAL: Clear nutrition data cache when ingredients are deleted
+      String foodSpecificScanId = _generateFoodSpecificScanId();
+      // Import the nutrition manager
+      nutrition.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
+      print('🗑️ Cleared nutrition cache for scan ID: $foodSpecificScanId');
+
+      // Remove the ingredient from the list
+      _ingredients.removeAt(indexToRemove);
+
+      // Subtract the ingredient's nutrition values from totals
+      double deletedCalories = double.tryParse(calories) ?? 0.0;
+      double deletedProtein = double.tryParse(protein) ?? 0.0;
+      double deletedFat = double.tryParse(fat) ?? 0.0;
+      double deletedCarbs = double.tryParse(carbs) ?? 0.0;
+
+      // Update totals by subtracting the deleted ingredient's values
+      double currentCalories = double.tryParse(_calories) ?? 0.0;
+      double currentProtein = double.tryParse(_protein) ?? 0.0;
+      double currentFat = double.tryParse(_fat) ?? 0.0;
+      double currentCarbs = double.tryParse(_carbs) ?? 0.0;
+
+      // Calculate new totals
+      double newCalories =
+          (currentCalories - deletedCalories).clamp(0.0, double.infinity);
+      double newProtein =
+          (currentProtein - deletedProtein).clamp(0.0, double.infinity);
+      double newFat = (currentFat - deletedFat).clamp(0.0, double.infinity);
+      double newCarbs =
+          (currentCarbs - deletedCarbs).clamp(0.0, double.infinity);
+
+      // Update the display values
       setState(() {
-        // Remove the ingredient
-        _ingredients.removeAt(indexToRemove);
+        _calories = _formatDecimalValue(newCalories.toString());
+        _protein = _formatDecimalValue(newProtein.toString());
+        _fat = _formatDecimalValue(newFat.toString());
+        _carbs = _formatDecimalValue(newCarbs.toString());
         _markAsUnsaved(); // Mark as having unsaved changes
-
-        // Recalculate total nutrition values
-        _calculateTotalNutrition();
-
-        // Log the deletion for debugging
-        print(
-            'Deleted ingredient: $name ($amount) - $calories kcal, P:$protein, F:$fat, C:$carbs');
       });
 
-      // Instead of saving immediately, just update the Nutrition display
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Only update the nutrition display without permanently saving
-        _updateNutritionDisplay();
-      });
+      // Recalculate micronutrients after deletion
+      _recalculateMicronutrientsAfterDeletion();
+
+      // Debug: Print micronutrients AFTER deletion
+      print('=== MICRONUTRIENTS AFTER DELETION ===');
+      _debugPrintMicronutrients();
+
+      print('Deleted ingredient: $name');
+      print(
+          'Updated totals: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
+
+      // Save the updated data immediately
+      _saveUpdatedNutritionDataOptimized();
+
+      print('Ingredient deletion completed successfully');
+    } else {
+      print('Ingredient not found for deletion: $name ($amount)');
+    }
+  }
+
+  // Recalculate micronutrients from all remaining ingredients
+  void _recalculateMicronutrientsFromRemainingIngredients() {
+    if (widget.additionalNutrients == null) {
+      print('No additionalNutrients to recalculate');
+      return;
+    }
+
+    print(
+        'Recalculating micronutrients from ${_ingredients.length} remaining ingredients');
+
+    // Reset all micronutrient values to 0
+    Map<String, dynamic> newMicronutrients = {};
+
+    // Initialize all existing keys to 0
+    widget.additionalNutrients!.forEach((key, value) {
+      newMicronutrients[key] = 0.0;
+    });
+
+    // Sum up micronutrients from all remaining ingredients
+    for (var ingredient in _ingredients) {
+      print('Processing ingredient: ${ingredient['name']}');
+      print('  Available keys: ${ingredient.keys.toList()}');
+
+      // Add vitamins
+      if (ingredient.containsKey('vitamins') && ingredient['vitamins'] is Map) {
+        Map<String, dynamic> vitamins =
+            Map<String, dynamic>.from(ingredient['vitamins']);
+        print('  Found vitamins: ${vitamins.keys.toList()}');
+        vitamins.forEach((vitaminKey, value) {
+          String normalizedKey = vitaminKey.toLowerCase().replaceAll(' ', '_');
+          double valueToAdd = double.tryParse(value.toString()) ?? 0.0;
+
+          if (newMicronutrients.containsKey(normalizedKey)) {
+            double currentValue =
+                double.tryParse(newMicronutrients[normalizedKey].toString()) ??
+                    0.0;
+            newMicronutrients[normalizedKey] = currentValue + valueToAdd;
+          } else {
+            newMicronutrients[normalizedKey] = valueToAdd;
+          }
+        });
+      } else {
+        print('  No vitamins found in ingredient');
+      }
+
+      // Add minerals
+      if (ingredient.containsKey('minerals') && ingredient['minerals'] is Map) {
+        Map<String, dynamic> minerals =
+            Map<String, dynamic>.from(ingredient['minerals']);
+        print('  Found minerals: ${minerals.keys.toList()}');
+        minerals.forEach((mineralKey, value) {
+          String normalizedKey = mineralKey.toLowerCase().replaceAll(' ', '_');
+          double valueToAdd = double.tryParse(value.toString()) ?? 0.0;
+
+          if (newMicronutrients.containsKey(normalizedKey)) {
+            double currentValue =
+                double.tryParse(newMicronutrients[normalizedKey].toString()) ??
+                    0.0;
+            newMicronutrients[normalizedKey] = currentValue + valueToAdd;
+          } else {
+            newMicronutrients[normalizedKey] = valueToAdd;
+          }
+        });
+      } else {
+        print('  No minerals found in ingredient');
+      }
+
+      // Add other nutrients
+      if (ingredient.containsKey('other') && ingredient['other'] is Map) {
+        Map<String, dynamic> other =
+            Map<String, dynamic>.from(ingredient['other']);
+        print('  Found other nutrients: ${other.keys.toList()}');
+        other.forEach((nutrientKey, value) {
+          String normalizedKey = nutrientKey.toLowerCase().replaceAll(' ', '_');
+          double valueToAdd = double.tryParse(value.toString()) ?? 0.0;
+
+          if (newMicronutrients.containsKey(normalizedKey)) {
+            double currentValue =
+                double.tryParse(newMicronutrients[normalizedKey].toString()) ??
+                    0.0;
+            newMicronutrients[normalizedKey] = currentValue + valueToAdd;
+          } else {
+            newMicronutrients[normalizedKey] = valueToAdd;
+          }
+        });
+      } else {
+        print('  No other nutrients found in ingredient');
+      }
+    }
+
+    // Update the widget's additionalNutrients with the recalculated values
+    widget.additionalNutrients!.clear();
+    widget.additionalNutrients!.addAll(newMicronutrients);
+
+    print(
+        'Recalculated micronutrients from remaining ingredients: ${newMicronutrients.keys.length} nutrients');
+  }
+
+  // Optimized method to save updated nutrition data without excessive storage operations
+  Future<void> _saveUpdatedNutritionDataOptimized() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get the food-specific scan ID (consistent with generateFoodSpecificScanId)
+      String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
+      String calIdentifier = _calories.replaceAll('.', '_');
+      String foodSpecificScanId = 'food_nutrition_${foodName}_${calIdentifier}';
+
+      // Create updated nutrition data with fresh data flag
+      Map<String, dynamic> updatedNutritionData = {
+        'protein': _protein,
+        'fat': _fat,
+        'carbs': _carbs,
+        'calories': _calories,
+        'scanId': foodSpecificScanId,
+        'lastUpdated': DateTime.now().millisecondsSinceEpoch,
+        'freshData': true, // Flag to indicate this is fresh data after deletion
+        'dataVersion': DateTime.now()
+            .millisecondsSinceEpoch, // Version for cache invalidation
+      };
+
+      // Add the updated additional nutrients
+      if (widget.additionalNutrients != null &&
+          widget.additionalNutrients!.isNotEmpty) {
+        updatedNutritionData.addAll(widget.additionalNutrients!);
+      }
+
+      // Save to multiple key formats to ensure persistence across navigation
+      String updatedJson = jsonEncode(updatedNutritionData);
+
+      // Save to the primary key (matches generateFoodSpecificScanId)
+      await prefs.setString(
+          'food_nutrition_data_$foodSpecificScanId', updatedJson);
+
+      // Save to backup key for redundancy
+      await prefs.setString('nutrition_data_$foodSpecificScanId', updatedJson);
+
+      // Save to simplified food name key as fallback
+      await prefs.setString('food_nutrition_$foodName', updatedJson);
+
+      // CRITICAL: Save a special "fresh data available" flag with timestamp
+      await prefs.setString('fresh_nutrition_data_$foodSpecificScanId',
+          DateTime.now().millisecondsSinceEpoch.toString());
+
+      print('✅ Successfully saved FRESH nutrition data to multiple keys:');
+      print('- food_nutrition_data_$foodSpecificScanId');
+      print('- nutrition_data_$foodSpecificScanId');
+      print('- food_nutrition_$foodName');
+      print('- fresh_nutrition_data_$foodSpecificScanId (timestamp)');
+    } catch (e) {
+      print('Error saving updated nutrition data: $e');
+      // If storage fails, at least the in-memory data is updated
     }
   }
 
@@ -6584,7 +6833,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           },
           body: jsonEncode(requestData),
         )
-            .timeout(const Duration(minutes: 1), onTimeout: () {
+            .timeout(const Duration(seconds: 30), onTimeout: () {
           print('FOOD FIXER: Request timed out');
           // Safely show error dialog on timeout without navigating away
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -6875,6 +7124,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       title: "Success",
       message: details != null ? "$message\n\n$details" : message,
       positiveButtonText: "OK",
+      positiveButtonColor: Colors.green,
       negativeButtonText: "OK",
       onNegativePressed: () => Navigator.of(context).pop(),
     );
@@ -6928,9 +7178,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         print('Updated food_cards list, removed deleted meal');
       }
 
-      // Invalidate nutrition cache since food data was deleted
-      // main_codia.NutritionTracker.invalidateCacheStatic();
-
       // Navigate to main CodiaPage (not Nutrition) with pushReplacement
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => CodiaPage()),
@@ -6944,6 +7191,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     required String message,
     String? positiveButtonText,
     String? positiveButtonIcon,
+    Color positiveButtonColor = Colors.black,
     VoidCallback? onPositivePressed,
     String negativeButtonText = "Cancel",
     VoidCallback? onNegativePressed,
@@ -6990,265 +7238,62 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Open the Nutrition screen to see updated nutrient values
   void _openNutritionScreen() async {
-    // Create a map with basic nutrition data including units
-    Map<String, dynamic> nutritionData = {
-      'protein': _addUnitIfMissing(_protein, 'g'),
-      'fat': _addUnitIfMissing(_fat, 'g'),
-      'carbs': _addUnitIfMissing(_carbs, 'g'),
-    };
-
-    // Handle micronutrients based on ingredient count
-    if (_ingredients.isEmpty) {
-      // If all ingredients are deleted, don't show any micronutrients
-      print("No ingredients left, clearing all micronutrient data");
-    } else if (_ingredients.length == 1 &&
-        widget.ingredients != null &&
-        widget.ingredients!.length > 1 &&
-        widget.additionalNutrients != null) {
-      // Special case: If we had multiple ingredients before but now have only one,
-      // the micronutrients should be adjusted to reflect that only one ingredient remains
-
-      // Calculate the proportion of the remaining ingredient's calories to original total
-      double originalTotalCalories = 0;
-      for (var ingredient in widget.ingredients!) {
-        var calories = ingredient['calories'];
-        if (calories is String) {
-          originalTotalCalories += double.tryParse(calories) ?? 0;
-        } else if (calories is num) {
-          originalTotalCalories += calories.toDouble();
-        }
-      }
-
-      // Get current calories of the remaining ingredient
-      double remainingCalories = 0;
-      var calories = _ingredients[0]['calories'];
-      if (calories is String) {
-        remainingCalories = double.tryParse(calories) ?? 0;
-      } else if (calories is num) {
-        remainingCalories = calories.toDouble();
-      }
-
-      // Calculate ratio for scaling micronutrients
-      double ratio = originalTotalCalories > 0
-          ? remainingCalories / originalTotalCalories
-          : 0.5;
-
-      // Adjust micronutrients by ratio
-      print(
-          "Scaling micronutrients by ratio: $ratio (1 ingredient remaining out of ${widget.ingredients!.length})");
-
-      if (widget.additionalNutrients != null &&
-          widget.additionalNutrients!.isNotEmpty) {
-        Map<String, dynamic> scaledNutrients = {};
-
-        widget.additionalNutrients!.forEach((key, value) {
-          if (value is num) {
-            scaledNutrients[key] = (value * ratio).round();
-          } else if (value is String) {
-            double? numValue = double.tryParse(value);
-            if (numValue != null) {
-              scaledNutrients[key] = (numValue * ratio).round().toString();
-            } else {
-              scaledNutrients[key] = value; // Keep non-numeric values unchanged
-            }
-          } else {
-            scaledNutrients[key] = value; // Keep other types unchanged
-          }
-        });
-
-        print("Adding scaled micronutrients: $scaledNutrients");
-        nutritionData.addAll(scaledNutrients);
-      }
-    } else if (widget.additionalNutrients != null &&
-        widget.additionalNutrients!.isNotEmpty) {
-      // Regular case: Add micronutrients directly from the widget parameter if available
-      print(
-          "Adding micronutrients from widget parameter: ${widget.additionalNutrients}");
-      nutritionData.addAll(widget.additionalNutrients!);
-    }
-
-    // Extract and add additional nutrition data from ingredients if available
-    if (_ingredients.isNotEmpty) {
-      // Check if ingredients contain additional micronutrient information
-      Map<String, dynamic> otherNutrients = _extractOtherNutrients();
-
-      // Add any nutrients found in ingredients that weren't already added
-      otherNutrients.forEach((key, value) {
-        if (!nutritionData.containsKey(key)) {
-          nutritionData[key] = value;
-        }
-      });
-    }
-
-    // Convert flat nutrition data to the format expected by Nutrition screen
-    Map<String, dynamic> formattedNutritionData =
-        _formatNutritionDataForScreen(nutritionData);
-
-    // Create a truly consistent ID for this specific food that will never change
-    // This ensures we always update and display the same persisted data for this food
+    // Get a simple, deterministic food ID without timestamp
     String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
-    String caloriesId = _calories.replaceAll('.', '_');
     // Construct a simple deterministic ID that will be the same every time for this food
-    String foodSpecificScanId = "food_nutrition_${foodName}_${caloriesId}";
+    String foodSpecificScanId = "food_nutrition_${foodName}";
 
-    print(
-        "Passing formatted nutrition data to Nutrition.dart: $formattedNutritionData");
-    print("Using PERSISTENT food-specific scan ID: $foodSpecificScanId");
+    print("Using CONSISTENT food-specific scan ID: $foodSpecificScanId");
 
-    // Pre-save the nutrition data with this ID to ensure it's never lost
+    // CLEAR ALL POSSIBLE CACHED DATA to force nutrition screen to use updated additionalNutrients
     final prefs = await SharedPreferences.getInstance();
 
-    // Save the nutrition data under multiple keys for redundancy
-    try {
-      // Create a data object with all nutrition details
-      Map<String, dynamic> allData = {
-        'scanId': foodSpecificScanId,
-        'lastSaved': DateTime.now().millisecondsSinceEpoch,
-        'nutritionData': formattedNutritionData
-      };
+    // Clear all possible cache keys for this food
+    List<String> keysToRemove = [
+      'food_nutrition_data_$foodSpecificScanId',
+      'nutrition_data_$foodSpecificScanId',
+      'food_nutrition_data_$foodName',
+      'nutrition_data_$foodName',
+      'PERMANENT_GLOBAL_NUTRITION_DATA',
+    ];
 
-      // Convert to JSON and save in a single operation
-      String dataJson = jsonEncode(allData);
-
-      // Save under multiple keys for redundancy and different lookup patterns
-      await prefs.setString('nutrition_data_$foodSpecificScanId', dataJson);
-      await prefs.setString('food_nutrition_$foodName', dataJson);
-      await prefs.setString('food_scanid_$foodName', foodSpecificScanId);
-
-      print(
-          'Pre-saved nutrition data for permanent storage with ID: $foodSpecificScanId');
-
-      // Also save this ID in a master list of food scan IDs for discovery
-      List<String> foodScanIds = prefs.getStringList('all_food_scan_ids') ?? [];
-      if (!foodScanIds.contains(foodSpecificScanId)) {
-        foodScanIds.add(foodSpecificScanId);
-        await prefs.setStringList('all_food_scan_ids', foodScanIds);
-      }
-    } catch (e) {
-      print('Error pre-saving nutrition data: $e');
+    for (String key in keysToRemove) {
+      await prefs.remove(key);
+      print("Cleared cached nutrition data for key: $key");
     }
 
+    // Save this ID in our food's data to make it discoverable later
+    // Use a simple standardized key based on the food name
+    String foodId = _foodName.toLowerCase().replaceAll(' ', '_');
+    await prefs.setString('food_nutrition_id_$foodId', foodSpecificScanId);
+
+    // Calculate total nutrition from current ingredients
+    Map<String, dynamic> totalNutrition = _extractOtherNutrients();
+
+    // Add the current additionalNutrients (which have been updated after ingredient deletion)
+    if (widget.additionalNutrients != null) {
+      totalNutrition.addAll(widget.additionalNutrients!);
+      print(
+          "Adding additional nutrients from widget parameter: ${widget.additionalNutrients}");
+    }
+
+    // Add macros using the correct variable names
+    totalNutrition['protein'] = _protein;
+    totalNutrition['fat'] = _fat;
+    totalNutrition['carbs'] = _carbs;
+
+    print("Passing nutrition data to Nutrition.dart: $totalNutrition");
+
+    // Navigate to nutrition screen with updated data
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => nutrition_page.CodiaPage(
-          nutritionData: formattedNutritionData,
-          scanId: foodSpecificScanId, // Pass the unique scan ID
+          scanId: foodSpecificScanId,
+          nutritionData: totalNutrition,
         ),
       ),
-    ).then((_) {
-      print("Returned from Nutrition.dart");
-    });
-  }
-
-  // Helper method to format nutrition data for the Nutrition screen
-  Map<String, dynamic> _formatNutritionDataForScreen(
-      Map<String, dynamic> flatData) {
-    Map<String, dynamic> vitamins = {};
-    Map<String, dynamic> minerals = {};
-    Map<String, dynamic> other = {};
-
-    // Define vitamin mappings with their daily values and units
-    Map<String, Map<String, dynamic>> vitaminInfo = {
-      'vitamin_a': {'dailyValue': 900.0, 'unit': 'mcg', 'name': 'Vitamin A'},
-      'vitamin_c': {'dailyValue': 75.0, 'unit': 'mg', 'name': 'Vitamin C'},
-      'vitamin_d': {'dailyValue': 15.0, 'unit': 'mcg', 'name': 'Vitamin D'},
-      'vitamin_e': {'dailyValue': 15.0, 'unit': 'mg', 'name': 'Vitamin E'},
-      'vitamin_k': {'dailyValue': 90.0, 'unit': 'mcg', 'name': 'Vitamin K'},
-      'vitamin_b1': {'dailyValue': 1.1, 'unit': 'mg', 'name': 'Vitamin B1'},
-      'vitamin_b2': {'dailyValue': 1.1, 'unit': 'mg', 'name': 'Vitamin B2'},
-      'vitamin_b3': {'dailyValue': 14.0, 'unit': 'mg', 'name': 'Vitamin B3'},
-      'vitamin_b5': {'dailyValue': 5.0, 'unit': 'mg', 'name': 'Vitamin B5'},
-      'vitamin_b6': {'dailyValue': 1.3, 'unit': 'mg', 'name': 'Vitamin B6'},
-      'vitamin_b7': {'dailyValue': 30.0, 'unit': 'mcg', 'name': 'Vitamin B7'},
-      'vitamin_b9': {'dailyValue': 400.0, 'unit': 'mcg', 'name': 'Vitamin B9'},
-      'vitamin_b12': {'dailyValue': 2.4, 'unit': 'mcg', 'name': 'Vitamin B12'},
-    };
-
-    // Define mineral mappings
-    Map<String, Map<String, dynamic>> mineralInfo = {
-      'calcium': {'dailyValue': 1000.0, 'unit': 'mg', 'name': 'Calcium'},
-      'iron': {'dailyValue': 8.0, 'unit': 'mg', 'name': 'Iron'},
-      'magnesium': {'dailyValue': 320.0, 'unit': 'mg', 'name': 'Magnesium'},
-      'potassium': {'dailyValue': 3500.0, 'unit': 'mg', 'name': 'Potassium'},
-      'sodium': {'dailyValue': 2300.0, 'unit': 'mg', 'name': 'Sodium'},
-      'zinc': {'dailyValue': 8.0, 'unit': 'mg', 'name': 'Zinc'},
-      'phosphorus': {'dailyValue': 700.0, 'unit': 'mg', 'name': 'Phosphorus'},
-      'copper': {'dailyValue': 0.9, 'unit': 'mg', 'name': 'Copper'},
-      'manganese': {'dailyValue': 1.8, 'unit': 'mg', 'name': 'Manganese'},
-      'selenium': {'dailyValue': 55.0, 'unit': 'mcg', 'name': 'Selenium'},
-      'chromium': {'dailyValue': 35.0, 'unit': 'mcg', 'name': 'Chromium'},
-      'iodine': {'dailyValue': 150.0, 'unit': 'mcg', 'name': 'Iodine'},
-      'molybdenum': {'dailyValue': 45.0, 'unit': 'mcg', 'name': 'Molybdenum'},
-      'fluoride': {'dailyValue': 3.0, 'unit': 'mg', 'name': 'Fluoride'},
-    };
-
-    // Process each nutrient in the flat data
-    flatData.forEach((key, value) {
-      String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
-      double numericValue = _parseNutritionValue(value);
-
-      if (vitaminInfo.containsKey(normalizedKey)) {
-        // It's a vitamin
-        var info = vitaminInfo[normalizedKey]!;
-        double dailyValue = info['dailyValue'];
-        String unit = info['unit'];
-        String name = info['name'];
-
-        double progress = numericValue / dailyValue;
-        int percentage = (progress * 100).round();
-
-        vitamins[normalizedKey] = {
-          'name': name,
-          'value':
-              '${numericValue.toStringAsFixed(1)}/${dailyValue.toStringAsFixed(1)} $unit',
-          'percent': '$percentage%',
-          'progress': progress.clamp(0.0, 1.0),
-          'hasInfo': false,
-        };
-      } else if (mineralInfo.containsKey(normalizedKey)) {
-        // It's a mineral
-        var info = mineralInfo[normalizedKey]!;
-        double dailyValue = info['dailyValue'];
-        String unit = info['unit'];
-        String name = info['name'];
-
-        double progress = numericValue / dailyValue;
-        int percentage = (progress * 100).round();
-
-        minerals[normalizedKey] = {
-          'name': name,
-          'value':
-              '${numericValue.toStringAsFixed(1)}/${dailyValue.toStringAsFixed(1)} $unit',
-          'percent': '$percentage%',
-          'progress': progress.clamp(0.0, 1.0),
-          'hasInfo': false,
-        };
-      } else if (!['protein', 'fat', 'carbs'].contains(normalizedKey)) {
-        // It's other nutrients (fiber, cholesterol, etc.)
-        other[normalizedKey] = {
-          'name': _formatNutrientName(normalizedKey),
-          'value': '${numericValue.toStringAsFixed(1)} g',
-          'percent': '0%',
-          'progress': 0.0,
-          'hasInfo': false,
-        };
-      }
-    });
-
-    return {
-      'vitamins': vitamins,
-      'minerals': minerals,
-      'other': other,
-    };
-  }
-
-  // Helper method to format nutrient names for display
-  String _formatNutrientName(String key) {
-    return key
-        .split('_')
-        .map((word) => word[0].toUpperCase() + word.substring(1))
-        .join(' ');
+    );
   }
 
   // Helper method to generate a scanId specific to this food
@@ -7264,33 +7309,86 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     return scanId;
   }
 
-  // Helper to add a unit to a value if it doesn't already have one
-  String _addUnitIfMissing(String value, String defaultUnit) {
-    if (value.isEmpty) return "0$defaultUnit";
-
-    // If the value already contains a unit (contains letters), return as is
-    if (RegExp(r'[a-zA-Z]').hasMatch(value)) {
-      return value;
-    }
-
-    // Otherwise add the default unit
-    return "$value$defaultUnit";
-  }
-
   // Helper method to extract other nutrients from ingredients
   Map<String, dynamic> _extractOtherNutrients() {
     Map<String, dynamic> result = {};
 
     if (_ingredients.isEmpty) return result;
 
+    print("=== DEBUG: _extractOtherNutrients ===");
+    print("Number of ingredients: ${_ingredients.length}");
+
+    for (int i = 0; i < _ingredients.length; i++) {
+      final ingredient = _ingredients[i];
+      print("Ingredient $i: ${ingredient.keys.toList()}");
+
+      // Check for vitamins map
+      if (ingredient.containsKey('vitamins')) {
+        print("Found vitamins map: ${ingredient['vitamins']}");
+      }
+
+      // Check for minerals map
+      if (ingredient.containsKey('minerals')) {
+        print("Found minerals map: ${ingredient['minerals']}");
+      }
+
+      // Check for other map
+      if (ingredient.containsKey('other')) {
+        print("Found other map: ${ingredient['other']}");
+      }
+    }
+    print("=== END DEBUG ===");
+
+    // Helper function to convert vitamin values to correct units
+    double _convertVitaminValue(String vitaminKey, dynamic value) {
+      double numValue = _parseNutritionValue(value);
+
+      // Special handling for Vitamin A which might come in IU instead of mcg
+      if (vitaminKey.toLowerCase() == 'vitamin_a') {
+        // If the value is high (>500), it's likely in IU, convert to mcg
+        // 1 IU of Vitamin A = 0.3 mcg
+        // Realistic vitamin A values in mcg: 0-500 per meal
+        // Realistic vitamin A values in IU: 0-5000 per meal
+        if (numValue > 500) {
+          print(
+              "Converting Vitamin A from IU to mcg: $numValue IU -> ${numValue * 0.3} mcg");
+          return numValue * 0.3; // Convert IU to mcg
+        }
+        // If value is reasonable for mcg (0-500), keep as is
+        print(
+            "Vitamin A value $numValue mcg is in correct range, keeping as-is");
+        return numValue;
+      }
+
+      // For other vitamins that should be in mcg: D, K, B7, B9, B12
+      List<String> mcgVitamins = [
+        'vitamin_d',
+        'vitamin_k',
+        'vitamin_b7',
+        'vitamin_b9',
+        'vitamin_b12'
+      ];
+
+      // If these vitamins have very high values, they might be in wrong units
+      if (mcgVitamins.contains(vitaminKey.toLowerCase())) {
+        // If value is extremely high (>10000), it might be in wrong units
+        if (numValue > 10000) {
+          print(
+              "Warning: $vitaminKey has unusually high value: $numValue, keeping as-is but may need unit check");
+        }
+      }
+
+      return numValue;
+    }
+
     // Common nutrient fields to extract from ingredients
-    const List<String> commonNutrients = [
+    List<String> commonNutrients = [
       'fiber',
       'cholesterol',
       'sodium',
       'sugar',
       'saturated_fat',
-      'saturated_fats', // Also check for this variant
+      'saturated_fats',
       'omega_3',
       'omega_6',
       'potassium',
@@ -7305,12 +7403,11 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       'iodine',
       'chromium',
       'fluoride',
-      'chloride',
       'molybdenum'
     ];
 
-    // Pre-compute vitamin mappings
-    const Map<String, String> vitaminMappings = {
+    // Vitamins with different possible naming formats
+    Map<String, String> vitaminMappings = {
       'vitamin_a': 'vitamin_a',
       'vitamin a': 'vitamin_a',
       'a': 'vitamin_a',
@@ -7362,136 +7459,114 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       'cobalamin': 'vitamin_b12'
     };
 
-    // More efficient processing of ingredients - use indexing
-    final int ingredientCount = _ingredients.length;
-    for (int i = 0; i < ingredientCount; i++) {
-      final ingredient = _ingredients[i];
-
-      // FIRST: Check for nested "other" nutrients structure
-      if (ingredient.containsKey('other') && ingredient['other'] is Map) {
-        Map<String, dynamic> otherNutrients =
-            Map<String, dynamic>.from(ingredient['other']);
-        print(
-            "Found 'other' nutrients in ingredient ${ingredient['name']}: $otherNutrients");
-
-        otherNutrients.forEach((key, value) {
-          if (value != null) {
-            String normalizedKey = key.toLowerCase();
-            // Handle saturated_fats vs saturated_fat naming
-            if (normalizedKey == 'saturated_fats') {
-              normalizedKey = 'saturated_fats';
-            }
-
-            // If the nutrient exists in the result, add the values
-            if (result.containsKey(normalizedKey)) {
-              double existingValue =
-                  _parseNutritionValue(result[normalizedKey]);
-              double newValue = _parseNutritionValue(value);
-              result[normalizedKey] = (existingValue + newValue).toString();
-            } else {
-              // Just add the nutrient directly
-              result[normalizedKey] = value.toString();
-            }
-          }
-        });
-      }
-
-      // NEW: Check for nested "vitamins" structure from API response
+    // Check each ingredient for additional nutrition data
+    for (var ingredient in _ingredients) {
+      // Extract vitamins from nested vitamins map
       if (ingredient.containsKey('vitamins') && ingredient['vitamins'] is Map) {
         Map<String, dynamic> vitamins =
             Map<String, dynamic>.from(ingredient['vitamins']);
-        print(
-            "Found 'vitamins' object in ingredient ${ingredient['name']}: $vitamins");
-
         vitamins.forEach((key, value) {
-          if (value != null) {
-            String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+          String standardKey = key.toLowerCase().replaceAll(' ', '_');
+          if (vitaminMappings.containsKey(standardKey)) {
+            standardKey = vitaminMappings[standardKey]!;
+          }
 
-            // If the vitamin exists in the result, add the values
-            if (result.containsKey(normalizedKey)) {
-              double existingValue =
-                  _parseNutritionValue(result[normalizedKey]);
-              double newValue = _parseNutritionValue(value);
-              result[normalizedKey] = (existingValue + newValue).toString();
-            } else {
-              // Just add the vitamin directly
-              result[normalizedKey] = value.toString();
-            }
+          if (result.containsKey(standardKey)) {
+            double existingValue = _parseNutritionValue(result[standardKey]);
+            double newValue = _convertVitaminValue(standardKey, value);
+            result[standardKey] = existingValue + newValue;
+          } else {
+            result[standardKey] = _convertVitaminValue(standardKey, value);
           }
         });
       }
 
-      // NEW: Check for nested "minerals" structure from API response
+      // Extract minerals from nested minerals map
       if (ingredient.containsKey('minerals') && ingredient['minerals'] is Map) {
         Map<String, dynamic> minerals =
             Map<String, dynamic>.from(ingredient['minerals']);
-        print(
-            "Found 'minerals' object in ingredient ${ingredient['name']}: $minerals");
-
         minerals.forEach((key, value) {
-          if (value != null) {
-            String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
+          String standardKey = key.toLowerCase().replaceAll(' ', '_');
 
-            // If the mineral exists in the result, add the values
-            if (result.containsKey(normalizedKey)) {
-              double existingValue =
-                  _parseNutritionValue(result[normalizedKey]);
-              double newValue = _parseNutritionValue(value);
-              result[normalizedKey] = (existingValue + newValue).toString();
-            } else {
-              // Just add the mineral directly
-              result[normalizedKey] = value.toString();
-            }
+          if (result.containsKey(standardKey)) {
+            double existingValue = _parseNutritionValue(result[standardKey]);
+            double newValue = _parseNutritionValue(value);
+            result[standardKey] = existingValue + newValue;
+          } else {
+            result[standardKey] = _parseNutritionValue(value);
           }
         });
       }
 
-      // SECOND: Check for common nutrient fields at the root level - use direct indexing
-      for (int j = 0; j < commonNutrients.length; j++) {
-        final String field = commonNutrients[j];
+      // Extract other nutrients from nested other map
+      if (ingredient.containsKey('other') && ingredient['other'] is Map) {
+        Map<String, dynamic> other =
+            Map<String, dynamic>.from(ingredient['other']);
+        other.forEach((key, value) {
+          String standardKey = key.toLowerCase().replaceAll(' ', '_');
+
+          if (result.containsKey(standardKey)) {
+            double existingValue = _parseNutritionValue(result[standardKey]);
+            double newValue = _parseNutritionValue(value);
+            result[standardKey] = existingValue + newValue;
+          } else {
+            result[standardKey] = _parseNutritionValue(value);
+          }
+        });
+      }
+
+      // Also check for flat nutrient fields (backward compatibility)
+      for (String field in commonNutrients) {
         if (ingredient.containsKey(field) && ingredient[field] != null) {
           // If the field exists in the current result, add the values
           if (result.containsKey(field)) {
             // Parse both values and add them
             double existingValue = _parseNutritionValue(result[field]);
             double newValue = _parseNutritionValue(ingredient[field]);
-            result[field] = (existingValue + newValue).toString();
+            result[field] = existingValue + newValue;
           } else {
             // Just add the field directly
-            result[field] = ingredient[field].toString();
+            result[field] = _parseNutritionValue(ingredient[field]);
           }
         }
       }
 
-      // THIRD: Check for vitamins with different naming formats - use direct map access
-      ingredient.forEach((key, value) {
-        if (value == null) return;
-
-        String? targetKey = vitaminMappings[key.toLowerCase()];
-        if (targetKey != null) {
+      // Check for vitamins with different naming formats (flat fields)
+      vitaminMappings.forEach((sourceKey, targetKey) {
+        if (ingredient.containsKey(sourceKey) &&
+            ingredient[sourceKey] != null) {
           // If this vitamin exists in the result under the standardized key, add the values
           if (result.containsKey(targetKey)) {
             double existingValue = _parseNutritionValue(result[targetKey]);
-            double newValue = _parseNutritionValue(value);
-            result[targetKey] = (existingValue + newValue).toString();
+            double newValue =
+                _convertVitaminValue(targetKey, ingredient[sourceKey]);
+            result[targetKey] = existingValue + newValue;
           } else {
             // Add the vitamin with the standardized key
-            result[targetKey] = value.toString();
+            result[targetKey] =
+                _convertVitaminValue(targetKey, ingredient[sourceKey]);
           }
         }
-        // Check for any keys that contain "vitamin" but aren't in our mapping
-        else if (key.toLowerCase().contains('vitamin')) {
+      });
+
+      // Check for any keys that contain "vitamin" but aren't in our mapping (flat fields)
+      ingredient.keys.forEach((key) {
+        String lowerKey = key.toLowerCase();
+        if (lowerKey.contains('vitamin') &&
+            !vitaminMappings.containsKey(lowerKey)) {
           // Standardize the key format: replace spaces with underscores
-          String standardKey = key.toLowerCase().replaceAll(' ', '_');
+          String standardKey = lowerKey.replaceAll(' ', '_');
 
           // If this vitamin exists in the result under the standardized key, add the values
           if (result.containsKey(standardKey)) {
             double existingValue = _parseNutritionValue(result[standardKey]);
-            double newValue = _parseNutritionValue(value);
-            result[standardKey] = (existingValue + newValue).toString();
+            double newValue =
+                _convertVitaminValue(standardKey, ingredient[key]);
+            result[standardKey] = existingValue + newValue;
           } else {
             // Add the vitamin with the standardized key
-            result[standardKey] = value.toString();
+            result[standardKey] =
+                _convertVitaminValue(standardKey, ingredient[key]);
           }
         }
       });
@@ -7501,220 +7576,54 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     return result;
   }
 
-  // Method to update nutrition display without permanently saving data
-  void _updateNutritionDisplay() {
-    // Create a map with basic nutrition data - ALWAYS include units to ensure they display in Nutrition.dart
-    Map<String, dynamic> nutritionData = {
-      'protein': _addUnitIfMissing(_protein, 'g'),
-      'fat': _addUnitIfMissing(_fat, 'g'),
-      'carbs': _addUnitIfMissing(_carbs, 'g'),
-    };
-
-    // Handle micronutrients based on ingredient count
-    if (_ingredients.isEmpty) {
-      // If all ingredients are deleted, don't show any micronutrients
-      print("No ingredients left, clearing all micronutrient data");
-    } else if (_ingredients.length == 1 &&
-        widget.ingredients != null &&
-        widget.ingredients!.length > 1 &&
-        widget.additionalNutrients != null) {
-      // Special case: If we had multiple ingredients before but now have only one,
-      // the micronutrients should be adjusted to reflect that only one ingredient remains
-
-      // Calculate the proportion of the remaining ingredient's calories to original total
-      double originalTotalCalories = 0;
-      for (var ingredient in widget.ingredients!) {
-        var calories = ingredient['calories'];
-        if (calories is String) {
-          originalTotalCalories += double.tryParse(calories) ?? 0;
-        } else if (calories is num) {
-          originalTotalCalories += calories.toDouble();
-        }
-      }
-
-      // Get current calories of the remaining ingredient
-      double remainingCalories = 0;
-      var calories = _ingredients[0]['calories'];
-      if (calories is String) {
-        remainingCalories = double.tryParse(calories) ?? 0;
-      } else if (calories is num) {
-        remainingCalories = calories.toDouble();
-      }
-
-      // Calculate ratio for scaling micronutrients
-      double ratio = originalTotalCalories > 0
-          ? remainingCalories / originalTotalCalories
-          : 0.5;
-
-      // Adjust micronutrients by ratio
-      print(
-          "Scaling micronutrients by ratio: $ratio (1 ingredient remaining out of ${widget.ingredients!.length})");
-
-      if (widget.additionalNutrients != null &&
-          widget.additionalNutrients!.isNotEmpty) {
-        Map<String, dynamic> scaledNutrients = {};
-
-        widget.additionalNutrients!.forEach((key, value) {
-          if (value is num) {
-            scaledNutrients[key] = (value * ratio).round();
-          } else if (value is String) {
-            double? numValue = double.tryParse(value);
-            if (numValue != null) {
-              scaledNutrients[key] = (numValue * ratio).round().toString();
-            } else {
-              scaledNutrients[key] = value; // Keep non-numeric values unchanged
-            }
-          } else {
-            scaledNutrients[key] = value; // Keep other types unchanged
-          }
-        });
-
-        print("Adding scaled micronutrients: $scaledNutrients");
-        nutritionData.addAll(scaledNutrients);
-      }
-    } else if (widget.additionalNutrients != null &&
-        widget.additionalNutrients!.isNotEmpty) {
-      // Regular case: Add micronutrients directly from the widget parameter if available
-      print(
-          "Adding micronutrients from widget parameter: ${widget.additionalNutrients}");
-      nutritionData.addAll(widget.additionalNutrients!);
-    }
-
-    // Extract and add additional nutrition data from ingredients if available
-    if (_ingredients.isNotEmpty) {
-      // Check if ingredients contain additional micronutrient information
-      Map<String, dynamic> otherNutrients = _extractOtherNutrients();
-
-      // Add any nutrients found in ingredients that weren't already added
-      otherNutrients.forEach((key, value) {
-        if (!nutritionData.containsKey(key)) {
-          nutritionData[key] = value;
-        }
+  // Debug method to print micronutrients
+  void _debugPrintMicronutrients() {
+    if (widget.additionalNutrients != null) {
+      widget.additionalNutrients!.forEach((key, value) {
+        print('  $key: $value');
       });
+    } else {
+      print('  No micronutrients available');
     }
-
-    // Create a truly consistent ID for this specific food that will never change
-    String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
-    String caloriesId = _calories.replaceAll('.', '_');
-    String foodSpecificScanId = "food_nutrition_${foodName}_${caloriesId}";
-
-    print("Updating local nutrition data without navigation: $nutritionData");
-
-    // Just update the widget's additionalNutrients value without navigating
-    if (mounted) {
-      setState(() {
-        widget.additionalNutrients?.clear();
-        widget.additionalNutrients?.addAll(nutritionData);
-      });
-    }
-
-    // Pre-save nutrition data for when user actually opens the Nutrition screen
-    SharedPreferences.getInstance().then((prefs) {
-      try {
-        Map<String, dynamic> allData = {
-          'scanId': foodSpecificScanId,
-          'lastSaved': DateTime.now().millisecondsSinceEpoch,
-          'nutritionData': nutritionData
-        };
-
-        String dataJson = jsonEncode(allData);
-        prefs.setString('nutrition_data_$foodSpecificScanId', dataJson);
-        print('Updated temporary nutrition data for ID: $foodSpecificScanId');
-      } catch (e) {
-        print('Error updating temporary nutrition data: $e');
-      }
-    });
+    print('=======================================');
   }
 
-  // Helper method to clean up storage to prevent quota exceeded errors
-  Future<void> _cleanupStorageIfNeeded() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
+  // Recalculate micronutrients after ingredient deletion
+  void _recalculateMicronutrientsAfterDeletion() {
+    // Recalculate micronutrients from remaining ingredients
+    _recalculateMicronutrientsFromRemainingIngredients();
 
-      // Check if we have food_cards
-      final List<String>? storedCards = prefs.getStringList('food_cards');
-      if (storedCards == null || storedCards.isEmpty) return;
+    // Recalculate totals
+    _calculateTotalNutrition();
+  }
 
-      print('Storage cleanup: Found ${storedCards.length} food cards');
+  // Generate fresh nutrition data after ingredient deletion for the nutrition screen
+  Map<String, dynamic> _generateFreshNutritionData() {
+    // Create the updated nutrition data structure that matches what the nutrition screen expects
+    Map<String, dynamic> freshData = {
+      'protein': _protein,
+      'fat': _fat,
+      'carbs': _carbs,
+      'calories': _calories,
+      'scanId': _generateFoodSpecificScanId(),
+      'lastUpdated': DateTime.now().millisecondsSinceEpoch,
+      'freshData': true, // Flag to indicate this is fresh data after deletion
+    };
 
-      // If we have more than 10 cards, remove the oldest ones
-      if (storedCards.length > 10) {
-        List<Map<String, dynamic>> cardDataList = [];
-
-        // Parse all cards and extract timestamps
-        for (String cardJson in storedCards) {
-          try {
-            Map<String, dynamic> cardData = jsonDecode(cardJson);
-            // Add timestamp if missing (use current time as fallback)
-            if (!cardData.containsKey('time')) {
-              cardData['time'] =
-                  DateTime.now().millisecondsSinceEpoch.toString();
-            }
-            cardDataList.add(cardData);
-          } catch (e) {
-            print('Error parsing card during cleanup: $e');
-          }
-        }
-
-        // Sort by timestamp (newest first)
-        cardDataList.sort((a, b) {
-          int timeA = int.tryParse(a['time']?.toString() ?? '0') ?? 0;
-          int timeB = int.tryParse(b['time']?.toString() ?? '0') ?? 0;
-          return timeB.compareTo(timeA); // Newest first
-        });
-
-        // Keep only the 10 most recent cards
-        List<String> cleanedCards = cardDataList
-            .take(10)
-            .map((cardData) => jsonEncode(cardData))
-            .toList();
-
-        await prefs.setStringList('food_cards', cleanedCards);
-        print(
-            'Storage cleanup: Reduced from ${storedCards.length} to ${cleanedCards.length} cards');
-      }
-
-      // Compress images in remaining cards to reduce storage usage
-      final List<String>? currentCards = prefs.getStringList('food_cards');
-      if (currentCards != null && currentCards.isNotEmpty) {
-        List<String> compressedCards = [];
-
-        for (String cardJson in currentCards) {
-          try {
-            Map<String, dynamic> cardData = jsonDecode(cardJson);
-
-            // If card has an image, compress it
-            if (cardData.containsKey('image') && cardData['image'] != null) {
-              String imageBase64 = cardData['image'];
-
-              // If image is larger than 500KB, compress it
-              if (imageBase64.length > 500000) {
-                // Simple compression: take every 2nd character (rough 50% reduction)
-                String compressedImage = '';
-                for (int i = 0; i < imageBase64.length; i += 2) {
-                  if (i < imageBase64.length) {
-                    compressedImage += imageBase64[i];
-                  }
-                }
-                cardData['image'] = compressedImage;
-                print(
-                    'Compressed image for ${cardData['name']}: ${imageBase64.length} -> ${compressedImage.length} chars');
-              }
-            }
-
-            compressedCards.add(jsonEncode(cardData));
-          } catch (e) {
-            print('Error compressing card image: $e');
-            compressedCards.add(cardJson); // Keep original if compression fails
-          }
-        }
-
-        await prefs.setStringList('food_cards', compressedCards);
-    print(
-            'Storage cleanup: Compressed images in ${compressedCards.length} cards');
-      }
-    } catch (e) {
-      print('Error during storage cleanup: $e');
+    // Add all the recalculated micronutrients
+    if (widget.additionalNutrients != null &&
+        widget.additionalNutrients!.isNotEmpty) {
+      freshData.addAll(widget.additionalNutrients!);
     }
+
+    print('🆕 Generated fresh nutrition data with ${freshData.length} entries');
+    return freshData;
+  }
+
+  // Generate the food-specific scan ID (consistent with codia_page.dart)
+  String _generateFoodSpecificScanId() {
+    String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
+    String calIdentifier = _calories.replaceAll('.', '_');
+    return 'food_nutrition_${foodName}_${calIdentifier}';
   }
 }
