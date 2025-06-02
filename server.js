@@ -86,18 +86,71 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
     // Force JSON response format
     const requestBody = {
       model: 'gpt-4o',
-      temperature: 0.9,
+      temperature: 0.3,
       messages: [
         {
           role: 'system',
-          content: '[STRICTLY JSON ONLY] You are a nutrition expert analyzing food images. OUTPUT MUST BE VALID JSON AND NOTHING ELSE.\n\n[CRITICAL NUTRITION ANALYSIS RULES]\nYou MUST calculate nutritional values BASED ON THE FOOD INGREDIENTS AND THEIR TYPICAL COMPOSITION:\n- Calculate protein, fats, and carbs based on actual typical nutritional composition of the identified ingredients\n- DO NOT inflate protein content - be realistic (e.g., donuts should have LOW protein, around 3-7g per serving)\n- CALORIES MUST BE PRECISE WHOLE NUMBERS - NO ROUNDING to multiples of 10 or 50\n- For example: if a food has 283 calories, return 283 (NOT 280 or 300)\n- Use common food nutrition databases as reference for standard values\n- Sweet foods should typically have higher carbs, lower protein\n- Meat dishes should have higher protein\n- Avoid unrealistic macros like high protein in desserts or high fat in fruits\n\n[CRITICAL INGREDIENT NAMING RULES]\n- EACH INGREDIENT NAME MUST BE 14 CHARACTERS OR LESS (including spaces, commas, hyphens)\n- NEVER USE THE WORD "WITH" IN INGREDIENT NAMES - split ingredients instead\n- If a full ingredient name would be longer than 14 characters, split it into SEPARATE INGREDIENTS\n- For example: "Chocolate with Nuts" is INCORRECT, instead use "Chocolate" and "Nuts" as separate ingredients\n- Another example: "Whole Wheat Bread" (17 chars) should be split into "Whole Wheat" and "Bread" as separate ingredients\n- Each component still gets its own weight and calories\n- Do not abbreviate ingredient names, split them instead\n- Be as specific and accurate as possible with each ingredient name\n\n[CRITICAL UNIT FORMAT RULES - EXACT MATCH REQUIRED]\n- ALWAYS include units for all nutrition values\n- Protein, fats, carbs: use "g" units (e.g., "24g")\n- Calories: use "kcal" units (e.g., "283kcal")\n- All vitamins and minerals: include proper units (mg, mcg, g)\n- Never separate numbers from their units with spaces\n\n[COMPLETE NUTRIENT REQUIREMENTS - ALL 34 NUTRIENTS MANDATORY]\nYou MUST provide ALL 34 nutrients that are tracked with EXACT UNITS:\n\nVITAMINS (13): \n- vitamin_a (mcg) - Target: 700 mcg\n- vitamin_c (mg) - Target: 75 mg\n- vitamin_d (mcg) - Target: 15 mcg\n- vitamin_e (mg) - Target: 15 mg\n- vitamin_k (mcg) - Target: 90 mcg\n- vitamin_b1 (mg) - Target: 1.1 mg\n- vitamin_b2 (mg) - Target: 1.1 mg\n- vitamin_b3 (mg) - Target: 14 mg\n- vitamin_b5 (mg) - Target: 5 mg\n- vitamin_b6 (mg) - Target: 1.3 mg\n- vitamin_b7 (mcg) - Target: 30 mcg\n- vitamin_b9 (mcg) - Target: 400 mcg\n- vitamin_b12 (mcg) - Target: 2.4 mcg\n\nMINERALS (15):\n- calcium (mg) - Target: 1000 mg\n- chloride (mg) - Target: 2300 mg\n- chromium (mcg) - Target: 35 mcg\n- copper (mcg) - Target: 900 mcg\n- fluoride (mg) - Target: 4 mg\n- iodine (mcg) - Target: 150 mcg\n- iron (mg) - Target: 18 mg\n- magnesium (mg) - Target: 400 mg\n- manganese (mg) - Target: 2.3 mg\n- molybdenum (mcg) - Target: 45 mcg\n- phosphorus (mg) - Target: 700 mg\n- potassium (mg) - Target: 3500 mg\n- selenium (mcg) - Target: 55 mcg\n- sodium (mg) - Target: 2300 mg\n- zinc (mg) - Target: 11 mg\n\nOTHER NUTRIENTS (6):\n- fiber (g) - Target: 30 g\n- cholesterol (mg) - Target: 300 mg\n- sugar (g) - Target: 100 g\n- saturated_fats (g) - Target: 22 g\n- omega_3 (mg) - Target: 1500 mg\n- omega_6 (g) - Target: 14 g\n\n[INGREDIENT-BY-INGREDIENT ANALYSIS REQUIRED]\nFor EVERY ingredient detected, you must:\n1. Identify the specific ingredient with weight\n2. Calculate ALL 34 micronutrients for that specific ingredient\n3. Sum all ingredient values to get total meal values\n4. Provide realistic values based on actual food composition\n\nFORMAT RULES:\n1. Return a single meal name for the entire image (e.g., "Pasta Meal")\n2. List ingredients with weights and calories (e.g., "Pasta (100g) 200kcal")\n3. Return PRECISE nutritional values for ALL 34 nutrients WITH EXACT UNITS\n4. Calculate a health score (1-10) based on ingredient quality and nutritional value\n\nHEALTH SCORE CRITERIA:\n• Positive indicators (+): Whole/unprocessed foods, healthy fats, high fiber foods\n• Negative indicators (-): Highly processed/fried ingredients, added sugars, high saturated fats\n• Score meaning: 9-10 (Very healthy), 7-8 (Healthy), 5-6 (Moderate), 3-4 (Unhealthy), 1-2 (Very unhealthy)\n\nYOU WILL BE PENALIZED SEVERELY IF YOU OMIT ANY OF THE 34 REQUIRED NUTRIENTS, GENERATE UNREALISTIC NUTRITIONAL VALUES, ROUNDED CALORIES, OR INGREDIENT NAMES LONGER THAN 14 CHARACTERS OR CONTAINING THE WORD "WITH".\n\nEXACT FORMAT REQUIRED:\n{\n  "meal_name": "Meal Name",\n  "ingredients": ["Item1 (weight) calories", "Item2 (weight) calories"],\n  "calories": "precise calorie count with kcal unit",\n  "protein": "realistic protein amount with g unit",\n  "fat": "realistic fat amount with g unit",\n  "carbs": "realistic carb amount with g unit",\n  "vitamin_a": "amount with mcg unit",\n  "vitamin_c": "amount with mg unit",\n  "vitamin_d": "amount with mcg unit",\n  "vitamin_e": "amount with mg unit",\n  "vitamin_k": "amount with mcg unit",\n  "vitamin_b1": "amount with mg unit",\n  "vitamin_b2": "amount with mg unit",\n  "vitamin_b3": "amount with mg unit",\n  "vitamin_b5": "amount with mg unit",\n  "vitamin_b6": "amount with mg unit",\n  "vitamin_b7": "amount with mcg unit",\n  "vitamin_b9": "amount with mcg unit",\n  "vitamin_b12": "amount with mcg unit",\n  "calcium": "amount with mg unit",\n  "chloride": "amount with mg unit",\n  "chromium": "amount with mcg unit",\n  "copper": "amount with mcg unit",\n  "fluoride": "amount with mg unit",\n  "iodine": "amount with mcg unit",\n  "iron": "amount with mg unit",\n  "magnesium": "amount with mg unit",\n  "manganese": "amount with mg unit",\n  "molybdenum": "amount with mcg unit",\n  "phosphorus": "amount with mg unit",\n  "potassium": "amount with mg unit",\n  "selenium": "amount with mcg unit",\n  "sodium": "amount with mg unit",\n  "zinc": "amount with mg unit",\n  "fiber": "amount with g unit",\n  "cholesterol": "amount with mg unit",\n  "sugar": "amount with g unit",\n  "saturated_fats": "amount with g unit",\n  "omega_3": "amount with mg unit",\n  "omega_6": "amount with g unit",\n  "health_score": "score/10"\n}'
+          content: 'You are a nutrition expert. Analyze food images and return detailed nutritional information in JSON format. Include all vitamins, minerals, and macronutrients with proper units.'
         },
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              text: "RETURN ONLY RAW JSON. Analyze this food image with the MOST ACCURATE values possible based on the typical nutritional composition of the identified ingredients. Use PRECISE CALORIE COUNTS - do not round to multiples of 10 or 50 (e.g., if a food has 283 calories, return 283, not 280 or 300). IMPORTANT: Each ingredient name MUST BE 14 CHARACTERS OR LESS - split longer names into separate ingredients with their own weights and calories. NEVER use the word \"with\" in ingredient names - split them into separate ingredients instead. Ensure all nutritional values are realistic for the type of food shown.\n\nYou MUST provide ALL 34 nutrients listed in the system prompt with EXACT UNITS. DO NOT omit any vitamins, minerals, or other nutrients. Analyze EACH INGREDIENT SEPARATELY and sum their nutritional values.\n\nFor EVERY ingredient you detect:\n1. Estimate its weight in the meal\n2. Calculate ALL 34 micronutrients for that ingredient\n3. Add all ingredient values together for the final totals\n4. Use realistic nutritional values based on actual food composition databases\n\n{\n  \"meal_name\": \"string (single name for entire meal)\",\n  \"ingredients\": [\"array of strings with weights and calories (EACH INGREDIENT NAME ≤ 14 CHARS, NO WITH)\"],\n  \"calories\": \"precise calorie count (exact number, not rounded) with kcal unit\",\n  \"protein\": \"realistic protein amount in grams with g unit\",\n  \"fat\": \"realistic fat amount in grams with g unit\",\n  \"carbs\": \"realistic carb amount in grams with g unit\",\n  \"vitamin_a\": \"amount with mcg unit\",\n  \"vitamin_c\": \"amount with mg unit\",\n  \"vitamin_d\": \"amount with mcg unit\",\n  \"vitamin_e\": \"amount with mg unit\",\n  \"vitamin_k\": \"amount with mcg unit\",\n  \"vitamin_b1\": \"amount with mg unit\",\n  \"vitamin_b2\": \"amount with mg unit\",\n  \"vitamin_b3\": \"amount with mg unit\",\n  \"vitamin_b5\": \"amount with mg unit\",\n  \"vitamin_b6\": \"amount with mg unit\",\n  \"vitamin_b7\": \"amount with mcg unit\",\n  \"vitamin_b9\": \"amount with mcg unit\",\n  \"vitamin_b12\": \"amount with mcg unit\",\n  \"calcium\": \"amount with mg unit\",\n  \"chloride\": \"amount with mg unit\",\n  \"chromium\": \"amount with mcg unit\",\n  \"copper\": \"amount with mcg unit\",\n  \"fluoride\": \"amount with mg unit\",\n  \"iodine\": \"amount with mcg unit\",\n  \"iron\": \"amount with mg unit\",\n  \"magnesium\": \"amount with mg unit\",\n  \"manganese\": \"amount with mg unit\",\n  \"molybdenum\": \"amount with mcg unit\",\n  \"phosphorus\": \"amount with mg unit\",\n  \"potassium\": \"amount with mg unit\",\n  \"selenium\": \"amount with mcg unit\",\n  \"sodium\": \"amount with mg unit\",\n  \"zinc\": \"amount with mg unit\",\n  \"fiber\": \"amount with g unit\",\n  \"cholesterol\": \"amount with mg unit\",\n  \"sugar\": \"amount with g unit\",\n  \"saturated_fats\": \"amount with g unit\",\n  \"omega_3\": \"amount with mg unit\",\n  \"omega_6\": \"amount with g unit\",\n  \"health_score\": \"string\"\n}"
+              text: `Please analyze this food image and return a JSON object with complete nutritional information. Include:
+
+1. Basic info: meal_name, ingredients (with weights), calories, protein, fat, carbs
+2. All 13 vitamins: A, C, D, E, K, B1, B2, B3, B5, B6, B7, B9, B12 (with proper units)
+3. All 15 minerals: calcium, chloride, chromium, copper, fluoride, iodine, iron, magnesium, manganese, molybdenum, phosphorus, potassium, selenium, sodium, zinc (with proper units)
+4. Other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6 (with proper units)
+5. Health score (1-10)
+
+Use realistic nutritional values based on standard food databases. Return only valid JSON.
+
+Example format:
+{
+  "meal_name": "Food Name",
+  "ingredients": ["Item1 (100g) 200kcal", "Item2 (50g) 150kcal"],
+  "calories": "350kcal",
+  "protein": "15g",
+  "fat": "12g", 
+  "carbs": "45g",
+  "vitamin_a": "500mcg",
+  "vitamin_c": "30mg",
+  "vitamin_d": "2mcg",
+  "vitamin_e": "5mg",
+  "vitamin_k": "15mcg",
+  "vitamin_b1": "0.8mg",
+  "vitamin_b2": "0.6mg",
+  "vitamin_b3": "8mg",
+  "vitamin_b5": "3mg",
+  "vitamin_b6": "1mg",
+  "vitamin_b7": "20mcg",
+  "vitamin_b9": "150mcg",
+  "vitamin_b12": "1mcg",
+  "calcium": "200mg",
+  "chloride": "300mg",
+  "chromium": "5mcg",
+  "copper": "200mcg",
+  "fluoride": "0.5mg",
+  "iodine": "20mcg",
+  "iron": "3mg",
+  "magnesium": "80mg",
+  "manganese": "1mg",
+  "molybdenum": "10mcg",
+  "phosphorus": "150mg",
+  "potassium": "400mg",
+  "selenium": "15mcg",
+  "sodium": "500mg",
+  "zinc": "2mg",
+  "fiber": "8g",
+  "cholesterol": "50mg",
+  "sugar": "20g",
+  "saturated_fats": "4g",
+  "omega_3": "200mg",
+  "omega_6": "1g",
+  "health_score": "7/10"
+}`
             },
             {
               type: 'image_url',
