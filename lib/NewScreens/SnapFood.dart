@@ -555,6 +555,113 @@ class _SnapFoodState extends State<SnapFood> {
             _extractDecimalValue(analysisData['vitamin_c']?.toString() ?? "0");
         String healthScore = analysisData['health_score']?.toString() ?? "5/10";
 
+        // EXTRACT ALL 34 MICRONUTRIENTS FROM OPENAI RESPONSE
+        Map<String, dynamic> allMicronutrients = {};
+
+        // Extract vitamins (13 nutrients)
+        allMicronutrients['vitamin_a'] =
+            _extractNumericValue(analysisData['vitamin_a']?.toString() ?? "0");
+        allMicronutrients['vitamin_c'] =
+            _extractNumericValue(analysisData['vitamin_c']?.toString() ?? "0");
+        allMicronutrients['vitamin_d'] =
+            _extractNumericValue(analysisData['vitamin_d']?.toString() ?? "0");
+        allMicronutrients['vitamin_e'] =
+            _extractNumericValue(analysisData['vitamin_e']?.toString() ?? "0");
+        allMicronutrients['vitamin_k'] =
+            _extractNumericValue(analysisData['vitamin_k']?.toString() ?? "0");
+        allMicronutrients['vitamin_b1'] =
+            _extractNumericValue(analysisData['vitamin_b1']?.toString() ?? "0");
+        allMicronutrients['vitamin_b2'] =
+            _extractNumericValue(analysisData['vitamin_b2']?.toString() ?? "0");
+        allMicronutrients['vitamin_b3'] =
+            _extractNumericValue(analysisData['vitamin_b3']?.toString() ?? "0");
+        allMicronutrients['vitamin_b5'] =
+            _extractNumericValue(analysisData['vitamin_b5']?.toString() ?? "0");
+        allMicronutrients['vitamin_b6'] =
+            _extractNumericValue(analysisData['vitamin_b6']?.toString() ?? "0");
+        allMicronutrients['vitamin_b7'] =
+            _extractNumericValue(analysisData['vitamin_b7']?.toString() ?? "0");
+        allMicronutrients['vitamin_b9'] =
+            _extractNumericValue(analysisData['vitamin_b9']?.toString() ?? "0");
+        allMicronutrients['vitamin_b12'] = _extractNumericValue(
+            analysisData['vitamin_b12']?.toString() ?? "0");
+
+        // Extract minerals (15 nutrients)
+        allMicronutrients['calcium'] =
+            _extractNumericValue(analysisData['calcium']?.toString() ?? "0");
+        allMicronutrients['chloride'] =
+            _extractNumericValue(analysisData['chloride']?.toString() ?? "0");
+        allMicronutrients['chromium'] =
+            _extractNumericValue(analysisData['chromium']?.toString() ?? "0");
+        allMicronutrients['copper'] =
+            _extractNumericValue(analysisData['copper']?.toString() ?? "0");
+        allMicronutrients['fluoride'] =
+            _extractNumericValue(analysisData['fluoride']?.toString() ?? "0");
+        allMicronutrients['iodine'] =
+            _extractNumericValue(analysisData['iodine']?.toString() ?? "0");
+        allMicronutrients['iron'] =
+            _extractNumericValue(analysisData['iron']?.toString() ?? "0");
+        allMicronutrients['magnesium'] =
+            _extractNumericValue(analysisData['magnesium']?.toString() ?? "0");
+        allMicronutrients['manganese'] =
+            _extractNumericValue(analysisData['manganese']?.toString() ?? "0");
+        allMicronutrients['molybdenum'] =
+            _extractNumericValue(analysisData['molybdenum']?.toString() ?? "0");
+        allMicronutrients['phosphorus'] =
+            _extractNumericValue(analysisData['phosphorus']?.toString() ?? "0");
+        allMicronutrients['potassium'] =
+            _extractNumericValue(analysisData['potassium']?.toString() ?? "0");
+        allMicronutrients['selenium'] =
+            _extractNumericValue(analysisData['selenium']?.toString() ?? "0");
+        allMicronutrients['sodium'] =
+            _extractNumericValue(analysisData['sodium']?.toString() ?? "0");
+        allMicronutrients['zinc'] =
+            _extractNumericValue(analysisData['zinc']?.toString() ?? "0");
+
+        // Extract other nutrients (6 nutrients)
+        allMicronutrients['fiber'] =
+            _extractNumericValue(analysisData['fiber']?.toString() ?? "0");
+        allMicronutrients['cholesterol'] = _extractNumericValue(
+            analysisData['cholesterol']?.toString() ?? "0");
+        allMicronutrients['sugar'] =
+            _extractNumericValue(analysisData['sugar']?.toString() ?? "0");
+        allMicronutrients['saturated_fats'] = _extractNumericValue(
+            analysisData['saturated_fats']?.toString() ?? "0");
+        allMicronutrients['omega_3'] =
+            _extractNumericValue(analysisData['omega_3']?.toString() ?? "0");
+        allMicronutrients['omega_6'] =
+            _extractNumericValue(analysisData['omega_6']?.toString() ?? "0");
+
+        print('🔬 EXTRACTED ALL 34 MICRONUTRIENTS FROM OPENAI RESPONSE:');
+        print(
+            '📊 Vitamins (13): ${allMicronutrients.keys.where((k) => k.startsWith('vitamin_')).length}');
+        print('⚗️ Minerals (15): ${[
+          'calcium',
+          'chloride',
+          'chromium',
+          'copper',
+          'fluoride',
+          'iodine',
+          'iron',
+          'magnesium',
+          'manganese',
+          'molybdenum',
+          'phosphorus',
+          'potassium',
+          'selenium',
+          'sodium',
+          'zinc'
+        ].where((k) => allMicronutrients.containsKey(k)).length}');
+        print('🥗 Other (6): ${[
+          'fiber',
+          'cholesterol',
+          'sugar',
+          'saturated_fats',
+          'omega_3',
+          'omega_6'
+        ].where((k) => allMicronutrients.containsKey(k)).length}');
+        print('💾 Total nutrients extracted: ${allMicronutrients.length}');
+
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
 
@@ -704,6 +811,7 @@ class _SnapFoodState extends State<SnapFood> {
           ingredientsList,
           healthScore,
           scanId, // Pass the scanId parameter
+          allMicronutrients, // Pass all 34 extracted micronutrients
         );
 
         // Mark navigation as handled
@@ -732,7 +840,8 @@ class _SnapFoodState extends State<SnapFood> {
             }
           ],
           "5/10",
-          scanId, // Pass the scanId parameter even in error case
+          scanId,
+          {}, // Empty micronutrients for error case
         );
       }
     }
@@ -820,10 +929,14 @@ class _SnapFoodState extends State<SnapFood> {
       String carbs,
       List<Map<String, dynamic>> ingredientsList,
       [String healthScore = "5/10",
-      String? scanId]) async {
+      String? scanId,
+      Map<String, dynamic>? micronutrients]) async {
     // Use provided scanId or generate a new one as fallback
     final String finalScanId = scanId ??
         '${foodName.isEmpty ? 'analyzed_meal' : foodName.replaceAll(' ', '_').toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}';
+
+    // Use provided micronutrients or empty map as fallback
+    final Map<String, dynamic> finalMicronutrients = micronutrients ?? {};
 
     // Get the current image bytes - use original without compression
     Uint8List? originalImage;
@@ -933,7 +1046,7 @@ class _SnapFoodState extends State<SnapFood> {
               imageBase64: displayImageBase64 ?? base64Image,
               ingredients: ingredientsList,
               additionalNutrients:
-                  _extractNutrientsFromIngredients(ingredientsList),
+                  finalMicronutrients, // Pass the extracted micronutrients directly
               scanId: finalScanId, // Pass the scanId to FoodCardOpen
             ),
           ),
