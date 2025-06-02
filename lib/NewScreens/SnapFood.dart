@@ -709,7 +709,43 @@ class _SnapFoodState extends State<SnapFood> {
         });
         print('🔍 ================================================\n');
 
-        // 🔧 VALIDATE AND CORRECT UNREALISTIC VALUES FROM OPENAI\n        Map<String, dynamic> validatedMicronutrients = _validateNutritionValues(allMicronutrients, mealName);\n        \n        print('🔧 VALIDATED NUTRITION VALUES:');\n        print('📊 CORRECTED VITAMINS:');\n        validatedMicronutrients.forEach((key, value) {\n          if (key.startsWith('vitamin_')) {\n            print('  • $key: ${value}${_getUnitForVitamin(key)}');\n          }\n        });\n        print('⚗️ CORRECTED MINERALS:');\n        [\n          'calcium',\n          'chloride',\n          'chromium',\n          'copper',\n          'fluoride',\n          'iodine',\n          'iron',\n          'magnesium',\n          'manganese',\n          'molybdenum',\n          'phosphorus',\n          'potassium',\n          'selenium',\n          'sodium',\n          'zinc'\n        ].forEach((key) {\n          if (validatedMicronutrients.containsKey(key)) {\n            print(\n                '  • $key: ${validatedMicronutrients[key]}${_getUnitForMineral(key)}');\n          }\n        });\n        print('🔧 ================================================\\n');\n\n        // Use validated micronutrients as the final corrected values\n        Map<String, dynamic> correctedMicronutrients = validatedMicronutrients;
+        // 🔧 VALIDATE AND CORRECT UNREALISTIC VALUES FROM OPENAI
+        Map<String, dynamic> validatedMicronutrients =
+            _validateNutritionValues(allMicronutrients, mealName);
+        print('🔧 VALIDATED NUTRITION VALUES:');
+        print('📊 CORRECTED VITAMINS:');
+        validatedMicronutrients.forEach((key, value) {
+          if (key.startsWith('vitamin_')) {
+            print('  • $key: ${value}${_getUnitForVitamin(key)}');
+          }
+        });
+        print('⚗️ CORRECTED MINERALS:');
+        [
+          'calcium',
+          'chloride',
+          'chromium',
+          'copper',
+          'fluoride',
+          'iodine',
+          'iron',
+          'magnesium',
+          'manganese',
+          'molybdenum',
+          'phosphorus',
+          'potassium',
+          'selenium',
+          'sodium',
+          'zinc'
+        ].forEach((key) {
+          if (validatedMicronutrients.containsKey(key)) {
+            print(
+                '  • $key: ${validatedMicronutrients[key]}${_getUnitForMineral(key)}');
+          }
+        });
+        print('🔧 ================================================\\n');
+
+        // Use validated micronutrients as the final corrected values
+        Map<String, dynamic> correctedMicronutrients = validatedMicronutrients;
 
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
