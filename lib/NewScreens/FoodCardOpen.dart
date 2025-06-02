@@ -872,19 +872,53 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         'lastSaved': DateTime.now().millisecondsSinceEpoch,
       };
 
-      // Add image data if available
+      // Try to save with image first
+      bool savedWithImage = false;
       if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
         consolidatedData['imageBase64'] = _storedImageBase64;
       } else if (_imageBytes != null) {
         consolidatedData['imageBase64'] = base64Encode(_imageBytes!);
       }
 
-      // Save everything in ONE operation to prevent quota issues
-      String consolidatedJson = jsonEncode(consolidatedData);
-      await prefs.setString('food_data_$foodId', consolidatedJson);
-
-      print(
-          'Successfully saved consolidated food data for $foodId (${consolidatedJson.length} bytes)');
+      try {
+        // Save everything in ONE operation to prevent quota issues
+        String consolidatedJson = jsonEncode(consolidatedData);
+        await prefs.setString('food_data_$foodId', consolidatedJson);
+        savedWithImage = true;
+        print(
+            'Successfully saved consolidated food data for $foodId (${consolidatedJson.length} bytes)');
+      } catch (e) {
+        if (e.toString().contains('quota') ||
+            e.toString().contains('QuotaExceededError')) {
+          print('Storage quota exceeded with image, trying without image...');
+          // Remove image data and try again
+          consolidatedData.remove('imageBase64');
+          try {
+            String consolidatedJson = jsonEncode(consolidatedData);
+            await prefs.setString('food_data_$foodId', consolidatedJson);
+            print(
+                'Successfully saved food data without image (${consolidatedJson.length} bytes)');
+          } catch (e2) {
+            print('Error saving even without image: $e2');
+            // Try saving only essential data
+            Map<String, dynamic> essentialData = {
+              'foodName': _foodName,
+              'calories': _calories,
+              'protein': _protein,
+              'fat': _fat,
+              'carbs': _carbs,
+              'healthScore': _healthScore,
+              'counter': _counter,
+              'lastSaved': DateTime.now().millisecondsSinceEpoch,
+            };
+            String essentialJson = jsonEncode(essentialData);
+            await prefs.setString('food_data_$foodId', essentialJson);
+            print('Saved essential data only (${essentialJson.length} bytes)');
+          }
+        } else {
+          throw e; // Re-throw if not a quota error
+        }
+      }
 
       // Only update food_cards if absolutely necessary (not on every save)
       // This prevents the excessive storage operations

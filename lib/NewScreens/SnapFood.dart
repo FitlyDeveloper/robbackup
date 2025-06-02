@@ -713,14 +713,39 @@ class _SnapFoodState extends State<SnapFood> {
               continue; // Skip this malformed "ingredient"
             }
 
-            // For clean ingredient names, create default values
+            // Parse ingredient string format: "Name (weight) calories"
+            // Example: "Grilled Sausage (100g) 300kcal"
+            String name = ingredientString;
+            String amount = "100g";
+            int calories = 100;
+
+            // Extract weight in parentheses
+            RegExp weightRegex = RegExp(r'\(([^)]+)\)');
+            Match? weightMatch = weightRegex.firstMatch(ingredientString);
+            if (weightMatch != null) {
+              amount = weightMatch.group(1) ?? "100g";
+              // Remove the weight part from the name
+              name = ingredientString.replaceFirst(weightRegex, '').trim();
+            }
+
+            // Extract calories at the end
+            RegExp caloriesRegex =
+                RegExp(r'(\d+)\s*kcal', caseSensitive: false);
+            Match? caloriesMatch = caloriesRegex.firstMatch(ingredientString);
+            if (caloriesMatch != null) {
+              calories = int.tryParse(caloriesMatch.group(1) ?? '100') ?? 100;
+              // Remove the calories part from the name
+              name = name.replaceFirst(caloriesRegex, '').trim();
+            }
+
+            // For clean ingredient names, create values based on parsed data
             processedIngredient = {
-              'name': ingredientString.trim(),
-              'amount': "100g",
-              'calories': 100, // Default reasonable values
-              'protein': 5.0,
-              'fat': 3.0,
-              'carbs': 10.0,
+              'name': name,
+              'amount': amount,
+              'calories': calories,
+              'protein': (calories * 0.15).round(), // Estimate 15% protein
+              'fat': (calories * 0.25).round(), // Estimate 25% fat
+              'carbs': (calories * 0.60).round(), // Estimate 60% carbs
             };
           }
 

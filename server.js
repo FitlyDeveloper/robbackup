@@ -304,6 +304,67 @@ Example format:
         try {
           const parsedData = JSON.parse(jsonContent);
           logToFile('Successfully extracted and parsed JSON from text');
+          
+          // 🔬 LOG ALL 34 MICRONUTRIENTS TO TERMINAL (FALLBACK PATH)
+          if (parsedData) {
+            console.log('\n🔬 ===== COMPLETE MICRONUTRIENT ANALYSIS (FALLBACK) =====');
+            console.log(`📊 Meal: ${parsedData.meal_name || 'Unknown'}`);
+            console.log(`🍽️ Total Calories: ${parsedData.calories || 0}`);
+            console.log(`🥩 Protein: ${parsedData.protein || 0}g`);
+            console.log(`🧈 Fat: ${parsedData.fat || 0}g`);
+            console.log(`🍞 Carbs: ${parsedData.carbs || 0}g`);
+            
+            console.log('\n💊 VITAMINS (13):');
+            console.log(`  Vitamin A: ${parsedData.vitamin_a || 0} mcg`);
+            console.log(`  Vitamin C: ${parsedData.vitamin_c || 0} mg`);
+            console.log(`  Vitamin D: ${parsedData.vitamin_d || 0} mcg`);
+            console.log(`  Vitamin E: ${parsedData.vitamin_e || 0} mg`);
+            console.log(`  Vitamin K: ${parsedData.vitamin_k || 0} mcg`);
+            console.log(`  Vitamin B1 (Thiamine): ${parsedData.vitamin_b1 || 0} mg`);
+            console.log(`  Vitamin B2 (Riboflavin): ${parsedData.vitamin_b2 || 0} mg`);
+            console.log(`  Vitamin B3 (Niacin): ${parsedData.vitamin_b3 || 0} mg`);
+            console.log(`  Vitamin B5 (Pantothenic): ${parsedData.vitamin_b5 || 0} mg`);
+            console.log(`  Vitamin B6 (Pyridoxine): ${parsedData.vitamin_b6 || 0} mg`);
+            console.log(`  Vitamin B7 (Biotin): ${parsedData.vitamin_b7 || 0} mcg`);
+            console.log(`  Vitamin B9 (Folate): ${parsedData.vitamin_b9 || 0} mcg`);
+            console.log(`  Vitamin B12 (Cobalamin): ${parsedData.vitamin_b12 || 0} mcg`);
+            
+            console.log('\n⚗️ MINERALS (15):');
+            console.log(`  Calcium: ${parsedData.calcium || 0} mg`);
+            console.log(`  Chloride: ${parsedData.chloride || 0} mg`);
+            console.log(`  Chromium: ${parsedData.chromium || 0} mcg`);
+            console.log(`  Copper: ${parsedData.copper || 0} mcg`);
+            console.log(`  Fluoride: ${parsedData.fluoride || 0} mg`);
+            console.log(`  Iodine: ${parsedData.iodine || 0} mcg`);
+            console.log(`  Iron: ${parsedData.iron || 0} mg`);
+            console.log(`  Magnesium: ${parsedData.magnesium || 0} mg`);
+            console.log(`  Manganese: ${parsedData.manganese || 0} mg`);
+            console.log(`  Molybdenum: ${parsedData.molybdenum || 0} mcg`);
+            console.log(`  Phosphorus: ${parsedData.phosphorus || 0} mg`);
+            console.log(`  Potassium: ${parsedData.potassium || 0} mg`);
+            console.log(`  Selenium: ${parsedData.selenium || 0} mcg`);
+            console.log(`  Sodium: ${parsedData.sodium || 0} mg`);
+            console.log(`  Zinc: ${parsedData.zinc || 0} mg`);
+            
+            console.log('\n🥗 OTHER NUTRIENTS (6):');
+            console.log(`  Fiber: ${parsedData.fiber || 0} g`);
+            console.log(`  Cholesterol: ${parsedData.cholesterol || 0} mg`);
+            console.log(`  Sugar: ${parsedData.sugar || 0} g`);
+            console.log(`  Saturated Fats: ${parsedData.saturated_fats || 0} g`);
+            console.log(`  Omega-3: ${parsedData.omega_3 || 0} mg`);
+            console.log(`  Omega-6: ${parsedData.omega_6 || 0} mg`);
+            
+            if (parsedData.ingredients && parsedData.ingredients.length > 0) {
+              console.log('\n🔬 INGREDIENT BREAKDOWN:');
+              parsedData.ingredients.forEach((ingredient, index) => {
+                console.log(`  ${index + 1}. ${ingredient.name || ingredient} (${ingredient.amount || 'N/A'})`);
+                console.log(`     Calories: ${ingredient.calories || 0}, Protein: ${ingredient.protein || 0}g, Fat: ${ingredient.fat || 0}g, Carbs: ${ingredient.carbs || 0}g`);
+              });
+            }
+            
+            console.log('🔬 ============================================\n');
+          }
+          
           return res.json({
             success: true,
             data: parsedData,
