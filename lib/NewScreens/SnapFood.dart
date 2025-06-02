@@ -709,17 +709,21 @@ class _SnapFoodState extends State<SnapFood> {
         });
         print('🔍 ================================================\n');
 
-        // 🔧 VALIDATE AND CORRECT UNREALISTIC VALUES FROM OPENAI
-        Map<String, dynamic> validatedMicronutrients =
-            _validateNutritionValues(allMicronutrients, mealName);
-        print('🔧 VALIDATED NUTRITION VALUES:');
-        print('📊 CORRECTED VITAMINS:');
-        validatedMicronutrients.forEach((key, value) {
+        // 🔧 CONVERT UNITS TO MATCH NUTRITION.DART EXPECTATIONS
+        Map<String, dynamic> correctedMicronutrients = {};
+        allMicronutrients.forEach((key, value) {
+          // OpenAI should now provide values in correct units, so use them directly
+          correctedMicronutrients[key] = value.toString();
+        });
+
+        print('🔧 USING DIRECT OPENAI VALUES (NO CONVERSION):');
+        print('📊 VITAMINS:');
+        correctedMicronutrients.forEach((key, value) {
           if (key.startsWith('vitamin_')) {
             print('  • $key: ${value}${_getUnitForVitamin(key)}');
           }
         });
-        print('⚗️ CORRECTED MINERALS:');
+        print('⚗️ MINERALS:');
         [
           'calcium',
           'chloride',
@@ -737,15 +741,12 @@ class _SnapFoodState extends State<SnapFood> {
           'sodium',
           'zinc'
         ].forEach((key) {
-          if (validatedMicronutrients.containsKey(key)) {
+          if (correctedMicronutrients.containsKey(key)) {
             print(
-                '  • $key: ${validatedMicronutrients[key]}${_getUnitForMineral(key)}');
+                '  • $key: ${correctedMicronutrients[key]}${_getUnitForMineral(key)}');
           }
         });
-        print('🔧 ================================================\\n');
-
-        // Use validated micronutrients as the final corrected values
-        Map<String, dynamic> correctedMicronutrients = validatedMicronutrients;
+        print('🔧 ================================================\n');
 
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
@@ -2198,82 +2199,6 @@ class _SnapFoodState extends State<SnapFood> {
       print('Compression failed: $e, using original');
       return imageBytes; // Return original on error
     }
-  }
-
-  // Validate and correct unrealistic nutrition values from OpenAI
-  Map<String, dynamic> _validateNutritionValues(
-      Map<String, dynamic> nutrients, String mealName) {
-    Map<String, dynamic> corrected = {};
-
-    // Determine if this is a fruit-based meal for context
-    bool isFruitMeal = mealName.toLowerCase().contains('fruit') ||
-        mealName.toLowerCase().contains('berry') ||
-        mealName.toLowerCase().contains('apple') ||
-        mealName.toLowerCase().contains('orange');
-
-    nutrients.forEach((key, value) {
-      double numValue = double.tryParse(value.toString()) ?? 0.0;
-
-      // Validate vitamins (realistic ranges)
-      if (key == 'vitamin_a') {
-        // Vitamin A: 0-200 mcg for most foods, fruits typically 0-50 mcg
-        if (numValue > 200) numValue = isFruitMeal ? 25.0 : 150.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'vitamin_c') {
-        // Vitamin C: Fruits 10-100mg, vegetables 5-50mg
-        if (numValue > 100) numValue = isFruitMeal ? 60.0 : 30.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'vitamin_d') {
-        // Vitamin D: Most foods 0-5 mcg
-        if (numValue > 5) numValue = 1.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key.startsWith('vitamin_b')) {
-        // B vitamins: Usually 0.1-5mg each
-        if (numValue > 5) numValue = 2.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'vitamin_e' || key == 'vitamin_k') {
-        // Vitamin E/K: Usually 0.1-10mg/mcg
-        if (numValue > 10) numValue = 3.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      }
-      // Validate minerals
-      else if (key == 'calcium') {
-        // Calcium: 10-300mg for most foods
-        if (numValue > 300) numValue = isFruitMeal ? 20.0 : 150.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'iron') {
-        // Iron: 0.5-5mg for most foods
-        if (numValue > 5) numValue = isFruitMeal ? 0.5 : 3.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'potassium') {
-        // Potassium: 100-800mg for most foods
-        if (numValue > 800) numValue = isFruitMeal ? 300.0 : 600.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'sodium') {
-        // Sodium: Usually 0-500mg, fruits very low
-        if (numValue > 500) numValue = isFruitMeal ? 2.0 : 200.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      }
-      // Validate other nutrients
-      else if (key == 'omega_6') {
-        // Omega-6: Nuts/oils 1-10g, fruits/vegetables 0-0.5g
-        if (numValue > 10) numValue = isFruitMeal ? 0.1 : 2.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'omega_3') {
-        // Omega-3: Usually 0-500mg, fruits very low
-        if (numValue > 500) numValue = isFruitMeal ? 10.0 : 100.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else if (key == 'fiber') {
-        // Fiber: Fruits 1-5g per 100g, vegetables 2-8g
-        if (numValue > 10) numValue = isFruitMeal ? 3.0 : 6.0;
-        corrected[key] = numValue.toStringAsFixed(1);
-      } else {
-        // For other nutrients, apply general validation
-        corrected[key] = numValue.toStringAsFixed(1);
-      }
-    });
-
-    return corrected;
   }
 }
 
