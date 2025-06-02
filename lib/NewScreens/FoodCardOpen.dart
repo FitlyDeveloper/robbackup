@@ -694,186 +694,166 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       print('Attempting to load saved data for foodId: $foodId');
 
-      // ONLY load ingredients if we don't have fresh API data
-      if (widget.ingredients == null || widget.ingredients!.isEmpty) {
-        // Load ingredients array
-        final ingredientsJson = prefs.getString('food_ingredients_$foodId');
-        if (ingredientsJson != null) {
-          print(
-              'Loaded ingredients JSON (first 200 chars): ${ingredientsJson.length > 200 ? ingredientsJson.substring(0, 200) + "..." : ingredientsJson}');
-          try {
-            final List<dynamic> decoded = jsonDecode(ingredientsJson);
-            _ingredients = [];
+      // Load the consolidated food data object
+      final consolidatedJson = prefs.getString('food_data_$foodId');
 
-            // Process each item in the decoded list
-            for (var item in decoded) {
-              // Handle both object and string formats
+      if (consolidatedJson != null) {
+        print(
+            'Loaded consolidated JSON (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
+        Map<String, dynamic> loadedData = jsonDecode(consolidatedJson);
+
+        // Populate general fields from loadedData
+        // (Ensure these assignments happen BEFORE _initFoodData might try to use them if it were called here)
+        _foodName = loadedData['foodName'] ?? _foodName;
+        _calories = _formatDecimalValue(
+            loadedData['calories']?.toString() ?? _calories);
+        _protein = loadedData['protein']?.toString() ?? _protein;
+        _fat = loadedData['fat']?.toString() ?? _fat;
+        _carbs = loadedData['carbs']?.toString() ?? _carbs;
+        _healthScore = loadedData['healthScore']?.toString() ?? _healthScore;
+        _healthScoreValue = _extractHealthScoreValue(_healthScore);
+        _counter = loadedData['counter'] ?? _counter;
+        _isLiked = loadedData['isLiked'] ?? _isLiked;
+        _isBookmarked = loadedData['isBookmarked'] ?? _isBookmarked;
+        _privacyStatus = loadedData['privacyStatus'] ?? _privacyStatus;
+
+        if (loadedData.containsKey('imageBase64')) {
+          _storedImageBase64 = loadedData['imageBase64'];
+          if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
+            try {
+              _imageBytes = base64Decode(_storedImageBase64!);
+              print(
+                  'Loaded image from consolidated SharedPreferences, size: ${_imageBytes!.length} bytes');
+              _optimizeImage();
+            } catch (e) {
+              print('Error decoding stored image from consolidated data: $e');
+            }
+          }
+        }
+
+        // ONLY load ingredients from SharedPreferences if we don't have fresh API data from widget
+        if (widget.ingredients == null || widget.ingredients!.isEmpty) {
+          if (loadedData.containsKey('ingredients') &&
+              loadedData['ingredients'] is List) {
+            final List<dynamic> decodedIngredients = loadedData['ingredients'];
+            _ingredients = []; // Clear before populating
+
+            for (var item in decodedIngredients) {
               if (item is Map) {
-                // Make sure all required fields exist
-                if (!item.containsKey('name') ||
-                    !item.containsKey('amount') ||
-                    !item.containsKey('calories')) {
-                  // Add missing fields with defaults
-                  item['name'] = item['name'] ?? 'Ingredient';
-                  item['amount'] = item['amount'] ?? '1 serving';
-                  item['calories'] = item['calories'] ?? 0;
-                }
+                Map<String, dynamic> ingredientMap =
+                    Map<String, dynamic>.from(item);
 
                 // Ensure macronutrient values are properly converted to doubles
                 double protein = 0.0;
                 double fat = 0.0;
                 double carbs = 0.0;
 
-                // Process protein value
-                if (item.containsKey('protein')) {
-                  var proteinValue = item['protein'];
+                if (ingredientMap.containsKey('protein')) {
+                  var proteinValue = ingredientMap['protein'];
                   if (proteinValue is String) {
                     protein = double.tryParse(proteinValue) ?? 0.0;
                   } else if (proteinValue is num) {
                     protein = proteinValue.toDouble();
                   }
                 }
+                ingredientMap['protein'] =
+                    protein; // Ensure it's stored as double
 
-                // Process fat value
-                if (item.containsKey('fat')) {
-                  var fatValue = item['fat'];
+                if (ingredientMap.containsKey('fat')) {
+                  var fatValue = ingredientMap['fat'];
                   if (fatValue is String) {
                     fat = double.tryParse(fatValue) ?? 0.0;
                   } else if (fatValue is num) {
                     fat = fatValue.toDouble();
                   }
                 }
+                ingredientMap['fat'] = fat; // Ensure it's stored as double
 
-                // Process carbs value
-                if (item.containsKey('carbs')) {
-                  var carbsValue = item['carbs'];
+                if (ingredientMap.containsKey('carbs')) {
+                  var carbsValue = ingredientMap['carbs'];
                   if (carbsValue is String) {
                     carbs = double.tryParse(carbsValue) ?? 0.0;
                   } else if (carbsValue is num) {
                     carbs = carbsValue.toDouble();
                   }
                 }
+                ingredientMap['carbs'] = carbs; // Ensure it's stored as double
 
-                // Also include macro values with fallbacks
-                Map<String, dynamic> validIngredient = {
-                  'name': item['name'] ?? 'Ingredient',
-                  'amount': item['amount'] ?? '1 serving',
-                  'calories': item['calories'] ?? 0,
-                  'protein': protein,
-                  'fat': fat,
-                  'carbs': carbs,
-                };
-
-                // PRESERVE MICRONUTRIENT DATA when saving ingredients
-                if (item.containsKey('vitamins')) {
-                  validIngredient['vitamins'] = item['vitamins'];
-                }
-                if (item.containsKey('minerals')) {
-                  validIngredient['minerals'] = item['minerals'];
-                }
-                if (item.containsKey('other')) {
-                  validIngredient['other'] = item['other'];
+                // Calories also needs to be a number
+                if (ingredientMap.containsKey('calories')) {
+                  var calValue = ingredientMap['calories'];
+                  if (calValue is String) {
+                    ingredientMap['calories'] =
+                        double.tryParse(calValue) ?? 0.0;
+                  } else if (calValue is num) {
+                    ingredientMap['calories'] = calValue.toDouble();
+                  } else {
+                    ingredientMap['calories'] = 0.0;
+                  }
                 }
 
-                _ingredients.add(validIngredient);
-              } else if (item is String) {
-                // Handle old format - string-only ingredients
-                // Create default ingredient object
-                Map<String, dynamic> validIngredient = {
-                  'name': item,
-                  'amount': '1 serving',
-                  'calories': 100,
-                  'protein': 5.0,
-                  'fat': 2.0,
-                  'carbs': 15.0,
-                };
-                _ingredients.add(validIngredient);
+                // Micronutrients are expected to be maps already, so direct assignment is fine
+                // if (ingredientMap.containsKey('vitamins')) { /* already there */ }
+                // if (ingredientMap.containsKey('minerals')) { /* already there */ }
+                // if (ingredientMap.containsKey('other')) { /* already there */ }
+
+                // Micronutrients are expected to be maps already
+                print(
+                    'DEBUG _loadSavedData: Keys in ingredientMap before adding to _ingredients: ${ingredientMap.keys.join(', ')}');
+                _ingredients.add(ingredientMap);
               }
             }
             print(
-                'Loaded and validated ${_ingredients.length} ingredients from SharedPreferences');
-          } catch (e) {
-            print('Error parsing saved ingredients: $e');
-            _ingredients = []; // Reset to empty on error
+                'Loaded and validated ${_ingredients.length} ingredients from consolidated SharedPreferences');
+          } else {
+            print(
+                'No ingredients found in consolidated SharedPreferences or format is incorrect.');
+            _ingredients = []; // Ensure it's empty if not found or bad format
           }
+        } else {
+          print(
+              'Skipping ingredient loading from SharedPreferences - using fresh API data from widget.');
+          // If using widget.ingredients, ensure _ingredients is populated by _initFoodData
+          // _initFoodData should have already been called or will be.
         }
       } else {
         print(
-            'Skipping ingredient loading - using fresh API data with micronutrients');
+            'No consolidated food data found in SharedPreferences for $foodId.');
+        // If no data, ensure _ingredients is empty if not relying on widget.ingredients
+        if (widget.ingredients == null || widget.ingredients!.isEmpty) {
+          _ingredients = [];
+        }
       }
 
-      setState(() {
-        // Load interaction data only (likes, bookmarks, counter)
-        _isLiked = prefs.getBool('food_liked_$foodId') ?? false;
-        _isBookmarked = prefs.getBool('food_bookmarked_$foodId') ?? false;
-        _counter = prefs.getInt('food_counter_$foodId') ?? 1;
-        // Load privacy status for this food item
-        _privacyStatus = prefs.getString('food_privacy_$foodId') ?? 'Private';
+      // This setState might be redundant if _initFoodData and _loadSavedData are managed carefully in initState
+      // However, it ensures UI updates if values were loaded/changed.
+      if (mounted) {
+        setState(() {
+          // Most fields are already updated above.
+          // This setState mainly triggers a rebuild if needed.
+        });
+      }
 
-        // Only load nutrition values if they weren't passed as parameters
-        if (widget.calories == null || widget.calories!.isEmpty) {
-          _calories = _formatDecimalValue(
-              prefs.getString('food_calories_$foodId') ?? _calories);
-        }
-
-        if (widget.protein == null || widget.protein!.isEmpty) {
-          _protein = prefs.getString('food_protein_$foodId') ?? _protein;
-        }
-
-        if (widget.fat == null || widget.fat!.isEmpty) {
-          _fat = prefs.getString('food_fat_$foodId') ?? _fat;
-        }
-
-        if (widget.carbs == null || widget.carbs!.isEmpty) {
-          _carbs = prefs.getString('food_carbs_$foodId') ?? _carbs;
-        }
-
-        if (widget.healthScore == null || widget.healthScore!.isEmpty) {
-          _healthScore =
-              prefs.getString('food_health_score_$foodId') ?? _healthScore;
-          // Update health score value when loaded
-          _healthScoreValue = _extractHealthScoreValue(_healthScore);
-        }
-
-        // Load image from SharedPreferences if not already loaded from parameter
-        if (_imageBytes == null) {
-          _storedImageBase64 = prefs.getString('food_image_$foodId');
-          if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
-            print(
-                'Loading image from SharedPreferences: ${_storedImageBase64!.length} characters');
-            try {
-              _imageBytes = base64Decode(_storedImageBase64!);
-              print(
-                  'Loaded image from SharedPreferences, size: ${_imageBytes!.length} bytes');
-
-              // Call optimize method
-              _optimizeImage();
-            } catch (e) {
-              print('Error decoding stored image: $e');
-            }
-          }
-        }
-      });
-
-      // After loading - check what we have
-      _debugPrintIngredients('After load');
+      _debugPrintIngredients('After load'); // Crucial log
 
       print(
           'Loaded interaction data for $foodId: liked=$_isLiked, bookmarked=$_isBookmarked, counter=$_counter');
       print(
           'Using nutrition data: calories=$_calories, protein=$_protein, fat=$_fat, carbs=$_carbs, healthScore=$_healthScore');
-      if (_ingredients.isNotEmpty) {
-        print('Loaded ${_ingredients.length} ingredients');
 
-        // Calculate total nutrition from all ingredients after loading
-        _calculateTotalNutrition();
+      if (_ingredients.isNotEmpty) {
+        // This check should now reflect reality
+        print(
+            'Loaded ${_ingredients.length} ingredients from SharedPreferences.');
+        _calculateTotalNutrition(); // Recalculate totals if ingredients were loaded
         print('Calculated total nutrition values from loaded ingredients');
       }
 
-      // Important: Reset unsaved changes state after everything is loaded
-      _resetUnsavedChangesState();
+      _resetUnsavedChangesState(); // Reset unsaved changes flag
     } catch (e) {
       print('Error loading saved food data: $e');
+      _ingredients =
+          []; // Ensure ingredients are reset on error if not using widget data
     }
   }
 
