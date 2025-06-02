@@ -662,6 +662,53 @@ class _SnapFoodState extends State<SnapFood> {
         ].where((k) => allMicronutrients.containsKey(k)).length}');
         print('💾 Total nutrients extracted: ${allMicronutrients.length}');
 
+        // 🔍 LOG THE ACTUAL OPENAI VALUES BEFORE DISTRIBUTION
+        print('\n🔍 ACTUAL OPENAI RESPONSE VALUES:');
+        print('📊 VITAMINS FROM API:');
+        allMicronutrients.forEach((key, value) {
+          if (key.startsWith('vitamin_')) {
+            print('  • $key: ${value}${_getUnitForVitamin(key)}');
+          }
+        });
+        print('⚗️ MINERALS FROM API:');
+        [
+          'calcium',
+          'chloride',
+          'chromium',
+          'copper',
+          'fluoride',
+          'iodine',
+          'iron',
+          'magnesium',
+          'manganese',
+          'molybdenum',
+          'phosphorus',
+          'potassium',
+          'selenium',
+          'sodium',
+          'zinc'
+        ].forEach((key) {
+          if (allMicronutrients.containsKey(key)) {
+            print(
+                '  • $key: ${allMicronutrients[key]}${_getUnitForMineral(key)}');
+          }
+        });
+        print('🥗 OTHER NUTRIENTS FROM API:');
+        [
+          'fiber',
+          'cholesterol',
+          'sugar',
+          'saturated_fats',
+          'omega_3',
+          'omega_6'
+        ].forEach((key) {
+          if (allMicronutrients.containsKey(key)) {
+            print(
+                '  • $key: ${allMicronutrients[key]}${_getUnitForNutrient(key)}');
+          }
+        });
+        print('🔍 ================================================\n');
+
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
 

@@ -7302,11 +7302,20 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     await prefs.setString('food_nutrition_id_$foodId', foodSpecificScanId);
 
     // Calculate total nutrition from current ingredients
-    Map<String, dynamic> totalNutrition = _extractOtherNutrients();
+    Map<String, dynamic> totalNutrition = {};
 
-    // REMOVED: Do NOT add widget.additionalNutrients as it overrides calculated ingredient values
-    // The _extractOtherNutrients() method already calculates the correct micronutrients from ingredients
-    print("Extracted additional nutrients from ingredients: $totalNutrition");
+    // Use the original OpenAI micronutrient values if available (preferred)
+    if (widget.additionalNutrients != null &&
+        widget.additionalNutrients!.isNotEmpty) {
+      totalNutrition.addAll(widget.additionalNutrients!);
+      print(
+          "Using original OpenAI micronutrient values: ${widget.additionalNutrients}");
+    } else {
+      // Fallback: Calculate from ingredients only if no original values available
+      totalNutrition = _extractOtherNutrients();
+      print(
+          "Fallback: Extracted additional nutrients from ingredients: $totalNutrition");
+    }
 
     // Add macros using the correct variable names
     totalNutrition['protein'] = _protein;
