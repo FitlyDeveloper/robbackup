@@ -104,6 +104,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
 3. All 15 minerals: calcium, chloride, chromium, copper, fluoride, iodine, iron, magnesium, manganese, molybdenum, phosphorus, potassium, selenium, sodium, zinc (with proper units)
 4. Other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6 (with proper units)
 5. Health score (1-10)
+6. **DETAILED INGREDIENT MICRONUTRIENTS**: For each ingredient, provide individual vitamin, mineral, and other nutrient values
 
 IMPORTANT PORTION REQUIREMENTS:
 - Use REALISTIC portion sizes based on what you see in the image
@@ -114,9 +115,15 @@ IMPORTANT PORTION REQUIREMENTS:
 INGREDIENT FORMAT: "Name (realistic_weight) realistic_calories"
 Examples: "Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal", "Rice (120g) 156kcal"
 
+MICRONUTRIENT REQUIREMENTS:
+- Use your extensive nutritional knowledge database
+- Provide realistic micronutrient values for each ingredient based on standard nutrition data
+- Include vitamins, minerals, and other nutrients for EACH individual ingredient
+- Base values on the actual portion size of each ingredient
+
 Use realistic nutritional values based on standard food databases. Return only valid JSON.
 
-Example format:
+Required format with ingredient-specific nutrients:
 {
   "meal_name": "Food Name",
   "ingredients": ["Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal", "Rice (120g) 156kcal"],
@@ -158,7 +165,105 @@ Example format:
   "saturated_fats": "4g",
   "omega_3": "200mg",
   "omega_6": "1g",
-  "health_score": "7/10"
+  "health_score": "7/10",
+  "ingredient_nutrients": [
+    {
+      "name": "Grilled Chicken",
+      "weight_g": 150,
+      "calories": 248,
+      "protein": 35,
+      "fat": 6,
+      "carbs": 0,
+      "vitamins": {
+        "vitamin_a": "10mcg",
+        "vitamin_c": "0mg",
+        "vitamin_d": "0.3mcg",
+        "vitamin_e": "0.5mg",
+        "vitamin_k": "0mcg",
+        "vitamin_b1": "0.1mg",
+        "vitamin_b2": "0.2mg",
+        "vitamin_b3": "12mg",
+        "vitamin_b5": "1.5mg",
+        "vitamin_b6": "0.8mg",
+        "vitamin_b7": "3mcg",
+        "vitamin_b9": "5mcg",
+        "vitamin_b12": "0.4mcg"
+      },
+      "minerals": {
+        "calcium": "15mg",
+        "chloride": "80mg",
+        "chromium": "0mcg",
+        "copper": "50mcg",
+        "fluoride": "0mg",
+        "iodine": "0mcg",
+        "iron": "1mg",
+        "magnesium": "25mg",
+        "manganese": "0mg",
+        "molybdenum": "0mcg",
+        "phosphorus": "200mg",
+        "potassium": "250mg",
+        "selenium": "25mcg",
+        "sodium": "70mg",
+        "zinc": "1mg"
+      },
+      "other": {
+        "fiber": "0g",
+        "cholesterol": "85mg",
+        "sugar": "0g",
+        "saturated_fats": "2g",
+        "omega_3": "45mg",
+        "omega_6": "150mg"
+      }
+    },
+    {
+      "name": "Mixed Salad",
+      "weight_g": 45,
+      "calories": 12,
+      "protein": 1,
+      "fat": 0,
+      "carbs": 2,
+      "vitamins": {
+        "vitamin_a": "450mcg",
+        "vitamin_c": "15mg",
+        "vitamin_d": "0mcg",
+        "vitamin_e": "1mg",
+        "vitamin_k": "50mcg",
+        "vitamin_b1": "0.05mg",
+        "vitamin_b2": "0.05mg",
+        "vitamin_b3": "0.5mg",
+        "vitamin_b5": "0.1mg",
+        "vitamin_b6": "0.1mg",
+        "vitamin_b7": "2mcg",
+        "vitamin_b9": "40mcg",
+        "vitamin_b12": "0mcg"
+      },
+      "minerals": {
+        "calcium": "25mg",
+        "chloride": "15mg",
+        "chromium": "1mcg",
+        "copper": "20mcg",
+        "fluoride": "0mg",
+        "iodine": "1mcg",
+        "iron": "0.5mg",
+        "magnesium": "8mg",
+        "manganese": "0.1mg",
+        "molybdenum": "1mcg",
+        "phosphorus": "15mg",
+        "potassium": "120mg",
+        "selenium": "1mcg",
+        "sodium": "5mg",
+        "zinc": "0.2mg"
+      },
+      "other": {
+        "fiber": "1.5g",
+        "cholesterol": "0mg",
+        "sugar": "1g",
+        "saturated_fats": "0g",
+        "omega_3": "20mg",
+        "omega_6": "30mg"
+      }
+    }
+  ]
 }`
             },
             {
