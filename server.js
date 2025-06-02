@@ -97,7 +97,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
           content: [
             {
               type: 'text',
-              text: `Please analyze this food image and return a JSON object with complete nutritional information. Use REALISTIC nutritional values based on USDA nutritional database standards.\n\nIMPORTANT NUTRITIONAL GUIDELINES:\n- Vitamin A: Most foods contain 0-200 mcg (not mg!), fruits typically 5-50 mcg\n- Vitamin C: Fruits 10-90mg, vegetables 5-120mg, meats 0-5mg\n- Vitamin D: Most foods contain 0-10 mcg, very few natural sources\n- B vitamins: Usually 0.1-5mg each, B12 mostly in animal products\n- Minerals: Calcium 10-300mg, Iron 0.5-18mg, Potassium 100-800mg\n- Fiber: Fruits 1-10g, vegetables 2-15g, grains 3-25g\n- Omega-6: Most foods 0.1-2g, nuts/oils higher\n\nProvide realistic portion sizes (50-200g typically) and ensure nutritional values match actual food composition.\n\nReturn JSON with:\n1. meal_name, ingredients (with realistic weights), calories, protein, fat, carbs\n2. All 13 vitamins with REALISTIC values in proper units (mcg for A,D,K,B7,B9,B12; mg for others)\n3. All 15 minerals with realistic values in proper units (mg for most, mcg for selenium)\n4. Other nutrients: fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6\n5. health_score (1-10)\n\nEnsure all values are nutritionally accurate for the actual foods shown.`
+              text: `Please analyze this food image and return a JSON object with complete nutritional information. Use REALISTIC nutritional values based on USDA nutritional database standards.\n\nIMPORTANT NUTRITIONAL GUIDELINES:\n- Vitamin A: Most foods contain 0-200 mcg (not mg!), fruits typically 5-50 mcg\n- Vitamin C: Fruits 10-90mg, vegetables 5-120mg, meats 0-5mg\n- Vitamin D: Most foods contain 0-10 mcg, very few natural sources\n- B vitamins: Usually 0.1-5mg each, B12 mostly in animal products\n- Minerals: Calcium 10-300mg, Iron 0.5-18mg, Potassium 100-800mg\n- Fiber: Fruits 1-10g, vegetables 2-15g, grains 3-25g\n- Omega-6: Most foods 0.1-2g, nuts/oils higher\n\nProvide realistic portion sizes (50-200g typically) and ensure nutritional values match actual food composition.\n\nReturn JSON with this EXACT structure:\n{\n  "meal_name": "Food Name",\n  "ingredients": ["Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal"],\n  "calories": "416",\n  "protein": "35",\n  "fat": "8", \n  "carbs": "45",\n  "vitamin_a": "50",\n  "vitamin_c": "30",\n  "vitamin_d": "2",\n  "vitamin_e": "5",\n  "vitamin_k": "15",\n  "vitamin_b1": "0.8",\n  "vitamin_b2": "0.6",\n  "vitamin_b3": "8",\n  "vitamin_b5": "3",\n  "vitamin_b6": "1",\n  "vitamin_b7": "20",\n  "vitamin_b9": "150",\n  "vitamin_b12": "1",\n  "calcium": "200",\n  "chloride": "300",\n  "chromium": "5",\n  "copper": "200",\n  "fluoride": "0.5",\n  "iodine": "20",\n  "iron": "3",\n  "magnesium": "80",\n  "manganese": "1",\n  "molybdenum": "10",\n  "phosphorus": "150",\n  "potassium": "400",\n  "selenium": "15",\n  "sodium": "500",\n  "zinc": "2",\n  "fiber": "8",\n  "cholesterol": "50",\n  "sugar": "20",\n  "saturated_fats": "4",\n  "omega_3": "200",\n  "omega_6": "1",\n  "health_score": "7/10"\n}\n\nEnsure all values are nutritionally accurate for the actual foods shown. Use this exact flat structure - do NOT nest ingredients as objects.`
             },
             {
               type: 'image_url',
@@ -176,10 +176,10 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       if (parsedData) {
         console.log('\n🔬 ===== COMPLETE MICRONUTRIENT ANALYSIS =====');
         console.log(`📊 Meal: ${parsedData.meal_name || 'Unknown'}`);
-        console.log(`🍽️ Total Calories: ${parsedData.calories || 0}`);
-        console.log(`🥩 Protein: ${parsedData.protein || 0}g`);
-        console.log(`🧈 Fat: ${parsedData.fat || 0}g`);
-        console.log(`🍞 Carbs: ${parsedData.carbs || 0}g`);
+        console.log(`🍽️ Total Calories: ${parsedData.calories || parsedData.total_calories || 0}`);
+        console.log(`🥩 Protein: ${parsedData.protein || parsedData.total_protein || 0}g`);
+        console.log(`🧈 Fat: ${parsedData.fat || parsedData.total_fat || 0}g`);
+        console.log(`🍞 Carbs: ${parsedData.carbs || parsedData.total_carbs || 0}g`);
         
         console.log('\n💊 VITAMINS (13):');
         console.log(`  Vitamin A: ${parsedData.vitamin_a || 0} mcg`);
@@ -224,8 +224,24 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
         if (parsedData.ingredients && parsedData.ingredients.length > 0) {
           console.log('\n🔬 INGREDIENT BREAKDOWN:');
           parsedData.ingredients.forEach((ingredient, index) => {
-            console.log(`  ${index + 1}. ${ingredient.name} (${ingredient.amount || 'N/A'})`);
-            console.log(`     Calories: ${ingredient.calories || 0}, Protein: ${ingredient.protein || 0}g, Fat: ${ingredient.fat || 0}g, Carbs: ${ingredient.carbs || 0}g`);
+            // Handle both string and object ingredient formats
+            let name, amount, calories, protein, fat, carbs;
+            
+            if (typeof ingredient === 'string') {
+              name = ingredient;
+              amount = 'N/A';
+              calories = protein = fat = carbs = 0;
+            } else {
+              name = ingredient.name || `Ingredient ${index + 1}`;
+              amount = ingredient.amount || ingredient.weight_g ? `${ingredient.weight_g}g` : 'N/A';
+              calories = ingredient.calories || 0;
+              protein = ingredient.protein || ingredient.protein_g || 0;
+              fat = ingredient.fat || ingredient.fat_g || 0;
+              carbs = ingredient.carbs || ingredient.carbs_g || 0;
+            }
+            
+            console.log(`  ${index + 1}. ${name} (${amount})`);
+            console.log(`     Calories: ${calories}, Protein: ${protein}g, Fat: ${fat}g, Carbs: ${carbs}g`);
           });
         }
         
@@ -256,10 +272,10 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
           if (parsedData) {
             console.log('\n🔬 ===== COMPLETE MICRONUTRIENT ANALYSIS (FALLBACK) =====');
             console.log(`📊 Meal: ${parsedData.meal_name || 'Unknown'}`);
-            console.log(`🍽️ Total Calories: ${parsedData.calories || 0}`);
-            console.log(`🥩 Protein: ${parsedData.protein || 0}g`);
-            console.log(`🧈 Fat: ${parsedData.fat || 0}g`);
-            console.log(`🍞 Carbs: ${parsedData.carbs || 0}g`);
+            console.log(`🍽️ Total Calories: ${parsedData.calories || parsedData.total_calories || 0}`);
+            console.log(`🥩 Protein: ${parsedData.protein || parsedData.total_protein || 0}g`);
+            console.log(`🧈 Fat: ${parsedData.fat || parsedData.total_fat || 0}g`);
+            console.log(`🍞 Carbs: ${parsedData.carbs || parsedData.total_carbs || 0}g`);
             
             console.log('\n💊 VITAMINS (13):');
             console.log(`  Vitamin A: ${parsedData.vitamin_a || 0} mcg`);
@@ -304,8 +320,24 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
             if (parsedData.ingredients && parsedData.ingredients.length > 0) {
               console.log('\n🔬 INGREDIENT BREAKDOWN:');
               parsedData.ingredients.forEach((ingredient, index) => {
-                console.log(`  ${index + 1}. ${ingredient.name || ingredient} (${ingredient.amount || 'N/A'})`);
-                console.log(`     Calories: ${ingredient.calories || 0}, Protein: ${ingredient.protein || 0}g, Fat: ${ingredient.fat || 0}g, Carbs: ${ingredient.carbs || 0}g`);
+                // Handle both string and object ingredient formats
+                let name, amount, calories, protein, fat, carbs;
+                
+                if (typeof ingredient === 'string') {
+                  name = ingredient;
+                  amount = 'N/A';
+                  calories = protein = fat = carbs = 0;
+                } else {
+                  name = ingredient.name || `Ingredient ${index + 1}`;
+                  amount = ingredient.amount || ingredient.weight_g ? `${ingredient.weight_g}g` : 'N/A';
+                  calories = ingredient.calories || 0;
+                  protein = ingredient.protein || ingredient.protein_g || 0;
+                  fat = ingredient.fat || ingredient.fat_g || 0;
+                  carbs = ingredient.carbs || ingredient.carbs_g || 0;
+                }
+                
+                console.log(`  ${index + 1}. ${name} (${amount})`);
+                console.log(`     Calories: ${calories}, Protein: ${protein}g, Fat: ${fat}g, Carbs: ${carbs}g`);
               });
             }
             
