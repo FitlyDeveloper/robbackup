@@ -1495,9 +1495,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                           child: InkWell(
                                             borderRadius:
                                                 BorderRadius.circular(20),
-                                            onTap: () {
-                                              // Use the dedicated delete method
-                                              _deleteMeal();
+                                            onTap: () async {
+                                              Navigator.pop(context);
+                                              await _deleteMeal();
                                             },
                                           ),
                                         ),
@@ -4956,15 +4956,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                       color: Colors.transparent,
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(20),
-                                        onTap: () {
+                                        onTap: () async {
                                           Navigator.pop(context);
-                                          _showDeleteIngredientConfirmation(
-                                              name,
-                                              amount,
-                                              calories,
-                                              protein,
-                                              fat,
-                                              carbs);
+                                          await _deleteIngredient(name, amount,
+                                              calories, protein, fat, carbs);
                                         },
                                       ),
                                     ),
@@ -5776,9 +5771,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                             color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(20),
-                              onTap: () {
+                              onTap: () async {
                                 Navigator.pop(context);
-                                _deleteIngredient(name, amount, calories,
+                                await _deleteIngredient(name, amount, calories,
                                     protein, fat, carbs);
                               },
                             ),
@@ -5849,8 +5844,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   }
 
   // Method to delete an ingredient and update nutrition values
-  void _deleteIngredient(String name, String amount, String calories,
-      String protein, String fat, String carbs) {
+  Future<void> _deleteIngredient(String name, String amount, String calories,
+      String protein, String fat, String carbs) async {
     // Find the ingredient in the _ingredients list
     int indexToRemove = -1;
     Map<String, dynamic>? deletedIngredient;
@@ -5867,15 +5862,12 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     if (indexToRemove >= 0 && deletedIngredient != null) {
       print('Found ingredient to delete: $name ($amount)');
 
+      // 🔥 LOAD CURRENT MICRONUTRIENTS FROM STORAGE BEFORE DELETION
+      await _loadCurrentMicronutrientsFromStorage();
+
       // Debug: Print micronutrients BEFORE deletion
       print('=== MICRONUTRIENTS BEFORE DELETION ===');
       _debugPrintMicronutrients();
-
-      // CRITICAL: Clear nutrition data cache when ingredients are deleted
-      String foodSpecificScanId = _generateFoodSpecificScanId();
-      // Import the nutrition manager
-      nutrition.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
-      print('🗑️ Cleared nutrition cache for scan ID: $foodSpecificScanId');
 
       // Get the original total calories BEFORE deletion
       double originalTotalCalories = double.tryParse(_calories) ?? 0.0;
@@ -5927,8 +5919,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print(
           'Updated totals: Calories=$_calories, Protein=$_protein, Fat=$_fat, Carbs=$_carbs');
 
-      // Save the updated data immediately
-      _saveUpdatedNutritionDataOptimized();
+      // Save the updated micronutrients immediately to storage
+      await _saveReducedMicronutrientsToStorage();
 
       print('Ingredient deletion completed successfully');
     } else {
@@ -7796,5 +7788,127 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     await nutrition_page.NutritionDataManager.storeNutritionData(
         scanId, vitamins, minerals, other);
     print('✅ ALL 34 MICRONUTRIENTS STORED PERMANENTLY! Scan ID: $scanId');
+  }
+
+  // 🔥 LOAD CURRENT MICRONUTRIENTS FROM STORAGE BEFORE DELETION
+  Future<void> _loadCurrentMicronutrientsFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String foodSpecificScanId = _generateFoodSpecificScanId();
+
+      // Try multiple storage keys to find current micronutrients
+      List<String> possibleKeys = [
+        'food_nutrition_data_$foodSpecificScanId',
+        'nutrition_data_$foodSpecificScanId',
+        'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}',
+      ];
+
+      Map<String, dynamic>? storedData;
+      String foundKey = '';
+
+      for (String key in possibleKeys) {
+        String? dataString = prefs.getString(key);
+        if (dataString != null && dataString.isNotEmpty) {
+          try {
+            storedData = Map<String, dynamic>.from(jsonDecode(dataString));
+            foundKey = key;
+            print('📥 Found micronutrients in storage key: $key');
+            break;
+          } catch (e) {
+            print('⚠️ Failed to parse data from key $key: $e');
+          }
+        }
+      }
+
+      if (storedData != null && widget.additionalNutrients != null) {
+        // Clear existing micronutrients
+        widget.additionalNutrients!.clear();
+
+        // Extract all micronutrients from stored data (excluding basic macros)
+        Set<String> basicKeys = {
+          'protein',
+          'fat',
+          'carbs',
+          'calories',
+          'scanId',
+          'lastUpdated',
+          'freshData',
+          'dataVersion'
+        };
+
+        storedData.forEach((key, value) {
+          if (!basicKeys.contains(key)) {
+            // This is a micronutrient - extract numeric value
+            double numericValue = 0.0;
+            if (value is num) {
+              numericValue = value.toDouble();
+            } else if (value is String) {
+              numericValue = double.tryParse(value) ?? 0.0;
+            }
+            widget.additionalNutrients![key] = numericValue;
+          }
+        });
+
+        print(
+            '📥 Loaded ${widget.additionalNutrients!.length} micronutrients from storage ($foundKey)');
+      } else {
+        print('⚠️ No stored micronutrients found for deletion reduction');
+        if (widget.additionalNutrients != null) {
+          widget.additionalNutrients!.clear();
+        }
+      }
+    } catch (e) {
+      print('❌ Error loading micronutrients from storage: $e');
+      if (widget.additionalNutrients != null) {
+        widget.additionalNutrients!.clear();
+      }
+    }
+  }
+
+  // 🔥 SAVE REDUCED MICRONUTRIENTS BACK TO STORAGE
+  Future<void> _saveReducedMicronutrientsToStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String foodSpecificScanId = _generateFoodSpecificScanId();
+
+      // Create updated nutrition data structure
+      Map<String, dynamic> updatedData = {
+        'protein': _protein,
+        'fat': _fat,
+        'carbs': _carbs,
+        'calories': _calories,
+        'scanId': foodSpecificScanId,
+        'lastUpdated': DateTime.now().millisecondsSinceEpoch,
+        'freshData': true,
+        'dataVersion': DateTime.now().millisecondsSinceEpoch,
+      };
+
+      // Add all reduced micronutrients
+      if (widget.additionalNutrients != null) {
+        updatedData.addAll(widget.additionalNutrients!);
+      }
+
+      String updatedJson = jsonEncode(updatedData);
+
+      // Save to multiple storage keys for reliability
+      await prefs.setString(
+          'food_nutrition_data_$foodSpecificScanId', updatedJson);
+      await prefs.setString('nutrition_data_$foodSpecificScanId', updatedJson);
+      await prefs.setString(
+          'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}',
+          updatedJson);
+
+      // Clear the NutritionDataManager cache to force fresh reload
+      nutrition.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
+
+      // Convert flat micronutrients to structured format and store permanently
+      await _convertAndStoreMicronutrients(
+          widget.additionalNutrients ?? {}, foodSpecificScanId);
+
+      print('💾 Successfully saved reduced micronutrients to storage');
+      print('🗑️ Cleared nutrition cache to force fresh reload');
+    } catch (e) {
+      print('❌ Error saving reduced micronutrients: $e');
+    }
   }
 }
