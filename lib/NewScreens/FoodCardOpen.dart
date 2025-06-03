@@ -5922,6 +5922,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // Save the updated micronutrients immediately to storage
       await _saveReducedMicronutrientsToStorage();
 
+      // Update the food card with the new calories to ensure correct scan ID lookup
+      await _updateFoodCardAfterDeletion();
+
       print('Ingredient deletion completed successfully');
     } else {
       print('Ingredient not found for deletion: $name ($amount)');
@@ -7909,6 +7912,58 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print('🗑️ Cleared nutrition cache to force fresh reload');
     } catch (e) {
       print('❌ Error saving reduced micronutrients: $e');
+    }
+  }
+
+  // Update the food card with the new calories to ensure correct scan ID lookup
+  Future<void> _updateFoodCardAfterDeletion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get the stored food cards as StringList
+      final List<String>? storedCards = prefs.getStringList('food_cards');
+      if (storedCards == null) return;
+
+      List<String> updatedCards = [];
+      bool foundAndUpdated = false;
+
+      // Search through each card and update the matching one
+      for (String cardJson in storedCards) {
+        try {
+          Map<String, dynamic> cardData = jsonDecode(cardJson);
+          String cardName = cardData['name'] ?? '';
+
+          // If this is the card we need to update
+          if (cardName.toLowerCase() == _foodName.toLowerCase()) {
+            // Update the calories with the new value after deletion
+            cardData['calories'] = _calories;
+            cardData['protein'] = _protein;
+            cardData['fat'] = _fat;
+            cardData['carbs'] = _carbs;
+            cardData['ingredients'] = _ingredients;
+
+            print(
+                '🔄 Updated food card "$_foodName" with new calories: $_calories');
+            foundAndUpdated = true;
+          }
+
+          updatedCards.add(jsonEncode(cardData));
+        } catch (e) {
+          // If there's an error parsing this card, keep the original
+          updatedCards.add(cardJson);
+          print('⚠️ Error updating food card: $e');
+        }
+      }
+
+      // Save the updated cards back to storage
+      if (foundAndUpdated) {
+        await prefs.setStringList('food_cards', updatedCards);
+        print('✅ Successfully updated food_cards with new calorie values');
+      } else {
+        print('⚠️ Food card "$_foodName" not found for calorie update');
+      }
+    } catch (e) {
+      print('❌ Error updating food card after deletion: $e');
     }
   }
 }

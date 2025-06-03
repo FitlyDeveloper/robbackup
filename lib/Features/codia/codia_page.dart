@@ -14,6 +14,9 @@ import 'dart:typed_data';
 import 'package:grouped_list/grouped_list.dart';
 import './Nutrition.dart' as Nutrition;
 import 'package:table_calendar/table_calendar.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
+
+// Image compression utilities removed to fix display issues
 
 // Custom painter for drawing the calorie gauge
 class CalorieGaugePainter extends CustomPainter {
@@ -145,11 +148,52 @@ class NutritionTracker {
   int _currentCarb = 0;
   int _consumedCalories = 0;
 
+  // Cache variables to prevent excessive loading
+  DateTime? _lastLoadTime;
+  String? _lastDataHash;
+  bool _isLoading = false;
+  static const Duration _cacheValidDuration =
+      Duration(seconds: 30); // Cache for 30 seconds
+
   // Getters for nutrition values
   int get currentProtein => _currentProtein;
   int get currentFat => _currentFat;
   int get currentCarb => _currentCarb;
   int get consumedCalories => _consumedCalories;
+
+  // Helper method to generate a hash of the current food data
+  String _generateDataHash(SharedPreferences prefs) {
+    List<String> hashComponents = [];
+
+    // Add food cards data to hash
+    if (prefs.containsKey('food_cards')) {
+      List<String>? cardStrings = prefs.getStringList('food_cards');
+      if (cardStrings != null) {
+        hashComponents.addAll(cardStrings);
+      }
+    }
+
+    // Add today's food logs to hash
+    String today = DateTime.now().toString().split(' ')[0];
+    String foodLogsKey = 'food_logs_$today';
+    if (prefs.containsKey(foodLogsKey)) {
+      String? foodLogsJson = prefs.getString(foodLogsKey);
+      if (foodLogsJson != null) {
+        hashComponents.add(foodLogsJson);
+      }
+    }
+
+    // Add daily nutrition to hash
+    String dailyNutritionKey = 'daily_nutrition_$today';
+    if (prefs.containsKey(dailyNutritionKey)) {
+      String? nutritionJson = prefs.getString(dailyNutritionKey);
+      if (nutritionJson != null) {
+        hashComponents.add(nutritionJson);
+      }
+    }
+
+    return hashComponents.join('|').hashCode.toString();
+  }
 
   // Add a new food log entry
   Future<bool> logFood({
@@ -215,6 +259,10 @@ class NutritionTracker {
       _currentCarb += _parseNutritionValue(carbs);
       _consumedCalories += _parseNutritionValue(calories);
 
+      // Invalidate cache since data changed
+      _lastDataHash = null;
+      _lastLoadTime = null;
+
       return true;
     } catch (e) {
       print('Error logging food: $e');
@@ -222,10 +270,31 @@ class NutritionTracker {
     }
   }
 
-  // Load nutrition data from SharedPreferences
+  // Load nutrition data from SharedPreferences with caching
   Future<void> loadNutritionData() async {
+    // Prevent concurrent loading
+    if (_isLoading) {
+      print('Already loading nutrition data, skipping...');
+      return;
+    }
+
     try {
+      _isLoading = true;
       final prefs = await SharedPreferences.getInstance();
+
+      // Check if we can use cached data
+      final now = DateTime.now();
+      final currentDataHash = _generateDataHash(prefs);
+
+      if (_lastLoadTime != null &&
+          _lastDataHash == currentDataHash &&
+          now.difference(_lastLoadTime!) < _cacheValidDuration) {
+        print(
+            'Using cached nutrition data (loaded ${now.difference(_lastLoadTime!).inSeconds}s ago)');
+        return;
+      }
+
+      print('Loading fresh nutrition data...');
 
       // Reset values first
       _currentProtein = 0;
@@ -247,9 +316,34 @@ class NutritionTracker {
         // For testing ONLY - use hardcoded values, COMMENT THIS OUT IN PRODUCTION
         _setupTestData();
       }
+
+      // Update cache
+      _lastLoadTime = now;
+      _lastDataHash = currentDataHash;
     } catch (e) {
       print('Error loading nutrition data: $e');
+    } finally {
+      _isLoading = false;
     }
+  }
+
+  // Force reload (bypass cache) - useful when we know data has changed
+  Future<void> forceReload() async {
+    _lastDataHash = null;
+    _lastLoadTime = null;
+    await loadNutritionData();
+  }
+
+  // Invalidate cache without reloading - useful when data changes but we don't need immediate reload
+  void invalidateCache() {
+    _lastDataHash = null;
+    _lastLoadTime = null;
+    print('Nutrition cache invalidated');
+  }
+
+  // Static method to invalidate cache from other files
+  static void invalidateCacheStatic() {
+    _instance.invalidateCache();
   }
 
   // Try to load from food_logs_DATE format
@@ -1218,75 +1312,60 @@ class _CodiaPageState extends State<CodiaPage> {
       List<Map<String, dynamic>> cards = [];
 
       if (storedCards != null && storedCards.isNotEmpty) {
-        final currentTime = DateTime.now().millisecondsSinceEpoch;
-        final twelveHoursInMillis =
-            12 * 60 * 60 * 1000; // 12 hours in milliseconds
-
         for (String cardJson in storedCards) {
           try {
             Map<String, dynamic> cardData = jsonDecode(cardJson);
 
-            // Check if the card is less than 12 hours old
-            int timestamp = cardData['timestamp'] ?? 0;
-            if (currentTime - timestamp < twelveHoursInMillis) {
-              // Ensure ingredients data structure is properly maintained
-              if (cardData.containsKey('ingredients')) {
-                List<dynamic> ingredients = cardData['ingredients'];
+            // REMOVED: 12-hour expiration filter - cards now persist until manually deleted
+            // Ensure ingredients data structure is properly maintained
+            if (cardData.containsKey('ingredients')) {
+              List<dynamic> ingredients = cardData['ingredients'];
 
-                // For each ingredient, ensure we have a properly structured map
-                List<dynamic> validIngredients = [];
-                Map<String, dynamic> ingredientAmounts = {};
-                Map<String, dynamic> ingredientCalories = {};
+              // For each ingredient, ensure we have a properly structured map
+              List<dynamic> validIngredients = [];
+              Map<String, dynamic> ingredientAmounts = {};
+              Map<String, dynamic> ingredientCalories = {};
 
-                for (var ingredient in ingredients) {
-                  if (ingredient is Map<String, dynamic>) {
-                    // Normalize values to ensure proper data types
-                    Map<String, dynamic> normalizedIngredient = {
-                      'name': ingredient['name'] ?? 'Ingredient',
-                      'amount': ingredient['amount'] ?? '1 serving',
-                      'calories':
-                          normalizeIngredientValue(ingredient['calories']),
-                    };
+              for (var ingredient in ingredients) {
+                if (ingredient is Map<String, dynamic>) {
+                  // Normalize values to ensure proper data types
+                  Map<String, dynamic> normalizedIngredient = {
+                    'name': ingredient['name'] ?? 'Ingredient',
+                    'amount': ingredient['amount'] ?? '1 serving',
+                    'calories':
+                        normalizeIngredientValue(ingredient['calories']),
+                  };
 
-                    // Use the normalized ingredient
-                    validIngredients.add(normalizedIngredient);
+                  // Use the normalized ingredient
+                  validIngredients.add(normalizedIngredient);
 
-                    // Store the name, amount and calories in separate maps for lookup
-                    String name = normalizedIngredient['name'];
-                    ingredientAmounts[name] = normalizedIngredient['amount'];
-                    ingredientCalories[name] = normalizedIngredient['calories'];
-                  } else if (ingredient is String) {
-                    // If it's a string, we need to create a map and add it
-                    validIngredients.add(ingredient);
-                  }
+                  // Store the name, amount and calories in separate maps for lookup
+                  String name = normalizedIngredient['name'];
+                  ingredientAmounts[name] = normalizedIngredient['amount'];
+                  ingredientCalories[name] = normalizedIngredient['calories'];
+                } else if (ingredient is String) {
+                  // If it's a string, we need to create a map and add it
+                  validIngredients.add(ingredient);
                 }
-
-                // Replace the ingredients list with our validated list
-                cardData['ingredients'] = validIngredients;
-
-                // Add the lookup maps for amounts and calories
-                cardData['ingredient_amounts'] = ingredientAmounts;
-                cardData['ingredient_calories'] = ingredientCalories;
               }
 
-              // Preserve the original high-quality image if it exists
-              if (cardData.containsKey('image') &&
-                  cardData['image'] is String) {
-                cardData['image'] = preserveImageQuality(cardData['image']);
-              }
+              // Replace the ingredients list with our validated list
+              cardData['ingredients'] = validIngredients;
 
-              cards.add(cardData);
+              // Add the lookup maps for amounts and calories
+              cardData['ingredient_amounts'] = ingredientAmounts;
+              cardData['ingredient_calories'] = ingredientCalories;
             }
+
+            // Preserve the original high-quality image if it exists
+            if (cardData.containsKey('image') && cardData['image'] is String) {
+              cardData['image'] = preserveImageQuality(cardData['image']);
+            }
+
+            cards.add(cardData);
           } catch (e) {
             print("Error parsing food card JSON: $e");
           }
-        }
-
-        // Save filtered cards back if any were removed due to expiration
-        if (cards.length < storedCards.length) {
-          final List<String> updatedCards =
-              cards.map((card) => jsonEncode(card)).toList();
-          await prefs.setStringList('food_cards', updatedCards);
         }
 
         // Sort by timestamp (most recent first)
@@ -1304,7 +1383,7 @@ class _CodiaPageState extends State<CodiaPage> {
           }
         });
 
-        print("Loaded ${cards.length} food cards");
+        print("Loaded ${cards.length} food cards (no expiration filter)");
       }
     } catch (e) {
       print("Error loading food cards: $e");
@@ -1386,6 +1465,24 @@ class _CodiaPageState extends State<CodiaPage> {
 
     try {
       Uint8List bytes = base64Decode(base64Image);
+
+      if (bytes.length > 700 * 1024) {
+        // 0.7MB target size
+        print(
+            'Image too large for display: ${(bytes.length / 1024 / 1024).toStringAsFixed(2)}MB, using original');
+        // Just return original image for now to avoid display issues
+        return Image.memory(
+          bytes,
+          width: 92,
+          height: 92,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading food card image: $error');
+            return _buildDefaultImageContainer();
+          },
+        );
+      }
+
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Image.memory(
@@ -1393,17 +1490,25 @@ class _CodiaPageState extends State<CodiaPage> {
           width: 92,
           height: 92,
           fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-          alignment: Alignment.center,
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading food card image: $error');
+            return _buildDefaultImageContainer();
+          },
         ),
       );
     } catch (e) {
-      print("Error decoding image: $e");
+      print('Error decoding food card image: $e');
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: _buildDefaultImageContainer(),
       );
     }
+  }
+
+  // Helper method to compress image if needed
+  Future<Uint8List> _compressImageIfNeeded(Uint8List imageBytes) async {
+    // Image compression removed to fix display issues - just return original
+    return imageBytes;
   }
 
   // Build a food card widget from food card data
@@ -2700,6 +2805,21 @@ class _CodiaPageState extends State<CodiaPage> {
         'Updated remaining calories: $remainingCalories (target=$targetCalories, consumed=${_nutritionTracker.consumedCalories})');
   }
 
+  // Force reload nutrition data (bypass cache) - use when we know data changed
+  Future<void> _forceReloadNutritionData() async {
+    await _nutritionTracker.forceReload();
+    setState(() {
+      // Update remaining calories based on consumed calories
+      if (targetCalories > 0) {
+        remainingCalories = targetCalories - _nutritionTracker.consumedCalories;
+        print(
+            'FORCE RELOAD DEBUG: Target=$targetCalories, Consumed=${_nutritionTracker.consumedCalories}, Remaining=$remainingCalories');
+      }
+    });
+    print(
+        'Force reloaded nutrition data: $remainingCalories (target=$targetCalories, consumed=${_nutritionTracker.consumedCalories})');
+  }
+
   // Navigation methods for Snap Meal and Coach buttons
   void _navigateToSnapFood() async {
     Navigator.push(
@@ -2711,7 +2831,7 @@ class _CodiaPageState extends State<CodiaPage> {
       // Refresh both food cards and nutrition data when returning from SnapFood
       print('Returned from SnapFood - refreshing data');
       _loadFoodCards();
-      _loadNutritionData();
+      _forceReloadNutritionData(); // Use force reload since new food was likely added
     });
   }
 
@@ -2748,17 +2868,43 @@ class _CodiaPageState extends State<CodiaPage> {
               String foodSpecificScanId =
                   "food_nutrition_${foodName}_${caloriesId}";
 
-              // Try to load nutrition data with this ID
-              String? nutritionJson =
-                  prefs.getString('food_nutrition_data_$foodSpecificScanId') ??
-                      prefs.getString('nutrition_data_$foodSpecificScanId');
+              // Try to load nutrition data with this ID - check multiple possible keys
+              List<String> possibleKeys = [
+                'food_nutrition_data_$foodSpecificScanId',
+                'nutrition_data_$foodSpecificScanId',
+                // Also check for any "fresh data" flags that indicate recent deletion/updates
+                'fresh_nutrition_data_$foodSpecificScanId',
+              ];
+
+              String? nutritionJson;
+              String matchedKey = '';
+
+              for (String key in possibleKeys) {
+                String? testData = prefs.getString(key);
+                if (testData != null && testData.isNotEmpty) {
+                  // For fresh data keys, it contains a timestamp, not JSON data
+                  if (key.startsWith('fresh_nutrition_data_')) {
+                    // This indicates fresh data is available - now get the actual nutrition data
+                    nutritionJson = prefs.getString(
+                            'food_nutrition_data_$foodSpecificScanId') ??
+                        prefs.getString('nutrition_data_$foodSpecificScanId');
+                    matchedKey = key;
+                    print('🔥 Found FRESH nutrition data flag: $key');
+                    break;
+                  } else {
+                    nutritionJson = testData;
+                    matchedKey = key;
+                    break;
+                  }
+                }
+              }
 
               if (nutritionJson != null && nutritionJson.isNotEmpty) {
                 try {
                   existingNutritionData = jsonDecode(nutritionJson);
                   finalScanId = foodSpecificScanId;
                   print(
-                      'Found nutrition data using food card ID: $foodSpecificScanId');
+                      '🎯 Found nutrition data using food card ID: $foodSpecificScanId (key: $matchedKey)');
                   foundFoodCardData = true;
                   break;
                 } catch (e) {
@@ -2795,7 +2941,7 @@ class _CodiaPageState extends State<CodiaPage> {
         }
       }
 
-      print('Navigating to Nutrition with scan ID: $finalScanId');
+      print('🚀 Navigating to Nutrition with scan ID: $finalScanId');
     } catch (e) {
       print('Error preparing navigation to Nutrition: $e');
       // Keep using the default ID set above
@@ -2826,16 +2972,14 @@ class _CodiaPageState extends State<CodiaPage> {
   }
 
   void _navigateToFoodCardOpen() {
-    Navigator.push(
+    // Use pushReplacement to prevent memory buildup and screen rebuilding
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => const FoodCardOpen(),
       ),
-    ).then((_) {
-      // Refresh both food cards and nutrition data when returning
-      print('Returned from FoodCardOpen - refreshing data');
-      _loadFoodCards();
-      _loadNutritionData();
-    });
+    );
+    // Note: No .then() callback needed since we're replacing the current screen
+    // The nutrition data will be handled by the persistent cache system
   }
 }
