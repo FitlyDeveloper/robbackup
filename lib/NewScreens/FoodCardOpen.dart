@@ -5877,11 +5877,16 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       nutrition.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
       print('🗑️ Cleared nutrition cache for scan ID: $foodSpecificScanId');
 
+      // Get the original total calories BEFORE deletion
+      double originalTotalCalories = double.tryParse(_calories) ?? 0.0;
+
+      // Get the deleted ingredient's calories
+      double deletedCalories = double.tryParse(calories) ?? 0.0;
+
       // Remove the ingredient from the list
       _ingredients.removeAt(indexToRemove);
 
       // Subtract the ingredient's nutrition values from totals
-      double deletedCalories = double.tryParse(calories) ?? 0.0;
       double deletedProtein = double.tryParse(protein) ?? 0.0;
       double deletedFat = double.tryParse(fat) ?? 0.0;
       double deletedCarbs = double.tryParse(carbs) ?? 0.0;
@@ -5910,8 +5915,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         _markAsUnsaved(); // Mark as having unsaved changes
       });
 
-      // Recalculate micronutrients after deletion
-      _recalculateMicronutrientsAfterDeletion();
+      // Apply proportional micronutrient reduction based on deleted calories
+      _recalculateMicronutrientsAfterDeletion(
+          originalTotalCalories, deletedCalories);
 
       // Debug: Print micronutrients AFTER deletion
       print('=== MICRONUTRIENTS AFTER DELETION ===');
@@ -5930,102 +5936,63 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     }
   }
 
-  // Recalculate micronutrients from all remaining ingredients
-  void _recalculateMicronutrientsFromRemainingIngredients() {
-    if (widget.additionalNutrients == null) {
-      print('No additionalNutrients to recalculate');
+  // 🔥 PROPORTIONAL MICRONUTRIENT REDUCTION AFTER INGREDIENT DELETION
+  void _recalculateMicronutrientsAfterDeletion(
+      double originalTotalCalories, double deletedCalories) {
+    if (widget.additionalNutrients == null ||
+        widget.additionalNutrients!.isEmpty) {
+      print('No micronutrients to adjust after deletion');
       return;
     }
 
-    print(
-        'Recalculating micronutrients from ${_ingredients.length} remaining ingredients');
-
-    // Reset all micronutrient values to 0
-    Map<String, dynamic> newMicronutrients = {};
-
-    // Initialize all existing keys to 0
-    widget.additionalNutrients!.forEach((key, value) {
-      newMicronutrients[key] = 0.0;
-    });
-
-    // Sum up micronutrients from all remaining ingredients
-    for (var ingredient in _ingredients) {
-      print('Processing ingredient: ${ingredient['name']}');
-      print('  Available keys: ${ingredient.keys.toList()}');
-
-      // Add vitamins
-      if (ingredient.containsKey('vitamins') && ingredient['vitamins'] is Map) {
-        Map<String, dynamic> vitamins =
-            Map<String, dynamic>.from(ingredient['vitamins']);
-        print('  Found vitamins: ${vitamins.keys.toList()}');
-        vitamins.forEach((vitaminKey, value) {
-          String normalizedKey = vitaminKey.toLowerCase().replaceAll(' ', '_');
-          double valueToAdd = double.tryParse(value.toString()) ?? 0.0;
-
-          if (newMicronutrients.containsKey(normalizedKey)) {
-            double currentValue =
-                double.tryParse(newMicronutrients[normalizedKey].toString()) ??
-                    0.0;
-            newMicronutrients[normalizedKey] = currentValue + valueToAdd;
-          } else {
-            newMicronutrients[normalizedKey] = valueToAdd;
-          }
-        });
-      } else {
-        print('  No vitamins found in ingredient');
-      }
-
-      // Add minerals
-      if (ingredient.containsKey('minerals') && ingredient['minerals'] is Map) {
-        Map<String, dynamic> minerals =
-            Map<String, dynamic>.from(ingredient['minerals']);
-        print('  Found minerals: ${minerals.keys.toList()}');
-        minerals.forEach((mineralKey, value) {
-          String normalizedKey = mineralKey.toLowerCase().replaceAll(' ', '_');
-          double valueToAdd = double.tryParse(value.toString()) ?? 0.0;
-
-          if (newMicronutrients.containsKey(normalizedKey)) {
-            double currentValue =
-                double.tryParse(newMicronutrients[normalizedKey].toString()) ??
-                    0.0;
-            newMicronutrients[normalizedKey] = currentValue + valueToAdd;
-          } else {
-            newMicronutrients[normalizedKey] = valueToAdd;
-          }
-        });
-      } else {
-        print('  No minerals found in ingredient');
-      }
-
-      // Add other nutrients
-      if (ingredient.containsKey('other') && ingredient['other'] is Map) {
-        Map<String, dynamic> other =
-            Map<String, dynamic>.from(ingredient['other']);
-        print('  Found other nutrients: ${other.keys.toList()}');
-        other.forEach((nutrientKey, value) {
-          String normalizedKey = nutrientKey.toLowerCase().replaceAll(' ', '_');
-          double valueToAdd = double.tryParse(value.toString()) ?? 0.0;
-
-          if (newMicronutrients.containsKey(normalizedKey)) {
-            double currentValue =
-                double.tryParse(newMicronutrients[normalizedKey].toString()) ??
-                    0.0;
-            newMicronutrients[normalizedKey] = currentValue + valueToAdd;
-          } else {
-            newMicronutrients[normalizedKey] = valueToAdd;
-          }
-        });
-      } else {
-        print('  No other nutrients found in ingredient');
-      }
+    if (deletedCalories <= 0 || originalTotalCalories <= 0) {
+      print(
+          'Invalid calorie values for proportional reduction: deleted=$deletedCalories, original=$originalTotalCalories');
+      return;
     }
 
-    // Update the widget's additionalNutrients with the recalculated values
-    widget.additionalNutrients!.clear();
-    widget.additionalNutrients!.addAll(newMicronutrients);
+    // Calculate the percentage reduction (Formula: deletedCalories / originalTotalCalories * 100)
+    double reductionPercentage =
+        (deletedCalories / originalTotalCalories) * 100;
+    double reductionMultiplier = reductionPercentage / 100.0;
 
+    print('🔥 PROPORTIONAL MICRONUTRIENT REDUCTION:');
+    print('   Deleted calories: $deletedCalories kcal');
+    print('   Original total calories: $originalTotalCalories kcal');
     print(
-        'Recalculated micronutrients from remaining ingredients: ${newMicronutrients.keys.length} nutrients');
+        '   Reduction percentage: ${reductionPercentage.toStringAsFixed(1)}%');
+    print('   Reduction multiplier: ${reductionMultiplier.toStringAsFixed(3)}');
+
+    // Apply proportional reduction to all micronutrients
+    Map<String, dynamic> reducedMicronutrients = {};
+
+    widget.additionalNutrients!.forEach((key, value) {
+      double currentValue = 0.0;
+
+      // Extract numeric value
+      if (value is num) {
+        currentValue = value.toDouble();
+      } else if (value is String) {
+        currentValue = double.tryParse(value) ?? 0.0;
+      }
+
+      // Calculate reduced value
+      double reductionAmount = currentValue * reductionMultiplier;
+      double newValue =
+          (currentValue - reductionAmount).clamp(0.0, double.infinity);
+
+      // Store the reduced value
+      reducedMicronutrients[key] = newValue;
+
+      print(
+          '   $key: $currentValue → $newValue (reduced by ${reductionAmount.toStringAsFixed(2)})');
+    });
+
+    // Update the micronutrients with reduced values
+    widget.additionalNutrients!.clear();
+    widget.additionalNutrients!.addAll(reducedMicronutrients);
+
+    print('✅ Micronutrient proportional reduction completed');
   }
 
   // Optimized method to save updated nutrition data without excessive storage operations
@@ -7643,15 +7610,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print('  No micronutrients available');
     }
     print('=======================================');
-  }
-
-  // Recalculate micronutrients after ingredient deletion
-  void _recalculateMicronutrientsAfterDeletion() {
-    // Recalculate micronutrients from remaining ingredients
-    _recalculateMicronutrientsFromRemainingIngredients();
-
-    // Recalculate totals
-    _calculateTotalNutrition();
   }
 
   // Generate fresh nutrition data after ingredient deletion for the nutrition screen
