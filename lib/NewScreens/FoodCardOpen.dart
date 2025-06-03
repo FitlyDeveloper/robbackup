@@ -7322,6 +7322,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // SAFER PRINTING:
       print(
           "Using original OpenAI micronutrient values. Keys: ${widget.additionalNutrients?.keys.join(', ') ?? 'N/A'}. Count: ${widget.additionalNutrients?.length ?? 0}");
+
+      // 🔥 CONVERT FLAT STRUCTURE TO NUTRITION.DART FORMAT AND STORE PERMANENTLY
+      await _convertAndStoreMicronutrients(
+          widget.additionalNutrients!, foodSpecificScanId);
     } else {
       // Fallback: Calculate from ingredients only if no original values available
       totalNutrition = _extractOtherNutrients();
@@ -7336,147 +7340,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     totalNutrition['carbs'] = _carbs;
 
     print("Passing nutrition data to Nutrition.dart: $totalNutrition");
-
-    // 💾 PERMANENT STORAGE: Convert and store all 34 micronutrients properly
-    Map<String, nutrition_page.NutrientInfo> vitamins = {};
-    Map<String, nutrition_page.NutrientInfo> minerals = {};
-    Map<String, nutrition_page.NutrientInfo> other = {};
-
-    // Define vitamin targets and units (exactly matching Nutrition.dart)
-    Map<String, Map<String, dynamic>> vitaminTargets = {
-      'Vitamin A': {'target': 900, 'unit': 'mcg'},
-      'Vitamin C': {'target': 90, 'unit': 'mg'},
-      'Vitamin D': {'target': 20, 'unit': 'mcg'},
-      'Vitamin E': {'target': 15, 'unit': 'mg'},
-      'Vitamin K': {'target': 120, 'unit': 'mcg'},
-      'Vitamin B1': {'target': 1.2, 'unit': 'mg'},
-      'Vitamin B2': {'target': 1.3, 'unit': 'mg'},
-      'Vitamin B3': {'target': 16, 'unit': 'mg'},
-      'Vitamin B5': {'target': 5, 'unit': 'mg'},
-      'Vitamin B6': {'target': 1.3, 'unit': 'mg'},
-      'Vitamin B7': {'target': 30, 'unit': 'mcg'},
-      'Vitamin B9': {'target': 400, 'unit': 'mcg'},
-      'Vitamin B12': {'target': 2.4, 'unit': 'mcg'}
-    };
-
-    // Process vitamins from OpenAI data
-    vitaminTargets.forEach((vitaminName, config) {
-      String apiKey = vitaminName.toLowerCase().replaceAll(' ', '_');
-      double value = 0.0;
-
-      if (totalNutrition.containsKey(apiKey)) {
-        value = double.tryParse(totalNutrition[apiKey].toString()) ?? 0.0;
-      }
-
-      double target = config['target'].toDouble();
-      String unit = config['unit'];
-      double progress = target > 0 ? (value / target).clamp(0.0, 1.0) : 0.0;
-      int percentage = (progress * 100).round();
-
-      vitamins[vitaminName] = nutrition_page.NutrientInfo(
-        name: vitaminName,
-        value: '${value.toStringAsFixed(value < 1 ? 1 : 0)} $unit',
-        progress: progress,
-        percent: '$percentage%',
-        progressColor: progress >= 1.0 ? Colors.green : Colors.orange,
-        rdiGoal: target,
-        unit: unit,
-      );
-    });
-
-    // Define mineral targets and units
-    Map<String, Map<String, dynamic>> mineralTargets = {
-      'Calcium': {'target': 1000, 'unit': 'mg'},
-      'Chloride': {'target': 2300, 'unit': 'mg'},
-      'Chromium': {'target': 35, 'unit': 'mcg'},
-      'Copper': {'target': 900, 'unit': 'mcg'},
-      'Fluoride': {'target': 4, 'unit': 'mg'},
-      'Iodine': {'target': 150, 'unit': 'mcg'},
-      'Iron': {'target': 8, 'unit': 'mg'},
-      'Magnesium': {'target': 400, 'unit': 'mg'},
-      'Manganese': {'target': 2.3, 'unit': 'mg'},
-      'Molybdenum': {'target': 45, 'unit': 'mcg'},
-      'Phosphorus': {'target': 700, 'unit': 'mg'},
-      'Potassium': {'target': 4700, 'unit': 'mg'},
-      'Selenium': {'target': 55, 'unit': 'mcg'},
-      'Sodium': {'target': 2300, 'unit': 'mg'},
-      'Zinc': {'target': 11, 'unit': 'mg'}
-    };
-
-    // Process minerals from OpenAI data
-    mineralTargets.forEach((mineralName, config) {
-      String apiKey = mineralName.toLowerCase();
-      double value = 0.0;
-
-      if (totalNutrition.containsKey(apiKey)) {
-        value = double.tryParse(totalNutrition[apiKey].toString()) ?? 0.0;
-      }
-
-      double target = config['target'].toDouble();
-      String unit = config['unit'];
-      double progress = target > 0 ? (value / target).clamp(0.0, 1.0) : 0.0;
-      int percentage = (progress * 100).round();
-
-      minerals[mineralName] = nutrition_page.NutrientInfo(
-        name: mineralName,
-        value: '${value.toStringAsFixed(value < 1 ? 1 : 0)} $unit',
-        progress: progress,
-        percent: '$percentage%',
-        progressColor: progress >= 1.0 ? Colors.green : Colors.orange,
-        rdiGoal: target,
-        unit: unit,
-      );
-    });
-
-    // Define other nutrient targets and units
-    Map<String, Map<String, dynamic>> otherTargets = {
-      'Fiber': {'target': 25, 'unit': 'g'},
-      'Cholesterol': {'target': 300, 'unit': 'mg'},
-      'Sugar': {'target': 50, 'unit': 'g'},
-      'Saturated Fats': {'target': 20, 'unit': 'g'},
-      'Omega 3': {'target': 1000, 'unit': 'mg'},
-      'Omega 6': {'target': 12, 'unit': 'g'}
-    };
-
-    // Process other nutrients from OpenAI data
-    otherTargets.forEach((nutrientName, config) {
-      String apiKey = nutrientName.toLowerCase().replaceAll(' ', '_');
-      if (apiKey == 'saturated_fats') apiKey = 'saturated_fats';
-      if (apiKey == 'omega_3') apiKey = 'omega_3';
-      if (apiKey == 'omega_6') apiKey = 'omega_6';
-
-      double value = 0.0;
-
-      if (totalNutrition.containsKey(apiKey)) {
-        value = double.tryParse(totalNutrition[apiKey].toString()) ?? 0.0;
-      }
-
-      double target = config['target'].toDouble();
-      String unit = config['unit'];
-      double progress = target > 0 ? (value / target).clamp(0.0, 1.0) : 0.0;
-      int percentage = (progress * 100).round();
-
-      other[nutrientName] = nutrition_page.NutrientInfo(
-        name: nutrientName,
-        value: '${value.toStringAsFixed(value < 1 ? 1 : 0)} $unit',
-        progress: progress,
-        percent: '$percentage%',
-        progressColor: progress >= 1.0 ? Colors.green : Colors.orange,
-        rdiGoal: target,
-        unit: unit,
-      );
-    });
-
-    // 🔥 STORE ALL 34 MICRONUTRIENTS PERMANENTLY via NutritionDataManager
-    try {
-      await nutrition_page.NutritionDataManager.storeNutritionData(
-          foodSpecificScanId, vitamins, minerals, other);
-
-      print(
-          '✅ PERMANENTLY STORED ${vitamins.length + minerals.length + other.length}/34 micronutrients to NutritionDataManager');
-    } catch (e) {
-      print('❌ Error storing nutrition data: $e');
-    }
 
     // Navigate to nutrition screen with updated data
     Navigator.push(
@@ -7819,5 +7682,161 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
     String calIdentifier = _calories.replaceAll('.', '_');
     return 'food_nutrition_${foodName}_${calIdentifier}';
+  }
+
+  // Helper method to extract ingredient nutrition value as double
+  double _extractIngredientValueAsDouble(dynamic value, double defaultValue) {
+    if (value == null) return defaultValue;
+
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+
+    return defaultValue;
+  }
+
+  // 🔥 CONVERT FLAT MICRONUTRIENT STRUCTURE TO NUTRITION.DART FORMAT AND STORE PERMANENTLY
+  Future<void> _convertAndStoreMicronutrients(
+      Map<String, dynamic> flatMicronutrients, String scanId) async {
+    print(
+        '🔥 CONVERTING FLAT MICRONUTRIENTS TO STRUCTURED FORMAT FOR PERMANENT STORAGE');
+    print('📊 Input data: ${flatMicronutrients.keys.join(', ')}');
+
+    // Import the nutrition data manager
+    await nutrition_page.NutritionDataManager.initialize();
+
+    // Create structured maps for vitamins, minerals, and other nutrients
+    Map<String, nutrition_page.NutrientInfo> vitamins = {};
+    Map<String, nutrition_page.NutrientInfo> minerals = {};
+    Map<String, nutrition_page.NutrientInfo> other = {};
+
+    // Vitamin mappings with target values and units (from Nutrition.dart)
+    Map<String, Map<String, dynamic>> vitaminTargets = {
+      'Vitamin A': {'target': 900, 'unit': 'mcg', 'api_key': 'vitamin_a'},
+      'Vitamin C': {'target': 90, 'unit': 'mg', 'api_key': 'vitamin_c'},
+      'Vitamin D': {'target': 20, 'unit': 'mcg', 'api_key': 'vitamin_d'},
+      'Vitamin E': {'target': 15, 'unit': 'mg', 'api_key': 'vitamin_e'},
+      'Vitamin K': {'target': 120, 'unit': 'mcg', 'api_key': 'vitamin_k'},
+      'Vitamin B1': {'target': 1.2, 'unit': 'mg', 'api_key': 'vitamin_b1'},
+      'Vitamin B2': {'target': 1.3, 'unit': 'mg', 'api_key': 'vitamin_b2'},
+      'Vitamin B3': {'target': 16, 'unit': 'mg', 'api_key': 'vitamin_b3'},
+      'Vitamin B5': {'target': 5, 'unit': 'mg', 'api_key': 'vitamin_b5'},
+      'Vitamin B6': {'target': 1.3, 'unit': 'mg', 'api_key': 'vitamin_b6'},
+      'Vitamin B7': {'target': 30, 'unit': 'mcg', 'api_key': 'vitamin_b7'},
+      'Vitamin B9': {'target': 400, 'unit': 'mcg', 'api_key': 'vitamin_b9'},
+      'Vitamin B12': {'target': 2.4, 'unit': 'mcg', 'api_key': 'vitamin_b12'},
+    };
+
+    // Mineral mappings with target values and units (from Nutrition.dart)
+    Map<String, Map<String, dynamic>> mineralTargets = {
+      'Calcium': {'target': 1000, 'unit': 'mg', 'api_key': 'calcium'},
+      'Chloride': {'target': 2300, 'unit': 'mg', 'api_key': 'chloride'},
+      'Chromium': {'target': 35, 'unit': 'mcg', 'api_key': 'chromium'},
+      'Copper': {'target': 900, 'unit': 'mcg', 'api_key': 'copper'},
+      'Fluoride': {'target': 4, 'unit': 'mg', 'api_key': 'fluoride'},
+      'Iodine': {'target': 150, 'unit': 'mcg', 'api_key': 'iodine'},
+      'Iron': {'target': 8, 'unit': 'mg', 'api_key': 'iron'},
+      'Magnesium': {'target': 400, 'unit': 'mg', 'api_key': 'magnesium'},
+      'Manganese': {'target': 2.3, 'unit': 'mg', 'api_key': 'manganese'},
+      'Molybdenum': {'target': 45, 'unit': 'mcg', 'api_key': 'molybdenum'},
+      'Phosphorus': {'target': 700, 'unit': 'mg', 'api_key': 'phosphorus'},
+      'Potassium': {'target': 4700, 'unit': 'mg', 'api_key': 'potassium'},
+      'Selenium': {'target': 55, 'unit': 'mcg', 'api_key': 'selenium'},
+      'Sodium': {'target': 2300, 'unit': 'mg', 'api_key': 'sodium'},
+      'Zinc': {'target': 11, 'unit': 'mg', 'api_key': 'zinc'},
+    };
+
+    // Other nutrients mappings with target values and units (from Nutrition.dart)
+    Map<String, Map<String, dynamic>> otherTargets = {
+      'Fiber': {'target': 25, 'unit': 'g', 'api_key': 'fiber'},
+      'Cholesterol': {'target': 300, 'unit': 'mg', 'api_key': 'cholesterol'},
+      'Sugar': {'target': 50, 'unit': 'g', 'api_key': 'sugar'},
+      'Saturated Fats': {
+        'target': 20,
+        'unit': 'g',
+        'api_key': 'saturated_fats'
+      },
+      'Omega 3': {'target': 1600, 'unit': 'mg', 'api_key': 'omega_3'},
+      'Omega 6': {'target': 17, 'unit': 'g', 'api_key': 'omega_6'},
+    };
+
+    // Helper function to create NutrientInfo from flat data
+    nutrition_page.NutrientInfo _createNutrientInfo(String displayName,
+        Map<String, dynamic> target, Map<String, dynamic> flatData) {
+      String apiKey = target['api_key'];
+      double targetValue = target['target'].toDouble();
+      String unit = target['unit'];
+
+      double currentValue = 0.0;
+      if (flatData.containsKey(apiKey)) {
+        var value = flatData[apiKey];
+        if (value is String) {
+          currentValue = double.tryParse(value) ?? 0.0;
+        } else if (value is num) {
+          currentValue = value.toDouble();
+        }
+      }
+
+      double progress = currentValue / targetValue;
+      if (progress > 1.0) progress = 1.0; // Cap at 100%
+
+      Color progressColor;
+      if (progress >= 0.8) {
+        progressColor = const Color(0xFF75D377); // Green
+      } else if (progress >= 0.5) {
+        progressColor = const Color(0xFFF3D960); // Yellow
+      } else {
+        progressColor = const Color(0xFFE97372); // Red
+      }
+
+      String percentText = "${(progress * 100).round()}%";
+      String valueText =
+          "${currentValue.toStringAsFixed(1)}/${targetValue.toStringAsFixed(targetValue == targetValue.round() ? 0 : 1)} $unit";
+
+      return nutrition_page.NutrientInfo(
+        name: displayName,
+        value: valueText,
+        percent: percentText,
+        progress: progress,
+        progressColor: progressColor,
+        hasInfo: true,
+        rdiGoal: targetValue,
+        unit: unit,
+      );
+    }
+
+    // Convert vitamins
+    vitaminTargets.forEach((displayName, target) {
+      vitamins[displayName] =
+          _createNutrientInfo(displayName, target, flatMicronutrients);
+      print(
+          '✅ Vitamin: $displayName = ${flatMicronutrients[target['api_key']] ?? 0} ${target['unit']}');
+    });
+
+    // Convert minerals
+    mineralTargets.forEach((displayName, target) {
+      minerals[displayName] =
+          _createNutrientInfo(displayName, target, flatMicronutrients);
+      print(
+          '✅ Mineral: $displayName = ${flatMicronutrients[target['api_key']] ?? 0} ${target['unit']}');
+    });
+
+    // Convert other nutrients
+    otherTargets.forEach((displayName, target) {
+      other[displayName] =
+          _createNutrientInfo(displayName, target, flatMicronutrients);
+      print(
+          '✅ Other: $displayName = ${flatMicronutrients[target['api_key']] ?? 0} ${target['unit']}');
+    });
+
+    // 🔥 STORE ALL DATA PERMANENTLY USING NUTRITION DATA MANAGER
+    print(
+        '🔥 STORING ALL MICRONUTRIENTS PERMANENTLY IN NUTRITION.DART FORMAT...');
+    await nutrition_page.NutritionDataManager.storeNutritionData(
+        scanId, vitamins, minerals, other);
+    print('✅ ALL 34 MICRONUTRIENTS STORED PERMANENTLY! Scan ID: $scanId');
   }
 }
