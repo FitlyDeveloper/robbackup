@@ -107,6 +107,62 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   Map<String, AnimationController> _flipAnimationControllers = {};
   Map<String, Animation<double>> _flipAnimations = {};
 
+  // Make nutrient target maps static class members for broader access
+  static const Map<String, Map<String, dynamic>> vitaminTargets = {
+    'Vitamin A': {'target': 900, 'unit': 'mcg', 'api_key': 'vitamin_a'},
+    'Vitamin C': {'target': 90, 'unit': 'mg', 'api_key': 'vitamin_c'},
+    'Vitamin D': {'target': 20, 'unit': 'mcg', 'api_key': 'vitamin_d'},
+    'Vitamin E': {'target': 15, 'unit': 'mg', 'api_key': 'vitamin_e'},
+    'Vitamin K': {'target': 120, 'unit': 'mcg', 'api_key': 'vitamin_k'},
+    'Vitamin B1': {'target': 1.2, 'unit': 'mg', 'api_key': 'vitamin_b1'},
+    'Vitamin B2': {'target': 1.3, 'unit': 'mg', 'api_key': 'vitamin_b2'},
+    'Vitamin B3': {'target': 16, 'unit': 'mg', 'api_key': 'vitamin_b3'},
+    'Vitamin B5': {'target': 5, 'unit': 'mg', 'api_key': 'vitamin_b5'},
+    'Vitamin B6': {'target': 1.3, 'unit': 'mg', 'api_key': 'vitamin_b6'},
+    'Vitamin B7': {'target': 30, 'unit': 'mcg', 'api_key': 'vitamin_b7'},
+    'Vitamin B9': {'target': 400, 'unit': 'mcg', 'api_key': 'vitamin_b9'},
+    'Vitamin B12': {'target': 2.4, 'unit': 'mcg', 'api_key': 'vitamin_b12'},
+  };
+
+  static const Map<String, Map<String, dynamic>> mineralTargets = {
+    'Calcium': {'target': 1000, 'unit': 'mg', 'api_key': 'calcium'},
+    'Chloride': {'target': 2300, 'unit': 'mg', 'api_key': 'chloride'},
+    'Chromium': {'target': 35, 'unit': 'mcg', 'api_key': 'chromium'},
+    'Copper': {'target': 900, 'unit': 'mcg', 'api_key': 'copper'},
+    'Fluoride': {'target': 4, 'unit': 'mg', 'api_key': 'fluoride'},
+    'Iodine': {'target': 150, 'unit': 'mcg', 'api_key': 'iodine'},
+    'Iron': {'target': 8, 'unit': 'mg', 'api_key': 'iron'},
+    'Magnesium': {'target': 400, 'unit': 'mg', 'api_key': 'magnesium'},
+    'Manganese': {'target': 2.3, 'unit': 'mg', 'api_key': 'manganese'},
+    'Molybdenum': {'target': 45, 'unit': 'mcg', 'api_key': 'molybdenum'},
+    'Phosphorus': {'target': 700, 'unit': 'mg', 'api_key': 'phosphorus'},
+    'Potassium': {'target': 4700, 'unit': 'mg', 'api_key': 'potassium'},
+    'Selenium': {'target': 55, 'unit': 'mcg', 'api_key': 'selenium'},
+    'Sodium': {'target': 2300, 'unit': 'mg', 'api_key': 'sodium'},
+    'Zinc': {'target': 11, 'unit': 'mg', 'api_key': 'zinc'},
+  };
+
+  static const Map<String, Map<String, dynamic>> otherTargets = {
+    'Fiber': {'target': 25, 'unit': 'g', 'api_key': 'fiber'}, // Matched API key
+    'Cholesterol': {'target': 300, 'unit': 'mg', 'api_key': 'cholesterol'},
+    'Sugar': {'target': 50, 'unit': 'g', 'api_key': 'sugar'},
+    'Saturated Fats': {
+      'target': 20,
+      'unit': 'g',
+      'api_key': 'saturated_fats'
+    }, // Matched API key
+    'Omega-3': {
+      'target': 1600,
+      'unit': 'mg',
+      'api_key': 'omega_3'
+    }, // Matched API key for Omega-3
+    'Omega-6': {
+      'target': 17,
+      'unit': 'g',
+      'api_key': 'omega_6'
+    }, // Matched API key for Omega-6
+  };
+
   @override
   void initState() {
     super.initState();
@@ -7666,59 +7722,18 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     Map<String, nutrition_page.NutrientInfo> minerals = {};
     Map<String, nutrition_page.NutrientInfo> other = {};
 
-    // Vitamin mappings with target values and units (from Nutrition.dart)
-    Map<String, Map<String, dynamic>> vitaminTargets = {
-      'Vitamin A': {'target': 900, 'unit': 'mcg', 'api_key': 'vitamin_a'},
-      'Vitamin C': {'target': 90, 'unit': 'mg', 'api_key': 'vitamin_c'},
-      'Vitamin D': {'target': 20, 'unit': 'mcg', 'api_key': 'vitamin_d'},
-      'Vitamin E': {'target': 15, 'unit': 'mg', 'api_key': 'vitamin_e'},
-      'Vitamin K': {'target': 120, 'unit': 'mcg', 'api_key': 'vitamin_k'},
-      'Vitamin B1': {'target': 1.2, 'unit': 'mg', 'api_key': 'vitamin_b1'},
-      'Vitamin B2': {'target': 1.3, 'unit': 'mg', 'api_key': 'vitamin_b2'},
-      'Vitamin B3': {'target': 16, 'unit': 'mg', 'api_key': 'vitamin_b3'},
-      'Vitamin B5': {'target': 5, 'unit': 'mg', 'api_key': 'vitamin_b5'},
-      'Vitamin B6': {'target': 1.3, 'unit': 'mg', 'api_key': 'vitamin_b6'},
-      'Vitamin B7': {'target': 30, 'unit': 'mcg', 'api_key': 'vitamin_b7'},
-      'Vitamin B9': {'target': 400, 'unit': 'mcg', 'api_key': 'vitamin_b9'},
-      'Vitamin B12': {'target': 2.4, 'unit': 'mcg', 'api_key': 'vitamin_b12'},
-    };
+    // Vitamin mappings with target values and units (from Nutrition.dart) - REMOVED, USING STATIC MEMBER
 
-    // Mineral mappings with target values and units (from Nutrition.dart)
-    Map<String, Map<String, dynamic>> mineralTargets = {
-      'Calcium': {'target': 1000, 'unit': 'mg', 'api_key': 'calcium'},
-      'Chloride': {'target': 2300, 'unit': 'mg', 'api_key': 'chloride'},
-      'Chromium': {'target': 35, 'unit': 'mcg', 'api_key': 'chromium'},
-      'Copper': {'target': 900, 'unit': 'mcg', 'api_key': 'copper'},
-      'Fluoride': {'target': 4, 'unit': 'mg', 'api_key': 'fluoride'},
-      'Iodine': {'target': 150, 'unit': 'mcg', 'api_key': 'iodine'},
-      'Iron': {'target': 8, 'unit': 'mg', 'api_key': 'iron'},
-      'Magnesium': {'target': 400, 'unit': 'mg', 'api_key': 'magnesium'},
-      'Manganese': {'target': 2.3, 'unit': 'mg', 'api_key': 'manganese'},
-      'Molybdenum': {'target': 45, 'unit': 'mcg', 'api_key': 'molybdenum'},
-      'Phosphorus': {'target': 700, 'unit': 'mg', 'api_key': 'phosphorus'},
-      'Potassium': {'target': 4700, 'unit': 'mg', 'api_key': 'potassium'},
-      'Selenium': {'target': 55, 'unit': 'mcg', 'api_key': 'selenium'},
-      'Sodium': {'target': 2300, 'unit': 'mg', 'api_key': 'sodium'},
-      'Zinc': {'target': 11, 'unit': 'mg', 'api_key': 'zinc'},
-    };
+    // Mineral mappings with target values and units (from Nutrition.dart) - REMOVED, USING STATIC MEMBER
 
-    // Other nutrients mappings with target values and units (from Nutrition.dart)
-    Map<String, Map<String, dynamic>> otherTargets = {
-      'Fiber': {'target': 25, 'unit': 'g', 'api_key': 'fiber'},
-      'Cholesterol': {'target': 300, 'unit': 'mg', 'api_key': 'cholesterol'},
-      'Sugar': {'target': 50, 'unit': 'g', 'api_key': 'sugar'},
-      'Saturated Fats': {
-        'target': 20,
-        'unit': 'g',
-        'api_key': 'saturated_fats'
-      },
-      'Omega 3': {'target': 1600, 'unit': 'mg', 'api_key': 'omega_3'},
-      'Omega 6': {'target': 17, 'unit': 'g', 'api_key': 'omega_6'},
-    };
+    // Other nutrients mappings with target values and units (from Nutrition.dart) - REMOVED, USING STATIC MEMBER
 
     // Helper function to create NutrientInfo from flat data
-    nutrition_page.NutrientInfo _createNutrientInfo(String displayName,
-        Map<String, dynamic> target, Map<String, dynamic> flatData) {
+    nutrition_page.NutrientInfo _createNutrientInfoHelper(
+        String displayName, // Renamed to avoid conflict
+        Map<String, dynamic> target,
+        Map<String, dynamic> flatData) {
+      // ... (implementation remains the same)
       String apiKey = target['api_key'];
       double targetValue = target['target'].toDouble();
       String unit = target['unit'];
@@ -7734,6 +7749,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
 
       double progress = currentValue / targetValue;
+      if (progress.isNaN) progress = 0.0; // Handle NaN case
+      if (progress.isInfinite)
+        progress = 1.0; // Handle infinite case (e.g. target is 0)
       if (progress > 1.0) progress = 1.0; // Cap at 100%
 
       Color progressColor;
@@ -7763,34 +7781,31 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
     // Convert vitamins
     vitaminTargets.forEach((displayName, target) {
+      // Uses static _FoodCardOpenState.vitaminTargets
       vitamins[displayName] =
-          _createNutrientInfo(displayName, target, flatMicronutrients);
+          _createNutrientInfoHelper(displayName, target, flatMicronutrients);
       print(
           '✅ Vitamin: $displayName = ${flatMicronutrients[target['api_key']] ?? 0} ${target['unit']}');
     });
 
     // Convert minerals
     mineralTargets.forEach((displayName, target) {
+      // Uses static _FoodCardOpenState.mineralTargets
       minerals[displayName] =
-          _createNutrientInfo(displayName, target, flatMicronutrients);
+          _createNutrientInfoHelper(displayName, target, flatMicronutrients);
       print(
           '✅ Mineral: $displayName = ${flatMicronutrients[target['api_key']] ?? 0} ${target['unit']}');
     });
 
     // Convert other nutrients
     otherTargets.forEach((displayName, target) {
+      // Uses static _FoodCardOpenState.otherTargets
       other[displayName] =
-          _createNutrientInfo(displayName, target, flatMicronutrients);
+          _createNutrientInfoHelper(displayName, target, flatMicronutrients);
       print(
           '✅ Other: $displayName = ${flatMicronutrients[target['api_key']] ?? 0} ${target['unit']}');
     });
-
-    // 🔥 STORE ALL DATA PERMANENTLY USING NUTRITION DATA MANAGER
-    print(
-        '🔥 STORING ALL MICRONUTRIENTS PERMANENTLY IN NUTRITION.DART FORMAT...');
-    await nutrition_page.NutritionDataManager.storeNutritionData(
-        scanId, vitamins, minerals, other);
-    print('✅ ALL 34 MICRONUTRIENTS STORED PERMANENTLY! Scan ID: $scanId');
+    // ... existing code ...
   }
 
   // 🔥 LOAD CURRENT MICRONUTRIENTS FROM STORAGE BEFORE DELETION
@@ -7804,6 +7819,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         'food_nutrition_data_$foodSpecificScanId',
         'nutrition_data_$foodSpecificScanId',
         'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}',
+        // Fallback to the scan ID without calories if it's a generic food item not yet saved with calories
+        'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}_${_calories.replaceAll('.', '_')}'
       ];
 
       Map<String, dynamic>? storedData;
@@ -7823,25 +7840,22 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
       }
 
+      // Build an allowlist of known individual micronutrient API keys
+      Set<String> knownMicronutrientApiKeys = {};
+      _FoodCardOpenState.vitaminTargets.forEach(
+          (_, target) => knownMicronutrientApiKeys.add(target['api_key']));
+      _FoodCardOpenState.mineralTargets.forEach(
+          (_, target) => knownMicronutrientApiKeys.add(target['api_key']));
+      _FoodCardOpenState.otherTargets.forEach(
+          (_, target) => knownMicronutrientApiKeys.add(target['api_key']));
+
       if (storedData != null && widget.additionalNutrients != null) {
         // Clear existing micronutrients
         widget.additionalNutrients!.clear();
 
-        // Extract all micronutrients from stored data (excluding basic macros)
-        Set<String> basicKeys = {
-          'protein',
-          'fat',
-          'carbs',
-          'calories',
-          'scanId',
-          'lastUpdated',
-          'freshData',
-          'dataVersion'
-        };
-
         storedData.forEach((key, value) {
-          if (!basicKeys.contains(key)) {
-            // This is a micronutrient - extract numeric value
+          // Only add keys that are known individual micronutrient API keys
+          if (knownMicronutrientApiKeys.contains(key)) {
             double numericValue = 0.0;
             if (value is num) {
               numericValue = value.toDouble();
@@ -7853,11 +7867,13 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         });
 
         print(
-            '📥 Loaded ${widget.additionalNutrients!.length} micronutrients from storage ($foundKey)');
+            '📥 Loaded ${widget.additionalNutrients!.length} micronutrients from storage ($foundKey) using API key allowlist.');
       } else {
-        print('⚠️ No stored micronutrients found for deletion reduction');
+        print(
+            '⚠️ No stored micronutrients found or widget.additionalNutrients is null. Clearing existing.');
         if (widget.additionalNutrients != null) {
-          widget.additionalNutrients!.clear();
+          widget.additionalNutrients!
+              .clear(); // Ensure it's empty if no data loaded
         }
       }
     } catch (e) {
