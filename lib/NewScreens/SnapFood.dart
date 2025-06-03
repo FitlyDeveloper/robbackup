@@ -751,279 +751,82 @@ class _SnapFoodState extends State<SnapFood> {
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
 
-        // Check if the API response includes ingredient_nutrients (our preferred format)
-        List<dynamic> ingredientNutrients =
-            analysisData['ingredient_nutrients'] ?? [];
+        // Check if the new OpenAI response format has ingredients as objects with nutrition data
+        if (analysisData['ingredients'] is List) {
+          List<dynamic> ingredientsFromAPI = analysisData['ingredients'];
 
-        // Log header for ingredient-specific nutrients
-        print('\n===== INGREDIENT-SPECIFIC NUTRIENTS =====');
+          print('\n===== PROCESSING OPENAI INGREDIENT OBJECTS =====');
 
-        // Process each ingredient with detailed nutrients if available
-        for (int i = 0; i < ingredients.length; i++) {
-          // Get the actual ingredient object instead of parsing strings
-          dynamic ingredientData = ingredients[i];
+          for (int i = 0; i < ingredientsFromAPI.length; i++) {
+            var ingredientData = ingredientsFromAPI[i];
 
-          Map<String, dynamic> processedIngredient = {};
+            if (ingredientData is Map<String, dynamic>) {
+              // Extract nutrition data directly from the ingredient object
+              Map<String, dynamic> processedIngredient = {
+                'name':
+                    ingredientData['name']?.toString() ?? 'Unknown Ingredient',
+                'amount': ingredientData['amount']?.toString() ?? '100g',
+                'calories':
+                    _extractIngredientValue(ingredientData['calories'], 0),
+                'protein': _extractIngredientValueAsDouble(
+                    ingredientData['protein'], 0.0),
+                'fat':
+                    _extractIngredientValueAsDouble(ingredientData['fat'], 0.0),
+                'carbs': _extractIngredientValueAsDouble(
+                    ingredientData['carbs'], 0.0),
+              };
 
-          // If ingredient is already a proper map (from API response)
-          if (ingredientData is Map) {
-            Map<String, dynamic> ingredient =
-                Map<String, dynamic>.from(ingredientData);
+              ingredientsList.add(processedIngredient);
 
-            processedIngredient = {
-              'name': ingredient['name'] ?? 'Unknown ingredient',
-              'amount': '${ingredient['weight_g'] ?? 100}g',
-              'calories': ingredient['calories'] ?? 0,
-              'protein': ingredient['protein_g'] ??
-                  0.0, // Keep as number to preserve precision
-              'fat': ingredient['fat_g'] ??
-                  0.0, // Keep as number to preserve precision
-              'carbs': ingredient['carbs_g'] ??
-                  0.0, // Keep as number to preserve precision
-            };
-          }
-          // If ingredient is a string, try to parse it properly
-          else {
-            String ingredientString = ingredientData.toString();
-
-            // Skip if this looks like a JSON field name rather than an ingredient
-            if (ingredientString.contains(':') ||
-                ingredientString.contains('{') ||
-                ingredientString.contains('}') ||
-                ingredientString.startsWith('weight_g') ||
-                ingredientString.startsWith('calories') ||
-                ingredientString.startsWith('protein_g') ||
-                ingredientString.startsWith('fat_g') ||
-                ingredientString.startsWith('carbs_g')) {
-              print('Skipping malformed ingredient: $ingredientString');
-              continue; // Skip this malformed "ingredient"
-            }
-
-            // Parse ingredient string format: "Name (weight) calories"
-            // Example: "Grilled Sausage (100g) 300kcal"
-            String name = ingredientString;
-            String amount = "100g";
-            int calories = 100;
-
-            // Extract weight in parentheses
-            RegExp weightRegex = RegExp(r'\(([^)]+)\)');
-            Match? weightMatch = weightRegex.firstMatch(ingredientString);
-            if (weightMatch != null) {
-              amount = weightMatch.group(1) ?? "100g";
-              // Remove the weight part from the name
-              name = ingredientString.replaceFirst(weightRegex, '').trim();
-            }
-
-            // Extract calories at the end
-            RegExp caloriesRegex =
-                RegExp(r'(\d+)\s*kcal', caseSensitive: false);
-            Match? caloriesMatch = caloriesRegex.firstMatch(ingredientString);
-            if (caloriesMatch != null) {
-              calories = int.tryParse(caloriesMatch.group(1) ?? '100') ?? 100;
-              // Remove the calories part from the name
-              name = name.replaceFirst(caloriesRegex, '').trim();
-            }
-
-            // For clean ingredient names, create values based on parsed data
-            processedIngredient = {
-              'name': name,
-              'amount': amount,
-              'calories': calories,
-              'protein': (calories * 0.15).round(), // Estimate 15% protein
-              'fat': (calories * 0.25).round(), // Estimate 25% fat
-              'carbs': (calories * 0.60).round(), // Estimate 60% carbs
-            };
-          }
-
-          // IMPORTANT: First check for detailed nutrients in ingredient_nutrients array
-          if (i < ingredientNutrients.length && ingredientNutrients[i] is Map) {
-            Map<String, dynamic> nutrient =
-                Map<String, dynamic>.from(ingredientNutrients[i]);
-
-            // Update macronutrient data from detailed nutrients
-            processedIngredient['protein'] =
-                nutrient['protein'] ?? processedIngredient['protein'];
-            processedIngredient['fat'] =
-                nutrient['fat'] ?? processedIngredient['fat'];
-            processedIngredient['carbs'] =
-                nutrient['carbs'] ?? processedIngredient['carbs'];
-
-            // Process vitamins
-            if (nutrient.containsKey('vitamins') &&
-                nutrient['vitamins'] is Map) {
-              Map<String, dynamic> vitaminsMap =
-                  Map<String, dynamic>.from(nutrient['vitamins']);
-              processedIngredient['vitamins'] = vitaminsMap;
+              // 🔬 LOG DETAILED MACRONUTRIENTS FOR EACH INGREDIENT
+              String ingredientName = processedIngredient['name'];
+              String ingredientAmount = processedIngredient['amount'] ?? '100g';
+              int ingredientCalories = processedIngredient['calories'] ?? 0;
 
               print(
-                  '\nIngredient: ${processedIngredient['name']} - Found ${vitaminsMap.length} vitamins');
-              print('  Vitamins:');
-              vitaminsMap.forEach((key, value) {
-                print('    • $key: ${value}${_getUnitForVitamin(key)}');
-              });
+                  '\n🍽️ ===== INGREDIENT: $ingredientName ($ingredientAmount) - ${ingredientCalories}kcal =====');
+              print('📊 MACRONUTRIENTS:');
+              print('  🥩 Protein: ${processedIngredient['protein']}g');
+              print('  🧈 Fat: ${processedIngredient['fat']}g');
+              print('  🍞 Carbs: ${processedIngredient['carbs']}g');
+              print('🔬 ================================================\n');
+
+              print('Added valid ingredient: ${processedIngredient['name']}');
+            } else if (ingredientData is String) {
+              // Handle old string format as fallback
+              Map<String, dynamic> processedIngredient = {
+                'name': ingredientData,
+                'amount': '100g',
+                'calories': 50, // Default fallback
+                'protein': 2.0,
+                'fat': 1.0,
+                'carbs': 10.0,
+              };
+
+              ingredientsList.add(processedIngredient);
+              print(
+                  'Added fallback ingredient: ${processedIngredient['name']}');
             }
-
-            // Process minerals
-            if (nutrient.containsKey('minerals') &&
-                nutrient['minerals'] is Map) {
-              Map<String, dynamic> mineralsMap =
-                  Map<String, dynamic>.from(nutrient['minerals']);
-              processedIngredient['minerals'] = mineralsMap;
-
-              print('  Minerals:');
-              mineralsMap.forEach((key, value) {
-                print('    • $key: ${value}${_getUnitForMineral(key)}');
-              });
-            }
-
-            // Process other nutrients
-            if (nutrient.containsKey('other') && nutrient['other'] is Map) {
-              Map<String, dynamic> otherMap =
-                  Map<String, dynamic>.from(nutrient['other']);
-              processedIngredient['other'] = otherMap;
-
-              print('  Other Nutrients:');
-              otherMap.forEach((key, value) {
-                print('    • $key: ${value}${_getUnitForNutrient(key)}');
-              });
-            }
-          } else {
-            // FALLBACK: Generate individual ingredient micronutrients from total meal values
-            // This distributes the total micronutrients proportionally based on calories
-            print(
-                '\n🔍 DEBUG: ingredient_nutrients length: ${ingredientNutrients.length}, current index: $i');
-
-            double totalMealCalories = double.tryParse(calories) ?? 1.0;
-            double ingredientCalories =
-                processedIngredient['calories']?.toDouble() ?? 100.0;
-            double proportion = ingredientCalories / totalMealCalories;
-
-            print(
-                '\n🔄 FALLBACK: Generating micronutrients for ${processedIngredient['name']} (${(proportion * 100).toStringAsFixed(1)}% of meal)');
-
-            // Generate vitamins proportionally
-            Map<String, dynamic> generatedVitamins = {};
-            allMicronutrients.forEach((key, value) {
-              if (key.startsWith('vitamin_')) {
-                double totalValue = double.tryParse(value.toString()) ?? 0.0;
-                double ingredientValue = totalValue * proportion;
-                generatedVitamins[key] = ingredientValue.toStringAsFixed(1);
-              }
-            });
-            processedIngredient['vitamins'] = generatedVitamins;
-
-            // Generate minerals proportionally
-            Map<String, dynamic> generatedMinerals = {};
-            List<String> mineralKeys = [
-              'calcium',
-              'chloride',
-              'chromium',
-              'copper',
-              'fluoride',
-              'iodine',
-              'iron',
-              'magnesium',
-              'manganese',
-              'molybdenum',
-              'phosphorus',
-              'potassium',
-              'selenium',
-              'sodium',
-              'zinc'
-            ];
-            mineralKeys.forEach((key) {
-              if (allMicronutrients.containsKey(key)) {
-                double totalValue =
-                    double.tryParse(allMicronutrients[key].toString()) ?? 0.0;
-                double ingredientValue = totalValue * proportion;
-                generatedMinerals[key] = ingredientValue.toStringAsFixed(1);
-              }
-            });
-            processedIngredient['minerals'] = generatedMinerals;
-
-            // Generate other nutrients proportionally
-            Map<String, dynamic> generatedOther = {};
-            List<String> otherKeys = [
-              'fiber',
-              'cholesterol',
-              'sugar',
-              'saturated_fats',
-              'omega_3',
-              'omega_6'
-            ];
-            otherKeys.forEach((key) {
-              if (allMicronutrients.containsKey(key)) {
-                double totalValue =
-                    double.tryParse(allMicronutrients[key].toString()) ?? 0.0;
-                double ingredientValue = totalValue * proportion;
-                generatedOther[key] = ingredientValue.toStringAsFixed(1);
-              }
-            });
-            processedIngredient['other'] = generatedOther;
-
-            print(
-                '✅ Generated ${generatedVitamins.length} vitamins, ${generatedMinerals.length} minerals, ${generatedOther.length} other nutrients');
           }
+        } else if (ingredients.isNotEmpty) {
+          // Fallback: Use the old string processing method
+          print('\n===== FALLBACK: PROCESSING STRING INGREDIENTS =====');
 
-          // Only add valid ingredients to the list
-          if (processedIngredient.isNotEmpty &&
-              processedIngredient['name'] != null) {
+          for (int i = 0; i < ingredients.length; i++) {
+            String ingredient = ingredients[i];
+
+            // Use more reasonable fallback values instead of the terrible estimates
+            Map<String, dynamic> processedIngredient = {
+              'name': ingredient,
+              'amount': '100g',
+              'calories': 50, // More reasonable default
+              'protein': 2.0, // More reasonable protein
+              'fat': 1.0, // More reasonable fat
+              'carbs': 10.0, // More reasonable carbs
+            };
+
             ingredientsList.add(processedIngredient);
-
-            // 🔬 LOG DETAILED MICRONUTRIENTS FOR EACH INGREDIENT
-            String ingredientName = processedIngredient['name'];
-            String ingredientAmount = processedIngredient['amount'] ?? '100g';
-            int ingredientCalories = processedIngredient['calories'] ?? 0;
-
-            print(
-                '\n🍽️ ===== INGREDIENT: $ingredientName ($ingredientAmount) - ${ingredientCalories}kcal =====');
-
-            // Log macronutrients
-            print('📊 MACRONUTRIENTS:');
-            print('  🥩 Protein: ${processedIngredient['protein'] ?? 0}g');
-            print('  🧈 Fat: ${processedIngredient['fat'] ?? 0}g');
-            print('  🍞 Carbs: ${processedIngredient['carbs'] ?? 0}g');
-
-            // Log vitamins if available
-            if (processedIngredient.containsKey('vitamins') &&
-                processedIngredient['vitamins'] is Map) {
-              Map<String, dynamic> vitamins = processedIngredient['vitamins'];
-              print('💊 VITAMINS (${vitamins.length}):');
-              vitamins.forEach((key, value) {
-                print('  • $key: ${value}${_getUnitForVitamin(key)}');
-              });
-            } else {
-              print('💊 VITAMINS: No detailed vitamin data available');
-            }
-
-            // Log minerals if available
-            if (processedIngredient.containsKey('minerals') &&
-                processedIngredient['minerals'] is Map) {
-              Map<String, dynamic> minerals = processedIngredient['minerals'];
-              print('⚗️ MINERALS (${minerals.length}):');
-              minerals.forEach((key, value) {
-                print('  • $key: ${value}${_getUnitForMineral(key)}');
-              });
-            } else {
-              print('⚗️ MINERALS: No detailed mineral data available');
-            }
-
-            // Log other nutrients if available
-            if (processedIngredient.containsKey('other') &&
-                processedIngredient['other'] is Map) {
-              Map<String, dynamic> other = processedIngredient['other'];
-              print('🥗 OTHER NUTRIENTS (${other.length}):');
-              other.forEach((key, value) {
-                print('  • $key: ${value}${_getUnitForNutrient(key)}');
-              });
-            } else {
-              print(
-                  '🥗 OTHER NUTRIENTS: No detailed other nutrient data available');
-            }
-
-            print('🔬 ================================================\n');
-
-            print('Added valid ingredient: ${processedIngredient['name']}');
+            print('Added fallback ingredient: ${processedIngredient['name']}');
           }
         }
 
@@ -1125,9 +928,10 @@ class _SnapFoodState extends State<SnapFood> {
     final numericRegex = RegExp(r'(\d+(?:\.\d+)?)');
     final match = numericRegex.firstMatch(input);
     if (match != null && match.group(1) != null) {
-      final value = double.tryParse(match.group(1)!) ?? 0.0;
-      return value
-          .round(); // Only round when converting to int is specifically needed
+      final value = double.tryParse(match.group(1)!);
+      if (value != null) {
+        return value.round(); // Round to nearest integer
+      }
     }
     return 0;
   }
@@ -2199,6 +2003,34 @@ class _SnapFoodState extends State<SnapFood> {
       print('Compression failed: $e, using original');
       return imageBytes; // Return original on error
     }
+  }
+
+  // Helper method to extract ingredient calorie value
+  int _extractIngredientValue(dynamic value, int defaultValue) {
+    if (value == null) return defaultValue;
+
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed.round();
+    }
+
+    return defaultValue;
+  }
+
+  // Helper method to extract ingredient nutrition value as double
+  double _extractIngredientValueAsDouble(dynamic value, double defaultValue) {
+    if (value == null) return defaultValue;
+
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+
+    return defaultValue;
   }
 }
 

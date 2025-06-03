@@ -101,7 +101,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
 
 ANALYSIS REQUIREMENTS:
 1. Identify each ingredient in the image
-2. Provide ingredient name, portion size, and calories for each ingredient
+2. Provide ingredient name, portion size, calories AND individual macronutrients for each ingredient
 3. Calculate the TOTAL micronutrients for the entire meal using the EXACT units listed below
 
 EXACT UNITS TO USE (MANDATORY):
@@ -141,24 +141,40 @@ EXACT UNITS TO USE (MANDATORY):
 - Omega 6: g
 
 IMPORTANT NUTRITIONAL GUIDELINES:
-- Vitamin A: Most foods contain 0-200 mcg (not mg!), fruits typically 5-50 mcg
-- Vitamin C: Fruits 10-90mg, vegetables 5-120mg, meats 0-5mg
-- Vitamin D: Most foods contain 0-10 mcg, very few natural sources
-- B vitamins: Usually 0.1-5mg each, B12 mostly in animal products
-- Minerals: Calcium 10-300mg, Iron 0.5-18mg, Potassium 100-800mg
-- Fiber: Fruits 1-10g, vegetables 2-15g, grains 3-25g
-- Omega-6: Most foods 0.1-2g, nuts/oils higher
+- Watermelon (100g): ~30kcal, 0.6g protein, 0.2g fat, 8g carbs
+- Pineapple (100g): ~50kcal, 0.5g protein, 0.1g fat, 13g carbs
+- Chicken breast (100g): ~165kcal, 31g protein, 3.6g fat, 0g carbs
+- White rice (100g): ~130kcal, 2.7g protein, 0.3g fat, 28g carbs
+- Vegetables: Generally low calories, minimal fat, some carbs
+- Fruits: Generally 30-80kcal per 100g, very low protein/fat, 8-20g carbs
 
 Provide realistic portion sizes (50-200g typically) and ensure nutritional values match actual food composition.
 
 Return JSON with this EXACT structure:
 {
   "meal_name": "Food Name",
-  "ingredients": ["Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal"],
-  "calories": "416",
-  "protein": "35",
-  "fat": "8", 
-  "carbs": "45",
+  "ingredients": [
+    {
+      "name": "Watermelon",
+      "amount": "150g",
+      "calories": 45,
+      "protein": 0.9,
+      "fat": 0.3,
+      "carbs": 12
+    },
+    {
+      "name": "Pineapple", 
+      "amount": "100g",
+      "calories": 50,
+      "protein": 0.5,
+      "fat": 0.1,
+      "carbs": 13
+    }
+  ],
+  "calories": "95",
+  "protein": "1.4",
+  "fat": "0.4", 
+  "carbs": "25",
   "vitamin_a": "50",
   "vitamin_c": "30",
   "vitamin_d": "2",
@@ -196,7 +212,7 @@ Return JSON with this EXACT structure:
   "health_score": "7/10"
 }
 
-Ensure all micronutrient values are TOTAL amounts for the entire meal and use the exact units specified above. The ingredients array should list each ingredient with its portion size and calories, but all other values should be TOTAL values for the complete meal.`
+CRITICAL: Each ingredient must have accurate individual nutrition values. The ingredients array should contain objects with name, amount, calories, protein, fat, and carbs for EACH ingredient. All micronutrient values are TOTAL amounts for the entire meal.`
             },
             {
               type: 'image_url',
