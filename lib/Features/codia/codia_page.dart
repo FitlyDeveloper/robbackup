@@ -2878,6 +2878,8 @@ class _CodiaPageState extends State<CodiaPage> {
 
               String? nutritionJson;
               String matchedKey = '';
+              String actualScanId =
+                  foodSpecificScanId; // Track the actual scan ID we end up using
 
               for (String key in possibleKeys) {
                 String? testData = prefs.getString(key);
@@ -2899,12 +2901,63 @@ class _CodiaPageState extends State<CodiaPage> {
                 }
               }
 
+              // If no data found, check for scan ID mappings (fallback for when food card update fails)
+              if (nutritionJson == null || nutritionJson.isEmpty) {
+                print(
+                    '⚠️ No data found for $foodSpecificScanId, checking scan ID mappings...');
+
+                // Check for latest scan ID mapping
+                String latestScanIdKey = 'latest_scan_id_$foodName';
+                String? latestScanId = prefs.getString(latestScanIdKey);
+
+                if (latestScanId != null && latestScanId.isNotEmpty) {
+                  print(
+                      '🔗 Found latest scan ID mapping: $foodSpecificScanId → $latestScanId');
+
+                  // Try to load data with the updated scan ID
+                  nutritionJson =
+                      prefs.getString('food_nutrition_data_$latestScanId') ??
+                          prefs.getString('nutrition_data_$latestScanId');
+
+                  if (nutritionJson != null && nutritionJson.isNotEmpty) {
+                    actualScanId = latestScanId;
+                    matchedKey = 'mapped_scan_id';
+                    print(
+                        '✅ Successfully loaded data using mapped scan ID: $latestScanId');
+                  }
+                }
+
+                // Also check direct mapping
+                if (nutritionJson == null || nutritionJson.isEmpty) {
+                  String mappingKey =
+                      'scan_id_mapping_food_nutrition_$foodName';
+                  String? mappedScanId = prefs.getString(mappingKey);
+
+                  if (mappedScanId != null && mappedScanId.isNotEmpty) {
+                    print(
+                        '🔗 Found scan ID mapping: $mappingKey → $mappedScanId');
+
+                    nutritionJson =
+                        prefs.getString('food_nutrition_data_$mappedScanId') ??
+                            prefs.getString('nutrition_data_$mappedScanId');
+
+                    if (nutritionJson != null && nutritionJson.isNotEmpty) {
+                      actualScanId = mappedScanId;
+                      matchedKey = 'direct_mapping';
+                      print(
+                          '✅ Successfully loaded data using direct mapped scan ID: $mappedScanId');
+                    }
+                  }
+                }
+              }
+
               if (nutritionJson != null && nutritionJson.isNotEmpty) {
                 try {
                   existingNutritionData = jsonDecode(nutritionJson);
-                  finalScanId = foodSpecificScanId;
+                  finalScanId =
+                      actualScanId; // Use the actual scan ID we found data for
                   print(
-                      '🎯 Found nutrition data using food card ID: $foodSpecificScanId (key: $matchedKey)');
+                      '🎯 Found nutrition data using food card ID: $actualScanId (key: $matchedKey)');
                   foundFoodCardData = true;
                   break;
                 } catch (e) {

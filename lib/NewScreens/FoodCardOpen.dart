@@ -7955,15 +7955,78 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
       }
 
-      // Save the updated cards back to storage
+      // Save the updated cards back to storage with quota handling
       if (foundAndUpdated) {
-        await prefs.setStringList('food_cards', updatedCards);
-        print('✅ Successfully updated food_cards with new calorie values');
+        try {
+          await prefs.setStringList('food_cards', updatedCards);
+          print('✅ Successfully updated food_cards with new calorie values');
+        } catch (e) {
+          print('❌ Storage quota exceeded, attempting cleanup and retry: $e');
+
+          // Try to clean up old entries and retry
+          await _cleanupStorageAndRetry(prefs, updatedCards);
+        }
       } else {
         print('⚠️ Food card "$_foodName" not found for calorie update');
       }
+
+      // CRITICAL: Save the updated scan ID mapping even if food card update fails
+      String newScanId = _generateFoodSpecificScanId();
+      String oldScanId =
+          'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}';
+
+      // Save a mapping so navigation can find the updated scan ID
+      await prefs.setString('scan_id_mapping_$oldScanId', newScanId);
+      await prefs.setString(
+          'latest_scan_id_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}',
+          newScanId);
+
+      print('🔗 Saved scan ID mapping: $oldScanId → $newScanId');
     } catch (e) {
       print('❌ Error updating food card after deletion: $e');
+    }
+  }
+
+  // Clean up storage and retry food card update
+  Future<void> _cleanupStorageAndRetry(
+      SharedPreferences prefs, List<String> updatedCards) async {
+    try {
+      print('🧹 Cleaning up storage to free space...');
+
+      // Remove old nutrition data keys (keep only recent ones)
+      final allKeys = prefs.getKeys().toList();
+      int removedCount = 0;
+
+      for (String key in allKeys) {
+        // Remove old nutrition data entries (but keep current ones)
+        if (key.startsWith('food_nutrition_data_') ||
+            key.startsWith('nutrition_data_') ||
+            key.startsWith('fresh_nutrition_data_')) {
+          // Don't remove the current scan ID data
+          String currentScanId = _generateFoodSpecificScanId();
+          if (!key.contains(currentScanId) &&
+              !key.contains(
+                  _foodName.toLowerCase().trim().replaceAll(' ', '_'))) {
+            try {
+              await prefs.remove(key);
+              removedCount++;
+              if (removedCount >= 10) break; // Remove up to 10 old entries
+            } catch (e) {
+              print('⚠️ Error removing key $key: $e');
+            }
+          }
+        }
+      }
+
+      print('🧹 Cleaned up $removedCount old storage entries');
+
+      // Now retry saving the food cards
+      await prefs.setStringList('food_cards', updatedCards);
+      print('✅ Successfully updated food_cards after cleanup');
+    } catch (e) {
+      print('❌ Cleanup and retry failed: $e');
+      print(
+          '⚠️ Food card update failed, but scan ID mapping was saved as fallback');
     }
   }
 }
