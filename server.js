@@ -97,7 +97,106 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
           content: [
             {
               type: 'text',
-              text: `Please analyze this food image and return a JSON object with complete nutritional information. Use REALISTIC nutritional values based on USDA nutritional database standards.\n\nIMPORTANT NUTRITIONAL GUIDELINES:\n- Vitamin A: Most foods contain 0-200 mcg (not mg!), fruits typically 5-50 mcg\n- Vitamin C: Fruits 10-90mg, vegetables 5-120mg, meats 0-5mg\n- Vitamin D: Most foods contain 0-10 mcg, very few natural sources\n- B vitamins: Usually 0.1-5mg each, B12 mostly in animal products\n- Minerals: Calcium 10-300mg, Iron 0.5-18mg, Potassium 100-800mg\n- Fiber: Fruits 1-10g, vegetables 2-15g, grains 3-25g\n- Omega-6: Most foods 0.1-2g, nuts/oils higher\n\nProvide realistic portion sizes (50-200g typically) and ensure nutritional values match actual food composition.\n\nReturn JSON with this EXACT structure:\n{\n  "meal_name": "Food Name",\n  "ingredients": ["Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal"],\n  "calories": "416",\n  "protein": "35",\n  "fat": "8", \n  "carbs": "45",\n  "vitamin_a": "50",\n  "vitamin_c": "30",\n  "vitamin_d": "2",\n  "vitamin_e": "5",\n  "vitamin_k": "15",\n  "vitamin_b1": "0.8",\n  "vitamin_b2": "0.6",\n  "vitamin_b3": "8",\n  "vitamin_b5": "3",\n  "vitamin_b6": "1",\n  "vitamin_b7": "20",\n  "vitamin_b9": "150",\n  "vitamin_b12": "1",\n  "calcium": "200",\n  "chloride": "300",\n  "chromium": "5",\n  "copper": "200",\n  "fluoride": "0.5",\n  "iodine": "20",\n  "iron": "3",\n  "magnesium": "80",\n  "manganese": "1",\n  "molybdenum": "10",\n  "phosphorus": "150",\n  "potassium": "400",\n  "selenium": "15",\n  "sodium": "500",\n  "zinc": "2",\n  "fiber": "8",\n  "cholesterol": "50",\n  "sugar": "20",\n  "saturated_fats": "4",\n  "omega_3": "200",\n  "omega_6": "1",\n  "health_score": "7/10"\n}\n\nEnsure all values are nutritionally accurate for the actual foods shown. Use this exact flat structure - do NOT nest ingredients as objects.`
+              text: `Please analyze this food image and return a JSON object with complete nutritional information. Use REALISTIC nutritional values based on USDA nutritional database standards.
+
+ANALYSIS REQUIREMENTS:
+1. Identify each ingredient in the image
+2. Provide ingredient name, portion size, and calories for each ingredient
+3. Calculate the TOTAL micronutrients for the entire meal using the EXACT units listed below
+
+EXACT UNITS TO USE (MANDATORY):
+- Vitamin A: mcg
+- Vitamin C: mg  
+- Vitamin D: mcg
+- Vitamin E: mg
+- Vitamin K: mcg
+- Vitamin B1: mg
+- Vitamin B2: mg
+- Vitamin B3: mg
+- Vitamin B5: mg
+- Vitamin B6: mg
+- Vitamin B7: mcg
+- Vitamin B9: mcg
+- Vitamin B12: mcg
+- Calcium: mg
+- Chloride: mg
+- Chromium: mcg
+- Copper: mcg
+- Fluoride: mg
+- Iodine: mcg
+- Iron: mg
+- Magnesium: mg
+- Manganese: mg
+- Molybdenum: mcg
+- Phosphorus: mg
+- Potassium: mg
+- Selenium: mcg
+- Sodium: mg
+- Zinc: mg
+- Fiber: g
+- Cholesterol: mg
+- Sugar: g
+- Saturated Fats: g
+- Omega 3: mg
+- Omega 6: g
+
+IMPORTANT NUTRITIONAL GUIDELINES:
+- Vitamin A: Most foods contain 0-200 mcg (not mg!), fruits typically 5-50 mcg
+- Vitamin C: Fruits 10-90mg, vegetables 5-120mg, meats 0-5mg
+- Vitamin D: Most foods contain 0-10 mcg, very few natural sources
+- B vitamins: Usually 0.1-5mg each, B12 mostly in animal products
+- Minerals: Calcium 10-300mg, Iron 0.5-18mg, Potassium 100-800mg
+- Fiber: Fruits 1-10g, vegetables 2-15g, grains 3-25g
+- Omega-6: Most foods 0.1-2g, nuts/oils higher
+
+Provide realistic portion sizes (50-200g typically) and ensure nutritional values match actual food composition.
+
+Return JSON with this EXACT structure:
+{
+  "meal_name": "Food Name",
+  "ingredients": ["Grilled Chicken (150g) 248kcal", "Mixed Salad (45g) 12kcal"],
+  "calories": "416",
+  "protein": "35",
+  "fat": "8", 
+  "carbs": "45",
+  "vitamin_a": "50",
+  "vitamin_c": "30",
+  "vitamin_d": "2",
+  "vitamin_e": "5",
+  "vitamin_k": "15",
+  "vitamin_b1": "0.8",
+  "vitamin_b2": "0.6",
+  "vitamin_b3": "8",
+  "vitamin_b5": "3",
+  "vitamin_b6": "1",
+  "vitamin_b7": "20",
+  "vitamin_b9": "150",
+  "vitamin_b12": "1",
+  "calcium": "200",
+  "chloride": "300",
+  "chromium": "5",
+  "copper": "200",
+  "fluoride": "0.5",
+  "iodine": "20",
+  "iron": "3",
+  "magnesium": "80",
+  "manganese": "1",
+  "molybdenum": "10",
+  "phosphorus": "150",
+  "potassium": "400",
+  "selenium": "15",
+  "sodium": "500",
+  "zinc": "2",
+  "fiber": "8",
+  "cholesterol": "50",
+  "sugar": "20",
+  "saturated_fats": "4",
+  "omega_3": "200",
+  "omega_6": "1",
+  "health_score": "7/10"
+}
+
+Ensure all micronutrient values are TOTAL amounts for the entire meal and use the exact units specified above. The ingredients array should list each ingredient with its portion size and calories, but all other values should be TOTAL values for the complete meal.`
             },
             {
               type: 'image_url',
