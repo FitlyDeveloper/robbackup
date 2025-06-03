@@ -1495,9 +1495,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                           child: InkWell(
                                             borderRadius:
                                                 BorderRadius.circular(20),
-                                            onTap: () async {
+                                            onTap: () {
                                               Navigator.pop(context);
-                                              await _deleteMeal();
+                                              _deleteMeal();
                                             },
                                           ),
                                         ),
