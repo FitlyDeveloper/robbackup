@@ -169,13 +169,22 @@ function expandToFullNutrients(simpleResponse) {
       carbs_g: ingredient.carbs_g || 0
     };
     
-    // Add real USDA micronutrients based on food type
+    // CRITICAL FIX: Get USDA micronutrients per 100g, then scale for actual portion size
+    const actualWeight = expanded.weight_g;
     const nutrients = getRealUSDANutrients(name, expanded.carbs_g, expanded.protein_g, expanded.fat_g);
     
-    // Merge all nutrients into the expanded ingredient
-    Object.assign(expanded, nutrients);
+    // Scale ALL micronutrients based on actual portion weight (USDA values are per 100g)
+    const scalingFactor = actualWeight / 100.0;
+    const scaledNutrients = {};
     
-    console.log(`✅ Expanded ${ingredient.name} with ${Object.keys(nutrients).length} micronutrients`);
+    Object.keys(nutrients).forEach(key => {
+      scaledNutrients[key] = nutrients[key] * scalingFactor;
+    });
+    
+    // Merge scaled nutrients into the expanded ingredient
+    Object.assign(expanded, scaledNutrients);
+    
+    console.log(`✅ Expanded ${ingredient.name} (${actualWeight}g) with ${Object.keys(scaledNutrients).length} scaled micronutrients (factor: ${scalingFactor.toFixed(2)})`);
     return expanded;
   });
   
