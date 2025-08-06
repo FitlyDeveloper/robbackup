@@ -274,12 +274,7 @@ class _SnapFoodState extends State<SnapFood> {
           if (response.containsKey('meal') && response['meal'] is List) {
             List<dynamic> ingredients = response['meal'];
             if (ingredients.length == 1) {
-              print(
-                  'WARNING: Only 1 ingredient detected. This might indicate the image needs better lighting or the meal is simple.');
-              print(
-                  'Detected ingredient: ${ingredients[0]['dish'] ?? 'Unknown'}');
-            } else {
-              print('SUCCESS: ${ingredients.length} ingredients detected');
+              print('⚠️ Only 1 ingredient detected - image may need better lighting');
             }
           }
 
@@ -288,6 +283,28 @@ class _SnapFoodState extends State<SnapFood> {
               response['meal_name'] == 'Analyzed Meal') {
             print('⚠️ Using emergency fallback data - APIs were unavailable');
           }
+
+          // Clean nutrition summary
+          print('\n🍽️ NUTRITION ANALYSIS COMPLETE');
+          print('📊 Food: ${response['meal_name'] ?? 'Unknown'}');
+          print('🔥 Calories: ${response['calories'] ?? 'N/A'}');
+          print('🥩 Protein: ${response['protein'] ?? 'N/A'}g');
+          print('🧈 Fat: ${response['fat'] ?? 'N/A'}g');
+          print('🍞 Carbs: ${response['carbs'] ?? 'N/A'}g');
+          
+          if (response.containsKey('ingredients') && response['ingredients'] is List) {
+            List<dynamic> ingredients = response['ingredients'];
+            print('\n🥗 INGREDIENTS (${ingredients.length}):');
+            for (int i = 0; i < ingredients.length; i++) {
+              var ingredient = ingredients[i];
+              String name = ingredient['name'] ?? 'Unknown';
+              String amount = ingredient['amount'] ?? 'N/A';
+              int calories = ingredient['calories'] ?? 0;
+              print('  ${i + 1}. $name ($amount) - ${calories} kcal');
+            }
+          }
+          
+          print('\n✅ Analysis successful - redirecting to details screen');
 
           // Extract the food name for the scan ID
           String foodName = 'Analyzed Meal';

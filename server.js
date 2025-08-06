@@ -5,6 +5,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const fetch = require('node-fetch');
 const fs = require('fs'); // For logging to file
+const { analyzeNutrition } = require('./100_percent_reliable.js');
 
 // Create Express app
 const app = express();
@@ -80,409 +81,46 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       });
     }
 
-    // Call OpenAI API
-    logToFile('Calling OpenAI API...');
+    // Call our corrected nutrition analysis module
+    logToFile('Calling nutrition analysis module...');
     
-    // Force JSON response format
-    const requestBody = {
-      model: 'gpt-4o',
-      temperature: 0.3,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a nutrition expert. Analyze food images and return detailed nutritional information in JSON format. Include all vitamins, minerals, and macronutrients with proper units.'
-        },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Please analyze this food image and return a JSON object with complete nutritional information. Use REALISTIC nutritional values based on USDA nutritional database standards.
-
-ANALYSIS REQUIREMENTS:
-1. Identify each ingredient in the image
-2. Provide ingredient name, portion size, calories AND individual macronutrients for each ingredient
-3. Calculate the TOTAL micronutrients for the entire meal using the EXACT units listed below
-
-EXACT UNITS TO USE (MANDATORY):
-- Vitamin A: mcg
-- Vitamin C: mg  
-- Vitamin D: mcg
-- Vitamin E: mg
-- Vitamin K: mcg
-- Vitamin B1: mg
-- Vitamin B2: mg
-- Vitamin B3: mg
-- Vitamin B5: mg
-- Vitamin B6: mg
-- Vitamin B7: mcg
-- Vitamin B9: mcg
-- Vitamin B12: mcg
-- Calcium: mg
-- Chloride: mg
-- Chromium: mcg
-- Copper: mcg
-- Fluoride: mg
-- Iodine: mcg
-- Iron: mg
-- Magnesium: mg
-- Manganese: mg
-- Molybdenum: mcg
-- Phosphorus: mg
-- Potassium: mg
-- Selenium: mcg
-- Sodium: mg
-- Zinc: mg
-- Fiber: g
-- Cholesterol: mg
-- Sugar: g
-- Saturated Fats: g
-- Omega 3: mg
-- Omega 6: g
-
-IMPORTANT NUTRITIONAL GUIDELINES:
-- Watermelon (100g): ~30kcal, 0.6g protein, 0.2g fat, 8g carbs
-- Pineapple (100g): ~50kcal, 0.5g protein, 0.1g fat, 13g carbs
-- Chicken breast (100g): ~165kcal, 31g protein, 3.6g fat, 0g carbs
-- White rice (100g): ~130kcal, 2.7g protein, 0.3g fat, 28g carbs
-- Vegetables: Generally low calories, minimal fat, some carbs
-- Fruits: Generally 30-80kcal per 100g, very low protein/fat, 8-20g carbs
-
-Provide realistic portion sizes (50-200g typically) and ensure nutritional values match actual food composition.
-
-Return JSON with this EXACT structure:
-{
-  "meal_name": "Food Name",
-  "ingredients": [
-    {
-      "name": "Watermelon",
-      "amount": "150g",
-      "calories": 45,
-      "protein": 0.9,
-      "fat": 0.3,
-      "carbs": 12
-    },
-    {
-      "name": "Pineapple", 
-      "amount": "100g",
-      "calories": 50,
-      "protein": 0.5,
-      "fat": 0.1,
-      "carbs": 13
-    }
-  ],
-  "calories": "95",
-  "protein": "1.4",
-  "fat": "0.4", 
-  "carbs": "25",
-  "vitamin_a": "50",
-  "vitamin_c": "30",
-  "vitamin_d": "2",
-  "vitamin_e": "5",
-  "vitamin_k": "15",
-  "vitamin_b1": "0.8",
-  "vitamin_b2": "0.6",
-  "vitamin_b3": "8",
-  "vitamin_b5": "3",
-  "vitamin_b6": "1",
-  "vitamin_b7": "20",
-  "vitamin_b9": "150",
-  "vitamin_b12": "1",
-  "calcium": "200",
-  "chloride": "300",
-  "chromium": "5",
-  "copper": "200",
-  "fluoride": "0.5",
-  "iodine": "20",
-  "iron": "3",
-  "magnesium": "80",
-  "manganese": "1",
-  "molybdenum": "10",
-  "phosphorus": "150",
-  "potassium": "400",
-  "selenium": "15",
-  "sodium": "500",
-  "zinc": "2",
-  "fiber": "8",
-  "cholesterol": "50",
-  "sugar": "20",
-  "saturated_fats": "4",
-  "omega_3": "200",
-  "omega_6": "1",
-  "health_score": "7/10"
-}
-
-CRITICAL: Each ingredient must have accurate individual nutrition values. The ingredients array should contain objects with name, amount, calories, protein, fat, and carbs for EACH ingredient. All micronutrient values are TOTAL amounts for the entire meal.`
-            },
-            {
-              type: 'image_url',
-              image_url: { url: image }
-            }
-          ]
-        }
-      ],
-      max_tokens: 2000,
-      response_format: { type: 'json_object' }
-    };
+    const nutritionData = await analyzeNutrition(image);
     
-    logToFile('OpenAI request payload structure:');
-    logToFile(JSON.stringify({
-      model: requestBody.model,
-      temperature: requestBody.temperature,
-      max_tokens: requestBody.max_tokens,
-      response_format: requestBody.response_format,
-      message_count: requestBody.messages.length
-    }));
-    
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      logToFile(`OpenAI API error: ${response.status} ${errorData}`);
-      return res.status(response.status).json({
-        success: false,
-        error: `OpenAI API error: ${response.status}`,
-        details: errorData
-      });
-    }
-
-    logToFile('OpenAI API response received');
-    const data = await response.json();
-    
-    // Log the full response structure but not content
-    logToFile(`OpenAI response structure: ${JSON.stringify({
-      id: data.id,
-      object: data.object,
-      created: data.created,
-      model: data.model,
-      choices_count: data.choices ? data.choices.length : 0,
-      usage: data.usage
-    })}`);
-    
-    if (!data.choices || 
-        !data.choices[0] || 
-        !data.choices[0].message || 
-        !data.choices[0].message.content) {
-      logToFile(`Invalid response format from OpenAI: ${JSON.stringify(data)}`);
+    if (!nutritionData) {
+      logToFile('Failed to analyze nutrition data');
       return res.status(500).json({
         success: false,
-        error: 'Invalid response from OpenAI',
-        raw_response: data
+        error: 'Failed to analyze nutrition data'
       });
     }
 
-    const content = data.choices[0].message.content;
-    logToFile(`OpenAI API response content (first 200 chars): ${content.substring(0, 200)}...`);
+    logToFile('Successfully analyzed nutrition data');
     
-    // Process and parse the response
-    try {
-      // First try direct parsing
-      const parsedData = JSON.parse(content);
-      logToFile('Successfully parsed JSON response');
+    // Log essential nutrition summary
+    if (nutritionData) {
+      console.log('\n🍽️ NUTRITION ANALYSIS COMPLETE');
+      console.log(`📊 Food: ${nutritionData.meal_name || 'Unknown'}`);
+      console.log(`🔥 Calories: ${nutritionData.calories || nutritionData.total_calories || 0}`);
+      console.log(`🥩 Protein: ${nutritionData.protein || nutritionData.total_protein || 0}g`);
+      console.log(`🧈 Fat: ${nutritionData.fat || nutritionData.total_fat || 0}g`);
+      console.log(`🍞 Carbs: ${nutritionData.carbs || nutritionData.total_carbs || 0}g`);
       
-      // 🔬 LOG ALL 34 MICRONUTRIENTS TO TERMINAL
-      if (parsedData) {
-        console.log('\n🔬 ===== COMPLETE MICRONUTRIENT ANALYSIS =====');
-        console.log(`📊 Meal: ${parsedData.meal_name || 'Unknown'}`);
-        console.log(`🍽️ Total Calories: ${parsedData.calories || parsedData.total_calories || 0}`);
-        console.log(`🥩 Protein: ${parsedData.protein || parsedData.total_protein || 0}g`);
-        console.log(`🧈 Fat: ${parsedData.fat || parsedData.total_fat || 0}g`);
-        console.log(`🍞 Carbs: ${parsedData.carbs || parsedData.total_carbs || 0}g`);
-        
-        console.log('\n💊 VITAMINS (13):');
-        console.log(`  Vitamin A: ${parsedData.vitamin_a || 0} mcg`);
-        console.log(`  Vitamin C: ${parsedData.vitamin_c || 0} mg`);
-        console.log(`  Vitamin D: ${parsedData.vitamin_d || 0} mcg`);
-        console.log(`  Vitamin E: ${parsedData.vitamin_e || 0} mg`);
-        console.log(`  Vitamin K: ${parsedData.vitamin_k || 0} mcg`);
-        console.log(`  Vitamin B1 (Thiamine): ${parsedData.vitamin_b1 || 0} mg`);
-        console.log(`  Vitamin B2 (Riboflavin): ${parsedData.vitamin_b2 || 0} mg`);
-        console.log(`  Vitamin B3 (Niacin): ${parsedData.vitamin_b3 || 0} mg`);
-        console.log(`  Vitamin B5 (Pantothenic): ${parsedData.vitamin_b5 || 0} mg`);
-        console.log(`  Vitamin B6 (Pyridoxine): ${parsedData.vitamin_b6 || 0} mg`);
-        console.log(`  Vitamin B7 (Biotin): ${parsedData.vitamin_b7 || 0} mcg`);
-        console.log(`  Vitamin B9 (Folate): ${parsedData.vitamin_b9 || 0} mcg`);
-        console.log(`  Vitamin B12 (Cobalamin): ${parsedData.vitamin_b12 || 0} mcg`);
-        
-        console.log('\n⚗️ MINERALS (15):');
-        console.log(`  Calcium: ${parsedData.calcium || 0} mg`);
-        console.log(`  Chloride: ${parsedData.chloride || 0} mg`);
-        console.log(`  Chromium: ${parsedData.chromium || 0} mcg`);
-        console.log(`  Copper: ${parsedData.copper || 0} mcg`);
-        console.log(`  Fluoride: ${parsedData.fluoride || 0} mg`);
-        console.log(`  Iodine: ${parsedData.iodine || 0} mcg`);
-        console.log(`  Iron: ${parsedData.iron || 0} mg`);
-        console.log(`  Magnesium: ${parsedData.magnesium || 0} mg`);
-        console.log(`  Manganese: ${parsedData.manganese || 0} mg`);
-        console.log(`  Molybdenum: ${parsedData.molybdenum || 0} mcg`);
-        console.log(`  Phosphorus: ${parsedData.phosphorus || 0} mg`);
-        console.log(`  Potassium: ${parsedData.potassium || 0} mg`);
-        console.log(`  Selenium: ${parsedData.selenium || 0} mcg`);
-        console.log(`  Sodium: ${parsedData.sodium || 0} mg`);
-        console.log(`  Zinc: ${parsedData.zinc || 0} mg`);
-        
-        console.log('\n🥗 OTHER NUTRIENTS (6):');
-        console.log(`  Fiber: ${parsedData.fiber || 0} g`);
-        console.log(`  Cholesterol: ${parsedData.cholesterol || 0} mg`);
-        console.log(`  Sugar: ${parsedData.sugar || 0} g`);
-        console.log(`  Saturated Fats: ${parsedData.saturated_fats || 0} g`);
-        console.log(`  Omega-3: ${parsedData.omega_3 || 0} mg`);
-        console.log(`  Omega-6: ${parsedData.omega_6 || 0} mg`);
-        
-        if (parsedData.ingredients && parsedData.ingredients.length > 0) {
-          console.log('\n🔬 INGREDIENT BREAKDOWN:');
-          parsedData.ingredients.forEach((ingredient, index) => {
-            // Handle both string and object ingredient formats
-            let name, amount, calories, protein, fat, carbs;
-            
-            if (typeof ingredient === 'string') {
-              name = ingredient;
-              amount = 'N/A';
-              calories = protein = fat = carbs = 0;
-            } else {
-              name = ingredient.name || `Ingredient ${index + 1}`;
-              amount = ingredient.amount || ingredient.weight_g ? `${ingredient.weight_g}g` : 'N/A';
-              calories = ingredient.calories || 0;
-              protein = ingredient.protein || ingredient.protein_g || 0;
-              fat = ingredient.fat || ingredient.fat_g || 0;
-              carbs = ingredient.carbs || ingredient.carbs_g || 0;
-            }
-            
-            console.log(`  ${index + 1}. ${name} (${amount})`);
-            console.log(`     Calories: ${calories}, Protein: ${protein}g, Fat: ${fat}g, Carbs: ${carbs}g`);
-          });
-        }
-        
-        console.log('🔬 ============================================\n');
-      }
-      
-      return res.json({
-        success: true,
-        data: parsedData
-      });
-    } catch (error) {
-      logToFile(`Direct JSON parsing failed: ${error.message}`);
-      logToFile('Attempting to extract JSON from text');
-      
-      // Try to extract JSON from the text
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || 
-                      content.match(/\{[\s\S]*\}/);
-      
-      if (jsonMatch) {
-        const jsonContent = jsonMatch[0].replace(/```json\n|```/g, '').trim();
-        logToFile(`Found JSON-like content: ${jsonContent.substring(0, 100)}...`);
-        
-        try {
-          const parsedData = JSON.parse(jsonContent);
-          logToFile('Successfully extracted and parsed JSON from text');
-          
-          // 🔬 LOG ALL 34 MICRONUTRIENTS TO TERMINAL (FALLBACK PATH)
-          if (parsedData) {
-            console.log('\n🔬 ===== COMPLETE MICRONUTRIENT ANALYSIS (FALLBACK) =====');
-            console.log(`📊 Meal: ${parsedData.meal_name || 'Unknown'}`);
-            console.log(`🍽️ Total Calories: ${parsedData.calories || parsedData.total_calories || 0}`);
-            console.log(`🥩 Protein: ${parsedData.protein || parsedData.total_protein || 0}g`);
-            console.log(`🧈 Fat: ${parsedData.fat || parsedData.total_fat || 0}g`);
-            console.log(`🍞 Carbs: ${parsedData.carbs || parsedData.total_carbs || 0}g`);
-            
-            console.log('\n💊 VITAMINS (13):');
-            console.log(`  Vitamin A: ${parsedData.vitamin_a || 0} mcg`);
-            console.log(`  Vitamin C: ${parsedData.vitamin_c || 0} mg`);
-            console.log(`  Vitamin D: ${parsedData.vitamin_d || 0} mcg`);
-            console.log(`  Vitamin E: ${parsedData.vitamin_e || 0} mg`);
-            console.log(`  Vitamin K: ${parsedData.vitamin_k || 0} mcg`);
-            console.log(`  Vitamin B1 (Thiamine): ${parsedData.vitamin_b1 || 0} mg`);
-            console.log(`  Vitamin B2 (Riboflavin): ${parsedData.vitamin_b2 || 0} mg`);
-            console.log(`  Vitamin B3 (Niacin): ${parsedData.vitamin_b3 || 0} mg`);
-            console.log(`  Vitamin B5 (Pantothenic): ${parsedData.vitamin_b5 || 0} mg`);
-            console.log(`  Vitamin B6 (Pyridoxine): ${parsedData.vitamin_b6 || 0} mg`);
-            console.log(`  Vitamin B7 (Biotin): ${parsedData.vitamin_b7 || 0} mcg`);
-            console.log(`  Vitamin B9 (Folate): ${parsedData.vitamin_b9 || 0} mcg`);
-            console.log(`  Vitamin B12 (Cobalamin): ${parsedData.vitamin_b12 || 0} mcg`);
-            
-            console.log('\n⚗️ MINERALS (15):');
-            console.log(`  Calcium: ${parsedData.calcium || 0} mg`);
-            console.log(`  Chloride: ${parsedData.chloride || 0} mg`);
-            console.log(`  Chromium: ${parsedData.chromium || 0} mcg`);
-            console.log(`  Copper: ${parsedData.copper || 0} mcg`);
-            console.log(`  Fluoride: ${parsedData.fluoride || 0} mg`);
-            console.log(`  Iodine: ${parsedData.iodine || 0} mcg`);
-            console.log(`  Iron: ${parsedData.iron || 0} mg`);
-            console.log(`  Magnesium: ${parsedData.magnesium || 0} mg`);
-            console.log(`  Manganese: ${parsedData.manganese || 0} mg`);
-            console.log(`  Molybdenum: ${parsedData.molybdenum || 0} mcg`);
-            console.log(`  Phosphorus: ${parsedData.phosphorus || 0} mg`);
-            console.log(`  Potassium: ${parsedData.potassium || 0} mg`);
-            console.log(`  Selenium: ${parsedData.selenium || 0} mcg`);
-            console.log(`  Sodium: ${parsedData.sodium || 0} mg`);
-            console.log(`  Zinc: ${parsedData.zinc || 0} mg`);
-            
-            console.log('\n🥗 OTHER NUTRIENTS (6):');
-            console.log(`  Fiber: ${parsedData.fiber || 0} g`);
-            console.log(`  Cholesterol: ${parsedData.cholesterol || 0} mg`);
-            console.log(`  Sugar: ${parsedData.sugar || 0} g`);
-            console.log(`  Saturated Fats: ${parsedData.saturated_fats || 0} g`);
-            console.log(`  Omega-3: ${parsedData.omega_3 || 0} mg`);
-            console.log(`  Omega-6: ${parsedData.omega_6 || 0} mg`);
-            
-            if (parsedData.ingredients && parsedData.ingredients.length > 0) {
-              console.log('\n🔬 INGREDIENT BREAKDOWN:');
-              parsedData.ingredients.forEach((ingredient, index) => {
-                // Handle both string and object ingredient formats
-                let name, amount, calories, protein, fat, carbs;
-                
-                if (typeof ingredient === 'string') {
-                  name = ingredient;
-                  amount = 'N/A';
-                  calories = protein = fat = carbs = 0;
-                } else {
-                  name = ingredient.name || `Ingredient ${index + 1}`;
-                  amount = ingredient.amount || ingredient.weight_g ? `${ingredient.weight_g}g` : 'N/A';
-                  calories = ingredient.calories || 0;
-                  protein = ingredient.protein || ingredient.protein_g || 0;
-                  fat = ingredient.fat || ingredient.fat_g || 0;
-                  carbs = ingredient.carbs || ingredient.carbs_g || 0;
-                }
-                
-                console.log(`  ${index + 1}. ${name} (${amount})`);
-                console.log(`     Calories: ${calories}, Protein: ${protein}g, Fat: ${fat}g, Carbs: ${carbs}g`);
-              });
-            }
-            
-            console.log('🔬 ============================================\n');
-          }
-          
-          return res.json({
-            success: true,
-            data: parsedData,
-            note: 'JSON was extracted from text response'
-          });
-        } catch (err) {
-          logToFile(`JSON extraction failed: ${err.message}`);
-          // Return the raw text if JSON parsing fails
-          return res.json({
-            success: false,
-            error: 'Failed to parse JSON',
-            data: { text: content }
-          });
-        }
-      } else {
-        logToFile('No JSON pattern found in response');
-        // Return the raw text if no JSON found
-        return res.json({
-          success: false,
-          error: 'No JSON found in response',
-          data: { text: content }
+      if (nutritionData.ingredients && nutritionData.ingredients.length > 0) {
+        console.log('\n🥗 INGREDIENTS:');
+        nutritionData.ingredients.forEach((ingredient, index) => {
+          let name = ingredient.name || ingredient.dish || `Ingredient ${index + 1}`;
+          let amount = ingredient.amount || ingredient.weight_g ? `${ingredient.weight_g}g` : 'N/A';
+          let calories = ingredient.calories || 0;
+          console.log(`  ${index + 1}. ${name} (${amount}) - ${calories} kcal`);
         });
       }
+      console.log('✅ Analysis successful\n');
     }
+    
+    return res.json({
+      success: true,
+      data: nutritionData
+    });
   } catch (error) {
     logToFile(`Server error: ${error.message}`);
     logToFile(error.stack);
