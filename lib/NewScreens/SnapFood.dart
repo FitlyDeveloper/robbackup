@@ -274,7 +274,8 @@ class _SnapFoodState extends State<SnapFood> {
           if (response.containsKey('meal') && response['meal'] is List) {
             List<dynamic> ingredients = response['meal'];
             if (ingredients.length == 1) {
-              print('⚠️ Only 1 ingredient detected - image may need better lighting');
+              print(
+                  '⚠️ Only 1 ingredient detected - image may need better lighting');
             }
           }
 
@@ -291,8 +292,9 @@ class _SnapFoodState extends State<SnapFood> {
           print('🥩 Protein: ${response['protein'] ?? 'N/A'}g');
           print('🧈 Fat: ${response['fat'] ?? 'N/A'}g');
           print('🍞 Carbs: ${response['carbs'] ?? 'N/A'}g');
-          
-          if (response.containsKey('ingredients') && response['ingredients'] is List) {
+
+          if (response.containsKey('ingredients') &&
+              response['ingredients'] is List) {
             List<dynamic> ingredients = response['ingredients'];
             print('\n🥗 INGREDIENTS (${ingredients.length}):');
             for (int i = 0; i < ingredients.length; i++) {
@@ -303,7 +305,7 @@ class _SnapFoodState extends State<SnapFood> {
               print('  ${i + 1}. $name ($amount) - ${calories} kcal');
             }
           }
-          
+
           print('\n✅ Analysis successful - redirecting to details screen');
 
           // Extract the food name for the scan ID
@@ -665,96 +667,11 @@ class _SnapFoodState extends State<SnapFood> {
         allMicronutrients['omega_6'] =
             _extractNumericValue(analysisData['omega_6']?.toString() ?? "0");
 
-        print('🔬 EXTRACTED ALL 34 MICRONUTRIENTS FROM OPENAI RESPONSE:');
-        print(
-            '📊 Vitamins (13): ${allMicronutrients.keys.where((k) => k.startsWith('vitamin_')).length}');
-        print('⚗️ Minerals (15): ${[
-          'calcium',
-          'chloride',
-          'chromium',
-          'copper',
-          'fluoride',
-          'iodine',
-          'iron',
-          'magnesium',
-          'manganese',
-          'molybdenum',
-          'phosphorus',
-          'potassium',
-          'selenium',
-          'sodium',
-          'zinc'
-        ].where((k) => allMicronutrients.containsKey(k)).length}');
-        print('🥗 Other (6): ${[
-          'fiber',
-          'cholesterol',
-          'sugar',
-          'saturated_fats',
-          'omega_3',
-          'omega_6'
-        ].where((k) => allMicronutrients.containsKey(k)).length}');
-        print('💾 Total nutrients extracted: ${allMicronutrients.length}');
-
-        // 🔍 LOG THE ACTUAL OPENAI VALUES BEFORE DISTRIBUTION
-        print('\n🔍 ACTUAL OPENAI RESPONSE VALUES:');
-        print('📊 VITAMINS FROM API:');
-        allMicronutrients.forEach((key, value) {
-          if (key.startsWith('vitamin_')) {
-            print('  • $key: ${value}${_getUnitForVitamin(key)}');
-          }
-        });
-        print('⚗️ MINERALS FROM API:');
-        [
-          'calcium',
-          'chloride',
-          'chromium',
-          'copper',
-          'fluoride',
-          'iodine',
-          'iron',
-          'magnesium',
-          'manganese',
-          'molybdenum',
-          'phosphorus',
-          'potassium',
-          'selenium',
-          'sodium',
-          'zinc'
-        ].forEach((key) {
-          if (allMicronutrients.containsKey(key)) {
-            print(
-                '  • $key: ${allMicronutrients[key]}${_getUnitForMineral(key)}');
-          }
-        });
-        print('🥗 OTHER NUTRIENTS FROM API:');
-        [
-          'fiber',
-          'cholesterol',
-          'sugar',
-          'saturated_fats',
-          'omega_3',
-          'omega_6'
-        ].forEach((key) {
-          if (allMicronutrients.containsKey(key)) {
-            print(
-                '  • $key: ${allMicronutrients[key]}${_getUnitForNutrient(key)}');
-          }
-        });
-        print('🔍 ================================================\n');
-
-        // 🔧 CONVERT UNITS TO MATCH NUTRITION.DART EXPECTATIONS
+        // Process micronutrients from OpenAI response
         Map<String, dynamic> correctedMicronutrients = {};
         allMicronutrients.forEach((key, value) {
           // OpenAI should now provide values in correct units, so use them directly
           correctedMicronutrients[key] = value.toString();
-        });
-
-        print('🔧 USING DIRECT OPENAI VALUES (NO CONVERSION):');
-        print('📊 VITAMINS:');
-        correctedMicronutrients.forEach((key, value) {
-          if (key.startsWith('vitamin_')) {
-            print('  • $key: ${value}${_getUnitForVitamin(key)}');
-          }
         });
         print('⚗️ MINERALS:');
         [
@@ -788,8 +705,6 @@ class _SnapFoodState extends State<SnapFood> {
         if (analysisData['ingredients'] is List) {
           List<dynamic> ingredientsFromAPI = analysisData['ingredients'];
 
-          print('\n===== PROCESSING OPENAI INGREDIENT OBJECTS =====');
-
           for (int i = 0; i < ingredientsFromAPI.length; i++) {
             var ingredientData = ingredientsFromAPI[i];
 
@@ -810,21 +725,6 @@ class _SnapFoodState extends State<SnapFood> {
               };
 
               ingredientsList.add(processedIngredient);
-
-              // 🔬 LOG DETAILED MACRONUTRIENTS FOR EACH INGREDIENT
-              String ingredientName = processedIngredient['name'];
-              String ingredientAmount = processedIngredient['amount'] ?? '100g';
-              int ingredientCalories = processedIngredient['calories'] ?? 0;
-
-              print(
-                  '\n🍽️ ===== INGREDIENT: $ingredientName ($ingredientAmount) - ${ingredientCalories}kcal =====');
-              print('📊 MACRONUTRIENTS:');
-              print('  🥩 Protein: ${processedIngredient['protein']}g');
-              print('  🧈 Fat: ${processedIngredient['fat']}g');
-              print('  🍞 Carbs: ${processedIngredient['carbs']}g');
-              print('🔬 ================================================\n');
-
-              print('Added valid ingredient: ${processedIngredient['name']}');
             } else if (ingredientData is String) {
               // Handle old string format as fallback
               Map<String, dynamic> processedIngredient = {
@@ -837,14 +737,10 @@ class _SnapFoodState extends State<SnapFood> {
               };
 
               ingredientsList.add(processedIngredient);
-              print(
-                  'Added fallback ingredient: ${processedIngredient['name']}');
             }
           }
         } else if (ingredients.isNotEmpty) {
           // Fallback: Use the old string processing method
-          print('\n===== FALLBACK: PROCESSING STRING INGREDIENTS =====');
-
           for (int i = 0; i < ingredients.length; i++) {
             String ingredient = ingredients[i];
 
@@ -859,11 +755,10 @@ class _SnapFoodState extends State<SnapFood> {
             };
 
             ingredientsList.add(processedIngredient);
-            print('Added fallback ingredient: ${processedIngredient['name']}');
           }
         }
 
-        print('=====================================\n');
+
 
         // Pass the scanId to _saveFoodCardData - this ensures consistent ID usage
         _saveFoodCardData(

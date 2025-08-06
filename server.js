@@ -11,11 +11,7 @@ const { analyzeNutrition } = require('./100_percent_reliable.js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Debug startup
-console.log('Starting server...');
-console.log('Node environment:', process.env.NODE_ENV);
-console.log('Current directory:', process.cwd());
-console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
+// Server startup
 
 // Configure logging
 const logToFile = (message) => {
@@ -287,6 +283,5 @@ app.post('/api/nutrition', limiter, async (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-  logToFile(`Server running on port ${PORT}`);
-  logToFile(`API Key configured: ${process.env.OPENAI_API_KEY ? 'Yes' : 'No'}`);
+  console.log(`Server running on port ${PORT}`);
 }); 

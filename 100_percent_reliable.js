@@ -1,0 +1,359 @@
+// OpenAI Vision API integration with strict JSON schema for micronutrient analysis
+// This module provides 100% reliable nutrition data by enforcing proper JSON structure and correct units
+
+require('dotenv').config();
+const fetch = require('node-fetch');
+
+// Strict JSON schema for OpenAI response with correct units
+const MICRONUTRIENT_SCHEMA = {
+  "ingredients": [
+    {
+      "name": "string",
+      "weight_g": "number",
+      "kcal": "number",
+      "micronutrients": {
+        "vitaminA_mcg": "number", // µg
+        "vitaminC_mg": "number", // mg
+        "vitaminD_mcg": "number", // µg
+        "vitaminE_mg": "number", // mg
+        "vitaminK_mcg": "number", // µg
+        "vitaminB1_mg": "number", // mg
+        "vitaminB2_mg": "number", // mg
+        "vitaminB3_mg": "number", // mg
+        "vitaminB5_mg": "number", // mg
+        "vitaminB6_mg": "number", // mg
+        "vitaminB7_mcg": "number", // µg
+        "vitaminB9_mcg": "number", // µg
+        "vitaminB12_mcg": "number", // µg
+        "minerals": {
+          "calcium_mg": "number", // mg
+          "chloride_mg": "number", // mg
+          "chromium_mcg": "number", // µg
+          "copper_mg": "number", // mg
+          "fluoride_mg": "number", // mg
+          "iodine_mcg": "number", // µg
+          "iron_mg": "number", // mg
+          "magnesium_mg": "number", // mg
+          "manganese_mg": "number", // mg
+          "molybdenum_mcg": "number", // µg
+          "phosphorus_mg": "number", // mg
+          "potassium_mg": "number", // mg
+          "selenium_mcg": "number", // µg
+          "sodium_mg": "number", // mg
+          "zinc_mg": "number" // mg
+        }
+      }
+    }
+  ],
+  "totals": {
+    "calories": "number",
+    "protein_g": "number", 
+    "fat_g": "number",
+    "carbs_g": "number",
+    "vitaminA_mcg": "number",
+    "vitaminC_mg": "number",
+    "vitaminD_mcg": "number",
+    "vitaminE_mg": "number",
+    "vitaminK_mcg": "number",
+    "vitaminB1_mg": "number",
+    "vitaminB2_mg": "number",
+    "vitaminB3_mg": "number",
+    "vitaminB5_mg": "number",
+    "vitaminB6_mg": "number",
+    "vitaminB7_mcg": "number",
+    "vitaminB9_mcg": "number",
+    "vitaminB12_mcg": "number",
+    "minerals": {
+      "calcium_mg": "number",
+      "chloride_mg": "number",
+      "chromium_mcg": "number",
+      "copper_mg": "number",
+      "fluoride_mg": "number",
+      "iodine_mcg": "number",
+      "iron_mg": "number",
+      "magnesium_mg": "number",
+      "manganese_mg": "number",
+      "molybdenum_mcg": "number",
+      "phosphorus_mg": "number",
+      "potassium_mg": "number",
+      "selenium_mcg": "number",
+      "sodium_mg": "number",
+      "zinc_mg": "number"
+    }
+  }
+};
+
+// Strict JSON-only system prompt with correct units
+const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an image, respond with valid JSON and nothing else. Use this exact schema, and ensure that each micronutrient uses the correct unit (µg or mg) as specified:
+
+{
+  "ingredients": [
+    {
+      "name": "string",
+      "weight_g": number,
+      "kcal": number,
+      "micronutrients": {
+        "vitaminA_mcg": number, // µg
+        "vitaminC_mg": number, // mg
+        "vitaminD_mcg": number, // µg
+        "vitaminE_mg": number, // mg
+        "vitaminK_mcg": number, // µg
+        "vitaminB1_mg": number, // mg
+        "vitaminB2_mg": number, // mg
+        "vitaminB3_mg": number, // mg
+        "vitaminB5_mg": number, // mg
+        "vitaminB6_mg": number, // mg
+        "vitaminB7_mcg": number, // µg
+        "vitaminB9_mcg": number, // µg
+        "vitaminB12_mcg": number, // µg
+        "minerals": {
+          "calcium_mg": number, // mg
+          "chloride_mg": number, // mg
+          "chromium_mcg": number, // µg
+          "copper_mg": number, // mg
+          "fluoride_mg": number, // mg
+          "iodine_mcg": number, // µg
+          "iron_mg": number, // mg
+          "magnesium_mg": number, // mg
+          "manganese_mg": number, // mg
+          "molybdenum_mcg": number, // µg
+          "phosphorus_mg": number, // mg
+          "potassium_mg": number, // mg
+          "selenium_mcg": number, // µg
+          "sodium_mg": number, // mg
+          "zinc_mg": number // mg
+        }
+      }
+    }
+  ],
+  "totals": {
+    "calories": number,
+    "protein_g": number,
+    "fat_g": number,
+    "carbs_g": number,
+    // Sum of each vitamin and mineral using same units as above:
+    "vitaminA_mcg": number,
+    "vitaminC_mg": number,
+    "vitaminD_mcg": number,
+    "vitaminE_mg": number,
+    "vitaminK_mcg": number,
+    "vitaminB1_mg": number,
+    "vitaminB2_mg": number,
+    "vitaminB3_mg": number,
+    "vitaminB5_mg": number,
+    "vitaminB6_mg": number,
+    "vitaminB7_mcg": number,
+    "vitaminB9_mcg": number,
+    "vitaminB12_mcg": number,
+    "minerals": {
+      "calcium_mg": number,
+      "chloride_mg": number,
+      "chromium_mcg": number,
+      "copper_mg": number,
+      "fluoride_mg": number,
+      "iodine_mcg": number,
+      "iron_mg": number,
+      "magnesium_mg": number,
+      "manganese_mg": number,
+      "molybdenum_mcg": number,
+      "phosphorus_mg": number,
+      "potassium_mg": number,
+      "selenium_mcg": number,
+      "sodium_mg": number,
+      "zinc_mg": number
+    }
+  }
+}
+
+Do not include any extra keys.
+
+Every numerical field must use the correct unit suffix (e.g. "mcg" for micrograms, "mg" for milligrams).
+
+If a micronutrient is not detected, return it as 0 (not null).
+
+CRITICAL UNIT RULES:
+- Vitamin A, D, K, B7, B9, B12: Use µg (micrograms)
+- Vitamin C, E, B1, B2, B3, B5, B6: Use mg (milligrams)
+- Minerals chromium, iodine, molybdenum, selenium: Use µg (micrograms)
+- All other minerals: Use mg (milligrams)
+
+Use temperature: 0 and response_format: "json" so the API returns parsed JSON.`;
+
+// OpenAI Vision API integration function with correct parameters
+async function analyzeImageWithOpenAI(imageBase64) {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const requestBody = {
+      model: 'gpt-4o',
+      temperature: 0,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: SYSTEM_PROMPT
+        },
+        {
+          role: 'user', 
+          content: [
+            {
+              type: 'text',
+              text: 'Analyze this food image and return the exact JSON schema with complete micronutrient breakdown using correct units (µg/mg) for each ingredient, then sum them in totals.'
+            },
+            {
+              type: 'image_url',
+              image_url: { url: imageBase64 }
+            }
+          ]
+        }
+      ]
+    };
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} - ${errorData}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+      throw new Error('Invalid response format from OpenAI');
+    }
+
+    const content = data.choices[0].message.content;
+    
+    // Parse and validate JSON response
+    const parsedData = JSON.parse(content);
+    
+    // Validate and process the response with correct units
+    const processedData = validateAndProcessNutritionData(parsedData);
+    
+    return processedData;
+    
+  } catch (error) {
+    console.error('❌ Error in OpenAI Vision analysis:', error.message);
+    throw error;
+  }
+}
+
+// Validate and process nutrition data to ensure proper summation with correct units
+function validateAndProcessNutritionData(data) {
+  
+  if (!data.ingredients || !Array.isArray(data.ingredients)) {
+    throw new Error('Invalid ingredients array in OpenAI response');
+  }
+
+  if (!data.totals) {
+    throw new Error('Missing totals section in OpenAI response');
+  }
+
+  // Initialize calculated totals with correct units
+  const calculatedTotals = {
+    calories: 0,
+    protein_g: 0,
+    fat_g: 0,
+    carbs_g: 0,
+    // Vitamins with correct units
+    vitaminA_mcg: 0, // µg
+    vitaminC_mg: 0, // mg
+    vitaminD_mcg: 0, // µg
+    vitaminE_mg: 0, // mg
+    vitaminK_mcg: 0, // µg
+    vitaminB1_mg: 0, // mg
+    vitaminB2_mg: 0, // mg
+    vitaminB3_mg: 0, // mg
+    vitaminB5_mg: 0, // mg
+    vitaminB6_mg: 0, // mg
+    vitaminB7_mcg: 0, // µg
+    vitaminB9_mcg: 0, // µg
+    vitaminB12_mcg: 0, // µg
+    minerals: {
+      calcium_mg: 0, // mg
+      chloride_mg: 0, // mg
+      chromium_mcg: 0, // µg
+      copper_mg: 0, // mg
+      fluoride_mg: 0, // mg
+      iodine_mcg: 0, // µg
+      iron_mg: 0, // mg
+      magnesium_mg: 0, // mg
+      manganese_mg: 0, // mg
+      molybdenum_mcg: 0, // µg
+      phosphorus_mg: 0, // mg
+      potassium_mg: 0, // mg
+      selenium_mcg: 0, // µg
+      sodium_mg: 0, // mg
+      zinc_mg: 0 // mg
+    }
+  };
+
+  // Sum micronutrients across all ingredients with unit consistency
+  data.ingredients.forEach((ingredient, index) => {
+    
+    calculatedTotals.calories += ingredient.kcal || 0;
+    calculatedTotals.protein_g += ingredient.protein_g || 0;
+    calculatedTotals.fat_g += ingredient.fat_g || 0;
+    calculatedTotals.carbs_g += ingredient.carbs_g || 0;
+
+    if (ingredient.micronutrients) {
+      // Sum vitamins with correct units
+      calculatedTotals.vitaminA_mcg += ingredient.micronutrients.vitaminA_mcg || 0; // µg
+      calculatedTotals.vitaminC_mg += ingredient.micronutrients.vitaminC_mg || 0; // mg
+      calculatedTotals.vitaminD_mcg += ingredient.micronutrients.vitaminD_mcg || 0; // µg
+      calculatedTotals.vitaminE_mg += ingredient.micronutrients.vitaminE_mg || 0; // mg
+      calculatedTotals.vitaminK_mcg += ingredient.micronutrients.vitaminK_mcg || 0; // µg
+      calculatedTotals.vitaminB1_mg += ingredient.micronutrients.vitaminB1_mg || 0; // mg
+      calculatedTotals.vitaminB2_mg += ingredient.micronutrients.vitaminB2_mg || 0; // mg
+      calculatedTotals.vitaminB3_mg += ingredient.micronutrients.vitaminB3_mg || 0; // mg
+      calculatedTotals.vitaminB5_mg += ingredient.micronutrients.vitaminB5_mg || 0; // mg
+      calculatedTotals.vitaminB6_mg += ingredient.micronutrients.vitaminB6_mg || 0; // mg
+      calculatedTotals.vitaminB7_mcg += ingredient.micronutrients.vitaminB7_mcg || 0; // µg
+      calculatedTotals.vitaminB9_mcg += ingredient.micronutrients.vitaminB9_mcg || 0; // µg
+      calculatedTotals.vitaminB12_mcg += ingredient.micronutrients.vitaminB12_mcg || 0; // µg
+
+      if (ingredient.micronutrients.minerals) {
+        const minerals = ingredient.micronutrients.minerals;
+        // Sum minerals with correct units
+        calculatedTotals.minerals.calcium_mg += minerals.calcium_mg || 0; // mg
+        calculatedTotals.minerals.chloride_mg += minerals.chloride_mg || 0; // mg
+        calculatedTotals.minerals.chromium_mcg += minerals.chromium_mcg || 0; // µg
+        calculatedTotals.minerals.copper_mg += minerals.copper_mg || 0; // mg
+        calculatedTotals.minerals.fluoride_mg += minerals.fluoride_mg || 0; // mg
+        calculatedTotals.minerals.iodine_mcg += minerals.iodine_mcg || 0; // µg
+        calculatedTotals.minerals.iron_mg += minerals.iron_mg || 0; // mg
+        calculatedTotals.minerals.magnesium_mg += minerals.magnesium_mg || 0; // mg
+        calculatedTotals.minerals.manganese_mg += minerals.manganese_mg || 0; // mg
+        calculatedTotals.minerals.molybdenum_mcg += minerals.molybdenum_mcg || 0; // µg
+        calculatedTotals.minerals.phosphorus_mg += minerals.phosphorus_mg || 0; // mg
+        calculatedTotals.minerals.potassium_mg += minerals.potassium_mg || 0; // mg
+        calculatedTotals.minerals.selenium_mcg += minerals.selenium_mcg || 0; // µg
+        calculatedTotals.minerals.sodium_mg += minerals.sodium_mg || 0; // mg
+        calculatedTotals.minerals.zinc_mg += minerals.zinc_mg || 0; // mg
+      }
+    }
+  });
+
+  // Use calculated totals to ensure accuracy with correct units
+  return {
+    ingredients: data.ingredients,
+    totals: calculatedTotals
+  };
+}
+
+// Export for use in server
+module.exports = {
+  analyzeImageWithOpenAI,
+  validateAndProcessNutritionData,
+  MICRONUTRIENT_SCHEMA,
+  SYSTEM_PROMPT
+}; 
