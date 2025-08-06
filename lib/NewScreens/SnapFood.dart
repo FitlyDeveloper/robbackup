@@ -38,6 +38,9 @@ import 'FoodCardOpen.dart';
 // Import the codia_page to access NutritionTracker
 // import '../Features/codia/codia_page.dart' as main_codia;
 
+// Import Nutrition.dart for persistent scan data storage
+import '../Features/codia/Nutrition.dart';
+
 class SnapFood extends StatefulWidget {
   const SnapFood({super.key});
 
@@ -280,6 +283,12 @@ class _SnapFoodState extends State<SnapFood> {
             }
           }
 
+          // Check if this is emergency fallback data
+          if (response.containsKey('meal_name') &&
+              response['meal_name'] == 'Analyzed Meal') {
+            print('⚠️ Using emergency fallback data - APIs were unavailable');
+          }
+
           // Extract the food name for the scan ID
           String foodName = 'Analyzed Meal';
           if (response.containsKey('meal_name')) {
@@ -322,6 +331,11 @@ class _SnapFoodState extends State<SnapFood> {
               e.toString().contains("timeout")) {
             errorMessage =
                 "The analysis timed out. This might be due to high server load. Please try again in a few minutes.";
+          } else if (e
+              .toString()
+              .contains("All API endpoints are unavailable")) {
+            errorMessage =
+                "Our servers are currently experiencing issues. Please try again in a few minutes or check your internet connection.";
           } else if (e.toString().contains("Analysis failed")) {
             errorMessage =
                 "We couldn't analyze your food image. Please try again with a clearer photo showing the food clearly.";
@@ -329,6 +343,9 @@ class _SnapFoodState extends State<SnapFood> {
               e.toString().contains("JSON")) {
             errorMessage =
                 "There was an issue processing the analysis results. Please try again.";
+          } else if (e.toString().contains("Failed to fetch")) {
+            errorMessage =
+                "Unable to connect to our servers. Please check your internet connection and try again.";
           } else {
             errorMessage =
                 "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection.";
@@ -424,7 +441,7 @@ class _SnapFoodState extends State<SnapFood> {
     }
   }
 
-  // Helper method to generate a consistent scanId
+  // Helper method to generate a consistent scanId - FIXED to match FoodCardOpen format
   String _generateScanId(String foodName) {
     // Normalize the food name - remove special characters, spaces, make lowercase
     final normalizedName = foodName.isEmpty
@@ -434,10 +451,9 @@ class _SnapFoodState extends State<SnapFood> {
             .replaceAll(RegExp(r'[^\w\s]+'), '') // Remove special chars
             .replaceAll(RegExp(r'\s+'), '_'); // Replace spaces with underscores
 
-    // Add timestamp for uniqueness
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-
-    return '${normalizedName}_$timestamp';
+    // CRITICAL FIX: Use the same format as FoodCardOpen.dart to ensure consistency
+    // Remove timestamp to make scanId deterministic and matchable
+    return 'food_nutrition_$normalizedName';
   }
 
   Future<bool> _cameraOnly() async {
@@ -964,9 +980,18 @@ class _SnapFoodState extends State<SnapFood> {
       [String healthScore = "5/10",
       String? scanId,
       Map<String, dynamic>? micronutrients]) async {
-    // Use provided scanId or generate a new one as fallback
+    // STRICT: SnapFood.dart is the ONLY source of scanId generation
+    // Generate a unique, consistent scanId for this scan
     final String finalScanId = scanId ??
-        '${foodName.isEmpty ? 'analyzed_meal' : foodName.replaceAll(' ', '_').toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}';
+        'snapfood_${foodName.isEmpty ? 'analyzed_meal' : foodName.replaceAll(' ', '_').toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}';
+
+    // STRICT: Validate generated scanId
+    if (finalScanId.isEmpty) {
+      throw StateError('SnapFood: Generated scanId cannot be empty');
+    }
+
+    print('🔒 SNAPFOOD: Generated UNIQUE scanId: "$finalScanId"');
+    print('🔒 SNAPFOOD: This scanId will be used throughout the entire flow');
 
     // Use provided micronutrients or empty map as fallback
     final Map<String, dynamic> finalMicronutrients = micronutrients ?? {};
@@ -1062,6 +1087,11 @@ class _SnapFoodState extends State<SnapFood> {
         displayImageBase64 = base64Encode(displayImageBytes);
       }
     } catch (e) {}
+
+    // SAVE SCAN DATA TO NUTRITION MANAGER PERMANENTLY
+    if (finalMicronutrients.isNotEmpty) {
+      await _saveScanDataToNutritionManager(finalScanId, finalMicronutrients);
+    }
 
     // After saving, navigate to FoodCardOpen
     if (mounted) {
@@ -2031,6 +2061,130 @@ class _SnapFoodState extends State<SnapFood> {
     }
 
     return defaultValue;
+  }
+
+  // PERMANENT SCAN DATA STORAGE - Save scan data to NutritionDataManager
+  Future<void> _saveScanDataToNutritionManager(
+      String scanId, Map<String, dynamic> micronutrients) async {
+    try {
+      // ═══════════════════════════════════════════════════════════════
+      // QUESTION 6: Is data saved using the SAME scanId that nutrition.dart expects?
+      // ═══════════════════════════════════════════════════════════════
+      print('💾 === QUESTION 6: SNAPFOOD SAVE SCANID INVESTIGATION ===');
+      print('💾 SnapFood saving with scanId: "$scanId"');
+      print('💾 ScanId type: ${scanId.runtimeType}');
+      print('💾 ScanId length: ${scanId.length}');
+      print('💾 ScanId isEmpty: ${scanId.isEmpty}');
+      print('💾 Micronutrients count: ${micronutrients.length}');
+      print('💾 Micronutrients keys: ${micronutrients.keys.toList()}');
+      print(
+          '💾 This scanId will be used for NutritionDataManager.storeNutritionData()');
+      print(
+          '💾 ANSWER 6: SnapFood is saving with scanId "$scanId" - verify this matches nutrition.dart expectation');
+
+      // Initialize the NutritionDataManager if not already done
+      await NutritionDataManager.initialize();
+
+      // Convert micronutrients to the expected format for NutritionDataManager
+      Map<String, NutrientInfo> vitamins = {};
+      Map<String, NutrientInfo> minerals = {};
+      Map<String, NutrientInfo> other = {};
+
+      // Categorize the micronutrients into vitamins, minerals, and other
+      micronutrients.forEach((key, value) {
+        double numValue = 0.0;
+        if (value is double) {
+          numValue = value;
+        } else if (value is int) {
+          numValue = value.toDouble();
+        } else if (value is String) {
+          numValue = double.tryParse(value) ?? 0.0;
+        }
+
+        // Skip zero values
+        if (numValue <= 0) return;
+
+        String normalizedKey = key.toLowerCase();
+
+        // Categorize nutrients
+        if (_isVitamin(normalizedKey)) {
+          vitamins[key] = NutrientInfo(
+            name: key,
+            value: '$numValue ${_getUnitForVitamin(key)}',
+            percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
+            progress: (numValue / 100).clamp(0.0, 1.0),
+            progressColor: Colors.orange,
+          );
+        } else if (_isMineral(normalizedKey)) {
+          minerals[key] = NutrientInfo(
+            name: key,
+            value: '$numValue ${_getUnitForMineral(key)}',
+            percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
+            progress: (numValue / 100).clamp(0.0, 1.0),
+            progressColor: Colors.blue,
+          );
+        } else {
+          other[key] = NutrientInfo(
+            name: key,
+            value: '$numValue ${_getUnitForNutrient(key)}',
+            percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
+            progress: (numValue / 100).clamp(0.0, 1.0),
+            progressColor: Colors.green,
+          );
+        }
+      });
+
+      // Store the data permanently
+      print(
+          '💾 SNAPFOOD: About to call NutritionDataManager.storeNutritionData()');
+      print('💾 SNAPFOOD: Final scanId being passed: "$scanId"');
+      print('💾 SNAPFOOD: Vitamins count: ${vitamins.length}');
+      print('💾 SNAPFOOD: Minerals count: ${minerals.length}');
+      print('💾 SNAPFOOD: Other count: ${other.length}');
+
+      await NutritionDataManager.storeNutritionData(
+          scanId, vitamins, minerals, other);
+
+      print(
+          '✅ SNAPFOOD: Successfully saved ${vitamins.length + minerals.length + other.length} nutrients to permanent storage');
+      print('✅ SNAPFOOD: Storage completed for scanId: "$scanId"');
+    } catch (e) {
+      print('❌ SNAPFOOD: Error saving scan data: $e');
+    }
+  }
+
+  // Helper method to check if a nutrient is a vitamin
+  bool _isVitamin(String nutrientName) {
+    String name = nutrientName.toLowerCase();
+    return name.contains('vitamin') ||
+        name == 'a' ||
+        name == 'c' ||
+        name == 'd' ||
+        name == 'e' ||
+        name == 'k' ||
+        name.startsWith('b') ||
+        name == 'thiamine' ||
+        name == 'riboflavin' ||
+        name == 'niacin' ||
+        name == 'folate' ||
+        name == 'biotin';
+  }
+
+  // Helper method to check if a nutrient is a mineral
+  bool _isMineral(String nutrientName) {
+    String name = nutrientName.toLowerCase();
+    return name == 'calcium' ||
+        name == 'iron' ||
+        name == 'magnesium' ||
+        name == 'phosphorus' ||
+        name == 'potassium' ||
+        name == 'sodium' ||
+        name == 'zinc' ||
+        name == 'copper' ||
+        name == 'manganese' ||
+        name == 'selenium' ||
+        name == 'chromium' ||
+        name == 'iodine';
   }
 }
 
