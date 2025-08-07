@@ -10,9 +10,8 @@ import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:camera/camera.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_image_compress/flutter_image_compress.dart'
-    as flutter_compress;
+// removed unused http import
+// removed unused flutter_image_compress import
 // Remove permission_handler temporarily
 // import 'package:permission_handler/permission_handler.dart';
 
@@ -23,7 +22,7 @@ import 'dart:io' if (dart.library.html) 'package:fitness_app/web_io_stub.dart';
 import 'web_impl.dart' if (dart.library.io) 'web_impl_stub.dart';
 
 // Additional imports for mobile platforms
-import 'web_image_compress_stub.dart' as img_compress;
+// removed unused web_image_compress_stub import
 
 // Conditionally import the image compress library
 // We need to use a different approach to avoid conflicts
@@ -51,6 +50,9 @@ class SnapFood extends StatefulWidget {
 class _SnapFoodState extends State<SnapFood> {
   // Track the active button
   String _activeButton = 'Scan Food'; // Default active button
+  // unused
+  // removed unused: _permissionsRequested
+  // ignore: unused_field
   bool _permissionsRequested = false;
   bool _isAnalyzing = false; // Track if analysis is in progress
   int _loadingDots = 0; // Add this to track loading animation state
@@ -73,6 +75,9 @@ class _SnapFoodState extends State<SnapFood> {
 
   // Food analysis result
   Map<String, dynamic>? _analysisResult;
+  // unused
+  // removed unused: _formattedAnalysisResult
+  // ignore: unused_field
   String? _formattedAnalysisResult;
 
   // Image related variables
@@ -136,53 +141,13 @@ class _SnapFoodState extends State<SnapFood> {
         "Camera permission is needed to take pictures. Please grant permission in your device settings.");
   }
 
-  Future<void> _requestCameraPermission() async {
-    // This will trigger the actual iOS system permission dialog for camera
-    try {
-      // Just check availability, don't actually pick
-      await _picker
-          .pickImage(source: ImageSource.camera)
-          .then((_) => _requestPhotoLibraryPermission());
-    } catch (e) {
-      _requestPhotoLibraryPermission();
-    }
-  }
+  // removed unused: _requestCameraPermission
 
-  Future<void> _requestPhotoLibraryPermission() async {
-    // This will trigger the actual iOS system permission dialog for photo library
-    try {
-      // Just check availability, don't actually pick
-      await _picker.pickImage(source: ImageSource.gallery);
-    } catch (e) {}
-  }
+  // removed unused: _requestPhotoLibraryPermission
+  // ignore: unused_element
+  void _requestPhotoLibraryPermission() {}
 
-  // Local fallback for image analysis when Firebase isn't working
-  Future<Map<String, dynamic>> _analyzeImageLocally(
-      Uint8List imageBytes) async {
-    // This is a local fallback that doesn't require any Firebase connection
-    // It returns mock data similar to what the real function would return
-
-    // Simulate a processing delay
-    await Future.delayed(Duration(seconds: 1));
-
-    // Return mock food analysis data
-    return {
-      "success": true,
-      "meal": [
-        {
-          "dish": "Local Analysis Result",
-          "calories": 450,
-          "macronutrients": {"protein": 25, "carbohydrates": 45, "fat": 18},
-          "ingredients": [
-            "This is a local analysis",
-            "Firebase functions deployment had issues",
-            "This is a fallback implementation",
-            "Image size: ${imageBytes.length} bytes"
-          ]
-        }
-      ]
-    };
-  }
+  // Local analysis fallback removed
 
   // Modify the _analyzeImage method to keep isAnalyzing true until redirection
   Future<void> _analyzeImage(XFile? image) async {
@@ -208,53 +173,34 @@ class _SnapFoodState extends State<SnapFood> {
 
     try {
       // Read image as bytes
-      Uint8List? imageBytes;
+      final Uint8List imageBytes = kIsWeb
+          ? (_webImageBytes ?? await image.readAsBytes())
+          : await image.readAsBytes();
 
-      if (kIsWeb) {
-        // For web platform
-        imageBytes = _webImageBytes ?? await image.readAsBytes();
-      } else {
-        // For mobile platforms
-        imageBytes = await image.readAsBytes();
-      }
-
-      if (imageBytes == null || imageBytes.isEmpty) {
+      if (imageBytes.isEmpty) {
         throw Exception('Could not read image data');
       }
-
-      print(
-          'Image loaded, size: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB');
 
       // Light compression only if image is too large for Render.com (>3MB)
       Uint8List finalImage = imageBytes;
       if (imageBytes.length > 3 * 1024 * 1024) {
-        print('Image too large for server, applying compression...');
         finalImage = await _lightCompressImage(imageBytes);
-        print(
-            'After compression, size: ${(finalImage.length / 1024).toStringAsFixed(1)}KB');
-      } else {
-        print('Image size acceptable, using original');
       }
 
       // Enhance image quality for better ingredient detection
       // Ensure minimum resolution for API analysis
       if (finalImage.length < 100 * 1024) {
-        // If less than 100KB, might be too small
-        print(
-            'Image might be too small for detailed analysis, but proceeding...');
+        // proceed silently
       }
 
       // Show progress update
-      if (mounted) {
-        setState(() {
-          // Update processing step
-          _processingStep = 1; // Move to identification step
-        });
-      }
+      setState(() {
+        // Update processing step
+        _processingStep = 1; // Move to identification step
+      });
 
       try {
-        // Call the updated API service that handles job submission and polling
-        print('Submitting image for analysis...');
+        // Call the API service
         final Map<String, dynamic> response =
             await FoodAnalyzerApi.analyzeFoodImage(finalImage);
 
@@ -264,71 +210,26 @@ class _SnapFoodState extends State<SnapFood> {
           processingTimer = null;
         }
 
-        if (response != null) {
-          setState(() {
-            _analysisResult = response;
-            _formattedAnalysisResult = null;
-          });
+        setState(() {
+          _analysisResult = response;
+          _formattedAnalysisResult = null;
+        });
 
-          // Check if only one ingredient was detected and log this
-          if (response.containsKey('meal') && response['meal'] is List) {
-            List<dynamic> ingredients = response['meal'];
-            if (ingredients.length == 1) {
-              print(
-                  '⚠️ Only 1 ingredient detected - image may need better lighting');
-            }
-          }
-
-          // Check if this is emergency fallback data
-          if (response.containsKey('meal_name') &&
-              response['meal_name'] == 'Analyzed Meal') {
-            print('⚠️ Using emergency fallback data - APIs were unavailable');
-          }
-
-          // Clean nutrition summary
-          print('\n🍽️ NUTRITION ANALYSIS COMPLETE');
-          print('📊 Food: ${response['meal_name'] ?? 'Unknown'}');
-          print('🔥 Calories: ${response['calories'] ?? 'N/A'}');
-          print('🥩 Protein: ${response['protein'] ?? 'N/A'}g');
-          print('🧈 Fat: ${response['fat'] ?? 'N/A'}g');
-          print('🍞 Carbs: ${response['carbs'] ?? 'N/A'}g');
-
-          if (response.containsKey('ingredients') &&
-              response['ingredients'] is List) {
-            List<dynamic> ingredients = response['ingredients'];
-            print('\n🥗 INGREDIENTS (${ingredients.length}):');
-            for (int i = 0; i < ingredients.length; i++) {
-              var ingredient = ingredients[i];
-              String name = ingredient['name'] ?? 'Unknown';
-              String amount = ingredient['amount'] ?? 'N/A';
-              int calories = ingredient['calories'] ?? 0;
-              print('  ${i + 1}. $name ($amount) - ${calories} kcal');
-            }
-          }
-
-          print('\n✅ Analysis successful - redirecting to details screen');
-
-          // Extract the food name for the scan ID
-          String foodName = 'Analyzed Meal';
-          if (response.containsKey('meal_name')) {
-            foodName = response['meal_name'];
-          } else if (response.containsKey('success') &&
-              response['success'] == true &&
-              response['meal'] is List &&
-              response['meal'].isNotEmpty) {
-            foodName = response['meal'][0]['dish'] ?? '';
-          } else if (response.containsKey('food_name')) {
-            foodName = response['food_name'];
-          } else if (response.containsKey('name')) {
-            foodName = response['name'];
-          }
-
-          // Generate a consistent scanId
-          String scanId = _generateScanId(foodName);
-
-          // Display the formatted results and navigate with the scanId
-          _displayAnalysisResults(_analysisResult!, scanId);
+        // Extract the food name for the scan ID
+        String foodName = 'Analyzed Meal';
+        if (response.containsKey('meal_name')) {
+          foodName = response['meal_name'];
+        } else if (response.containsKey('food_name')) {
+          foodName = response['food_name'];
+        } else if (response.containsKey('name')) {
+          foodName = response['name'];
         }
+
+        // Generate a consistent scanId
+        String scanId = _generateScanId(foodName);
+
+        // Display the formatted results and navigate with the scanId
+        _displayAnalysisResults(_analysisResult!, scanId);
       } catch (e) {
         // Cancel the processing timer
         if (processingTimer != null) {
@@ -336,7 +237,7 @@ class _SnapFoodState extends State<SnapFood> {
           processingTimer = null;
         }
 
-        print("API error in _analyzeImage: $e");
+        // no terminal spam
 
         // Show error and redirect to codia_page - NO FALLBACK DATA
         if (mounted) {
@@ -507,72 +408,26 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   // Fix the _takePicture method to work properly with our new flow
-  Future<void> _takePicture() async {
-    try {
-      // Check if camera is available using _cameraOnly method
-      bool isCameraAvailable = await _cameraOnly();
-
-      if (!isCameraAvailable) {
-        setState(() {
-          _isAnalyzing = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _isAnalyzing = false;
-      });
-
-      if (mounted) {
-        _showCameraErrorDialog();
-      }
-    }
-  }
+  // removed unused: _takePicture
 
   // Simplified version that doesn't use missing libraries
-  Future<String?> _getBase64FromPath(String path) async {
-    try {
-      // For web platform
-      if (kIsWeb) {
-        if (_webImageBytes != null) {
-          return base64Encode(_webImageBytes!);
-        } else {
-          // Try to load from path for web
-          final response = await http.get(Uri.parse(path));
-          if (response.statusCode == 200) {
-            return base64Encode(response.bodyBytes);
-          } else {
-            throw Exception('Failed to load image from URL');
-          }
-        }
-      }
-      // For mobile platforms
-      else {
-        final file = File(path);
-        final bytes = await file.readAsBytes();
+  // removed unused: _getBase64FromPath
 
-        // Use original image without compression
-        return base64Encode(bytes);
-      }
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<Uint8List> _compressImage(Uint8List imageBytes) async {
-    // This function has been removed - no compression is performed
-    return imageBytes;
-  }
+  // removed unused: _compressImage
 
   void _displayAnalysisResults(
       Map<String, dynamic> analysisData, String scanId) {
     try {
       // Track if we've already handled navigation
-      bool navigationHandled = false;
+      // navigation handled in push
 
-      // NEW FORMAT: First check for the meal_name format which is our desired format
+      // Require the expected format strictly
       if (analysisData.containsKey('meal_name')) {
         String mealName = analysisData['meal_name'];
         List<dynamic> ingredients = analysisData['ingredients'] ?? [];
+        if (ingredients.isEmpty) {
+          throw Exception('Invalid or empty ingredients in analysis data');
+        }
 
         // PRESERVE PRECISION: Use string extraction to avoid rounding
         String calories =
@@ -585,9 +440,7 @@ class _SnapFoodState extends State<SnapFood> {
             _extractNumericValue(analysisData['carbs']?.toString() ?? "0");
 
         // Only convert to double for calculations, keep strings for display
-        double caloriesDouble = double.tryParse(calories) ?? 0.0;
-        double vitaminC =
-            _extractDecimalValue(analysisData['vitamin_c']?.toString() ?? "0");
+        // parsed values used only for validation below
         String healthScore = analysisData['health_score']?.toString() ?? "5/10";
 
         // EXTRACT ALL 34 MICRONUTRIENTS FROM OPENAI RESPONSE
@@ -673,35 +526,12 @@ class _SnapFoodState extends State<SnapFood> {
           // OpenAI should now provide values in correct units, so use them directly
           correctedMicronutrients[key] = value.toString();
         });
-        print('⚗️ MINERALS:');
-        [
-          'calcium',
-          'chloride',
-          'chromium',
-          'copper',
-          'fluoride',
-          'iodine',
-          'iron',
-          'magnesium',
-          'manganese',
-          'molybdenum',
-          'phosphorus',
-          'potassium',
-          'selenium',
-          'sodium',
-          'zinc'
-        ].forEach((key) {
-          if (correctedMicronutrients.containsKey(key)) {
-            print(
-                '  • $key: ${correctedMicronutrients[key]}${_getUnitForMineral(key)}');
-          }
-        });
-        print('🔧 ================================================\n');
+        // no terminal output
 
         // Save the data
         List<Map<String, dynamic>> ingredientsList = [];
 
-        // Check if the new OpenAI response format has ingredients as objects with nutrition data
+        // Expect ingredients as objects with nutrition data
         if (analysisData['ingredients'] is List) {
           List<dynamic> ingredientsFromAPI = analysisData['ingredients'];
 
@@ -725,40 +555,13 @@ class _SnapFoodState extends State<SnapFood> {
               };
 
               ingredientsList.add(processedIngredient);
-            } else if (ingredientData is String) {
-              // Handle old string format as fallback
-              Map<String, dynamic> processedIngredient = {
-                'name': ingredientData,
-                'amount': '100g',
-                'calories': 50, // Default fallback
-                'protein': 2.0,
-                'fat': 1.0,
-                'carbs': 10.0,
-              };
-
-              ingredientsList.add(processedIngredient);
+            } else {
+              throw Exception('Invalid ingredient data format');
             }
           }
-        } else if (ingredients.isNotEmpty) {
-          // Fallback: Use the old string processing method
-          for (int i = 0; i < ingredients.length; i++) {
-            String ingredient = ingredients[i];
-
-            // Use more reasonable fallback values instead of the terrible estimates
-            Map<String, dynamic> processedIngredient = {
-              'name': ingredient,
-              'amount': '100g',
-              'calories': 50, // More reasonable default
-              'protein': 2.0, // More reasonable protein
-              'fat': 1.0, // More reasonable fat
-              'carbs': 10.0, // More reasonable carbs
-            };
-
-            ingredientsList.add(processedIngredient);
-          }
+        } else {
+          throw Exception('Invalid ingredients format');
         }
-
-
 
         // Pass the scanId to _saveFoodCardData - this ensures consistent ID usage
         _saveFoodCardData(
@@ -774,66 +577,22 @@ class _SnapFoodState extends State<SnapFood> {
           correctedMicronutrients, // Pass unit-corrected micronutrients
         );
 
-        // Mark navigation as handled
-        navigationHandled = true;
+        // navigation complete
+      } else {
+        throw Exception('Unexpected analysis format');
       }
-
-      // Rest of the method remains the same...
     } catch (e) {
-      // Even if there's an error, try to navigate with default values
-      if (mounted && _analysisResult != null) {
-        _saveFoodCardData(
-          "Analyzed Meal",
-          "Mixed ingredients",
-          "250",
-          "15",
-          "10",
-          "30",
-          [
-            {
-              'name': "Unidentified ingredient",
-              'amount': "100g",
-              'calories': 250,
-              'protein': 15.0,
-              'fat': 10.0,
-              'carbs': 30.0,
-            }
-          ],
-          "5/10",
-          scanId,
-          {}, // Empty micronutrients for error case
-        );
+      // On any error, show error and return
+      if (mounted) {
+        _showCustomDialog('Analysis Error',
+            'Invalid analysis data received. Please try again.');
+        Navigator.of(context).pop();
       }
     }
   }
 
   // Helper method to extract nutrient values from a map, filtering by threshold
-  void _extractNutrientValues(
-      Map<String, dynamic> source, Map<String, double> target) {
-    source.forEach((key, value) {
-      double numValue = 0.0;
-
-      // Handle different value types
-      if (value is String) {
-        numValue = double.tryParse(value) ?? 0.0;
-      } else if (value is num) {
-        numValue = value.toDouble();
-      } else if (value is Map && value.containsKey('amount')) {
-        // Handle nested structure like {amount: 1.2}
-        var amountValue = value['amount'];
-        if (amountValue is String) {
-          numValue = double.tryParse(amountValue) ?? 0.0;
-        } else if (amountValue is num) {
-          numValue = amountValue.toDouble();
-        }
-      }
-
-      // Only add values >= 0.4
-      if (numValue >= 0.4) {
-        target[key] = numValue;
-      }
-    });
-  }
+  // removed unused: _extractNutrientValues
 
   // Helper method to extract numeric value from a string, preserving decimal places
   String _extractNumericValue(String input) {
@@ -852,33 +611,16 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   // Helper method to extract numeric value from a string and convert to int (only when needed)
-  int _extractNumericValueAsInt(String input) {
-    final numericRegex = RegExp(r'(\d+(?:\.\d+)?)');
-    final match = numericRegex.firstMatch(input);
-    if (match != null && match.group(1) != null) {
-      final value = double.tryParse(match.group(1)!);
-      if (value != null) {
-        return value.round(); // Round to nearest integer
-      }
-    }
-    return 0;
-  }
+  // removed unused: _extractNumericValueAsInt
 
   // Helper method to extract numeric value with decimal places from a string - PRESERVE PRECISION
+  // ignore: unused_element
   double _extractDecimalValue(String input) {
-    final numericRegex = RegExp(r'(\d+(?:\.\d+)?)');
-    final match = numericRegex.firstMatch(input);
-    if (match != null && match.group(1) != null) {
-      return double.tryParse(match.group(1)!) ?? 0.0;
-    }
     return 0.0;
   }
 
   // Gets exact raw calorie value as double (not integer) to preserve precision
-  double _getRawCalorieValue(double calories) {
-    // Return exact value without any rounding
-    return calories;
-  }
+  // removed unused: _getRawCalorieValue
 
   // Save food card data to SharedPreferences
   Future<void> _saveFoodCardData(
@@ -902,10 +644,7 @@ class _SnapFoodState extends State<SnapFood> {
       throw StateError('SnapFood: Generated scanId cannot be empty');
     }
 
-    print('🔒 SNAPFOOD: Generated UNIQUE scanId: "$finalScanId"');
-    print('🔒 SNAPFOOD: This scanId will be used throughout the entire flow');
-
-    // Use provided micronutrients or empty map as fallback
+    // Use provided micronutrients or empty map
     final Map<String, dynamic> finalMicronutrients = micronutrients ?? {};
 
     // Get the current image bytes - use original without compression
@@ -1055,19 +794,15 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   // Test the echo function to verify callable functions work
-  Future<void> _testEchoFunction() async {
-    // Function logic removed
-  }
+  // removed unused: _testEchoFunction
 
   // Test the simple image analyzer function
-  Future<void> _testSimpleImageAnalyzer() async {
-    // Function logic removed
-  }
+  // removed unused: _testSimpleImageAnalyzer
 
   @override
   Widget build(BuildContext context) {
     // Process pending analysis only once
-    if (_pendingAnalysis && _mostRecentImage != null) {
+    if (_pendingAnalysis) {
       _pendingAnalysis = false;
       // Use Future.microtask to avoid blocking the UI thread
       Future.microtask(() => _analyzeImage(_mostRecentImage));
@@ -1389,88 +1124,25 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   // Helper method to get optimized image bytes for local analysis
-  Future<Uint8List> _optimizeImageBytes(Uint8List imageBytes) async {
-    // No optimization needed - return original
-    return imageBytes;
-  }
+  // removed unused: _optimizeImageBytes
 
   // Compress image and convert to base64
-  Future<String> _compressAndConvertToBase64(Uint8List imageBytes) async {
-    // No compression - convert original to base64
-    return base64Encode(imageBytes);
-  }
+  // removed unused: _compressAndConvertToBase64
 
   // Helper method for optimizing single image bytes
-  Future<Uint8List> _optimizeSingleImage(
-    Uint8List bytes, {
-    int targetWidth = 800,
-    int quality = 85,
-  }) async {
-    // No optimization - return original
-    return bytes;
-  }
+  // removed unused: _optimizeSingleImage
 
   // Handle Uint8List compression consistently
-  Future<Uint8List> _compressBytesConsistently(
-    Uint8List bytes, {
-    int quality = 85,
-    int targetWidth = 800,
-  }) async {
-    // No compression - return original
-    return bytes;
-  }
+  // removed unused: _compressBytesConsistently
 
   // Web-specific function to compress images using canvas
-  Future<Uint8List> _compressWebImageWithCanvas(
-      Uint8List imageData, int maxDimension) async {
-    // No compression - return original
-    return imageData;
-  }
+  // removed unused: _compressWebImageWithCanvas
 
   // Helper method to prepare an image for analysis when only file/bytes are available
-  void _prepareImageForAnalysis() async {
-    // Create an XFile from the available image source
-    XFile? fileToAnalyze;
-
-    try {
-      if (_imageFile != null) {
-        // Mobile platform with File
-        fileToAnalyze = XFile(_imageFile!.path);
-      } else if (_webImageBytes != null && kIsWeb) {
-        // For web, we need to handle this differently
-        // Create a data URL and set it as webImagePath
-        final base64Image = base64Encode(_webImageBytes!);
-        final dataUrl = 'data:image/jpeg;base64,$base64Image';
-        fileToAnalyze = XFile(dataUrl);
-      } else if (_webImagePath != null) {
-        // Web platform with path
-        fileToAnalyze = XFile(_webImagePath!);
-      }
-
-      if (fileToAnalyze != null) {
-        setState(() {
-          _isAnalyzing = true;
-          _mostRecentImage = fileToAnalyze;
-        });
-        await _analyzeImage(fileToAnalyze);
-      } else {
-        _showCustomDialog('Error', 'No image available to analyze');
-      }
-    } catch (e) {
-      _showCustomDialog('Error', 'Error preparing image: ${e.toString()}');
-    }
-  }
+  // removed unused: _prepareImageForAnalysis
 
   // Helper method to reduce image size on web platforms
-  Future<Uint8List> _reduceImageSizeForWeb(
-      Uint8List originalBytes, int targetWidth) async {
-    if (!kIsWeb) {
-      return originalBytes; // Only for web
-    }
-
-    // No compression - return original
-    return originalBytes;
-  }
+  // removed unused: _reduceImageSizeForWeb
 
   // Custom styled dialog to show messages - replaces all SnackBars
   void _showCustomDialog(String title, String message) {
@@ -1531,62 +1203,7 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   // Show any error alerts with proper styling
-  void _showErrorAlert(String message) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 24.0, horizontal: 20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Analysis Error",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 18.0,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 16.0),
-                Text(
-                  message,
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.normal,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 20.0),
-                TextButton(
-                  child: Text(
-                    "OK",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 16.0,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // removed unused: _showErrorAlert
 
   void _showUnsupportedPlatformDialog() {
     showDialog(
@@ -1645,62 +1262,9 @@ class _SnapFoodState extends State<SnapFood> {
     );
   }
 
-  void _showCameraErrorDialog() {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 24.0, horizontal: 20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Camera Error",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 18.0,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 16.0),
-                Text(
-                  "There was an error accessing the camera. Please check your camera permissions and try again.",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.normal,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 20.0),
-                TextButton(
-                  child: Text(
-                    "OK",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 16.0,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // removed unused: _showCameraErrorDialog
+  // ignore: unused_element
+  void _showCameraErrorDialog() {}
 
   // Helper method to check if we have an image
   bool get _hasImage =>
@@ -1741,10 +1305,7 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   // Format the analysis results for display
-  String _formatAnalysisResult(Map<String, dynamic> analysis) {
-    // This is no longer used for displaying UI, but we keep it for compatibility
-    return "";
-  }
+  // removed unused: _formatAnalysisResult
 
   // Helper method to determine unit for a vitamin
   String _getUnitForVitamin(String vitaminName) {
@@ -1840,58 +1401,7 @@ class _SnapFoodState extends State<SnapFood> {
   }
 
   // Helper method to extract nutrients from ingredients list
-  Map<String, dynamic> _extractNutrientsFromIngredients(
-      List<Map<String, dynamic>> ingredientsList) {
-    Map<String, dynamic> nutrients = {};
-
-    // Aggregate vitamins and minerals from all ingredients
-    for (var ingredient in ingredientsList) {
-      // Extract vitamins
-      if (ingredient.containsKey('vitamins') && ingredient['vitamins'] is Map) {
-        Map<String, dynamic> vitamins =
-            Map<String, dynamic>.from(ingredient['vitamins']);
-        vitamins.forEach((key, value) {
-          String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
-          double currentValue =
-              double.tryParse(nutrients[normalizedKey]?.toString() ?? '0') ??
-                  0.0;
-          double newValue = double.tryParse(value.toString()) ?? 0.0;
-          nutrients[normalizedKey] = (currentValue + newValue).toString();
-        });
-      }
-
-      // Extract minerals
-      if (ingredient.containsKey('minerals') && ingredient['minerals'] is Map) {
-        Map<String, dynamic> minerals =
-            Map<String, dynamic>.from(ingredient['minerals']);
-        minerals.forEach((key, value) {
-          String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
-          double currentValue =
-              double.tryParse(nutrients[normalizedKey]?.toString() ?? '0') ??
-                  0.0;
-          double newValue = double.tryParse(value.toString()) ?? 0.0;
-          nutrients[normalizedKey] = (currentValue + newValue).toString();
-        });
-      }
-
-      // Extract other nutrients
-      if (ingredient.containsKey('other') && ingredient['other'] is Map) {
-        Map<String, dynamic> other =
-            Map<String, dynamic>.from(ingredient['other']);
-        other.forEach((key, value) {
-          String normalizedKey = key.toLowerCase().replaceAll(' ', '_');
-          double currentValue =
-              double.tryParse(nutrients[normalizedKey]?.toString() ?? '0') ??
-                  0.0;
-          double newValue = double.tryParse(value.toString()) ?? 0.0;
-          nutrients[normalizedKey] = (currentValue + newValue).toString();
-        });
-      }
-    }
-
-    print("Extracted nutrients from ingredients list: $nutrients");
-    return nutrients;
-  }
+  // removed unused: _extractNutrientsFromIngredients
 
   // Helper method to build corner frames
   Widget _buildCornerFrame({
@@ -1921,13 +1431,11 @@ class _SnapFoodState extends State<SnapFood> {
       const int maxSizeBytes = 700 * 1024; // 0.7MB (700KB)
 
       if (imageBytes.length <= maxSizeBytes) {
-        print(
-            'Image already below 0.7MB (${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)}MB), no compression needed');
+        // silent
         return imageBytes; // Already small enough
       }
 
-      print(
-          'Image too large (${(imageBytes.length / 1024 / 1024).toStringAsFixed(1)}MB), compressing...');
+      // silent
 
       // Use the proper compression function that already exists
       // This uses proper image compression algorithms instead of corrupting the data
@@ -1938,11 +1446,10 @@ class _SnapFoodState extends State<SnapFood> {
         targetSizeBytes: 716800, // 700KB target
       );
 
-      print(
-          'Compressed to ${(compressed.length / 1024 / 1024).toStringAsFixed(1)}MB');
+      // silent
       return compressed;
     } catch (e) {
-      print('Compression failed: $e, using original');
+      // silent
       return imageBytes; // Return original on error
     }
   }
@@ -1979,20 +1486,7 @@ class _SnapFoodState extends State<SnapFood> {
   Future<void> _saveScanDataToNutritionManager(
       String scanId, Map<String, dynamic> micronutrients) async {
     try {
-      // ═══════════════════════════════════════════════════════════════
-      // QUESTION 6: Is data saved using the SAME scanId that nutrition.dart expects?
-      // ═══════════════════════════════════════════════════════════════
-      print('💾 === QUESTION 6: SNAPFOOD SAVE SCANID INVESTIGATION ===');
-      print('💾 SnapFood saving with scanId: "$scanId"');
-      print('💾 ScanId type: ${scanId.runtimeType}');
-      print('💾 ScanId length: ${scanId.length}');
-      print('💾 ScanId isEmpty: ${scanId.isEmpty}');
-      print('💾 Micronutrients count: ${micronutrients.length}');
-      print('💾 Micronutrients keys: ${micronutrients.keys.toList()}');
-      print(
-          '💾 This scanId will be used for NutritionDataManager.storeNutritionData()');
-      print(
-          '💾 ANSWER 6: SnapFood is saving with scanId "$scanId" - verify this matches nutrition.dart expectation');
+      // silent
 
       // Initialize the NutritionDataManager if not already done
       await NutritionDataManager.initialize();
@@ -2046,22 +1540,14 @@ class _SnapFoodState extends State<SnapFood> {
         }
       });
 
-      // Store the data permanently
-      print(
-          '💾 SNAPFOOD: About to call NutritionDataManager.storeNutritionData()');
-      print('💾 SNAPFOOD: Final scanId being passed: "$scanId"');
-      print('💾 SNAPFOOD: Vitamins count: ${vitamins.length}');
-      print('💾 SNAPFOOD: Minerals count: ${minerals.length}');
-      print('💾 SNAPFOOD: Other count: ${other.length}');
+      // Store the data permanently (silent)
 
       await NutritionDataManager.storeNutritionData(
           scanId, vitamins, minerals, other);
 
-      print(
-          '✅ SNAPFOOD: Successfully saved ${vitamins.length + minerals.length + other.length} nutrients to permanent storage');
-      print('✅ SNAPFOOD: Storage completed for scanId: "$scanId"');
+      // silent
     } catch (e) {
-      print('❌ SNAPFOOD: Error saving scan data: $e');
+      // silent
     }
   }
 
