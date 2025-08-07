@@ -2679,7 +2679,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     try {
       if (widget.additionalNutrients == null || widget.scanId == null) return;
 
-          // Saving nutrition data
+      // Saving nutrition data
       print(
           '💾 Additional Nutrients: ${widget.additionalNutrients!.keys.toList()}');
 
@@ -2743,7 +2743,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         throw ArgumentError('FoodCardOpen: Cannot save with empty scanId');
       }
 
-          // Processing nutrition data
+      // Processing nutrition data
 
       await nutrition.NutritionDataManager.storeNutritionData(
           widget.scanId, vitamins, minerals, other);
@@ -5025,15 +5025,37 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         widget.carbs != null &&
         widget.carbs!.isNotEmpty;
 
-    // NEW LOGIC: Always calculate from ingredients if there are multiple ingredients
-    // OR if there's no API data OR if user has made changes
+    // Prefer trusted API totals when ingredient macros are missing or zero
+    bool allIngredientMacrosMissing = _ingredients.isNotEmpty &&
+        _ingredients.every((ing) {
+          final p = ing['protein'];
+          final f = ing['fat'];
+          final c = ing['carbs'];
+          double toNum(v) {
+            if (v is num) return v.toDouble();
+            if (v is String) return double.tryParse(v) ?? 0;
+            return 0;
+          }
+          return toNum(p) == 0 && toNum(f) == 0 && toNum(c) == 0;
+        });
+
+    // If API totals exist and user hasn't edited, use them regardless of ingredient count
+    if (hasApiData && !_hasUnsavedChanges && allIngredientMacrosMissing) {
+      setState(() {
+        _calories = widget.calories!;
+        _protein = widget.protein!;
+        _fat = widget.fat!;
+        _carbs = widget.carbs!;
+      });
+      return;
+    }
+
+    // Otherwise, calculate from ingredients if data exists or if no API data
     bool shouldCalculateFromIngredients =
-        _ingredients.length > 1 || !hasApiData || _hasUnsavedChanges;
+        _ingredients.isNotEmpty && (!hasApiData || _hasUnsavedChanges || !allIngredientMacrosMissing);
 
     if (!shouldCalculateFromIngredients) {
-      // We have fresh API data from a single ingredient and user hasn't made changes - use API values
-      print(
-          'Using API nutrition values for single ingredient, not calculating from ingredients');
+      // No reliable ingredient macros and no user edits; hold current values
       return;
     }
 
@@ -8375,7 +8397,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         print(
             '⚠️ No stored micronutrients found or widget.additionalNutrients is null. Clearing existing.');
         if (widget.additionalNutrients != null) {
-          widget.additionalNutrients!.clear(); // Ensure it's empty if no data loaded
+          widget.additionalNutrients!
+              .clear(); // Ensure it's empty if no data loaded
         }
       }
     } catch (e) {
