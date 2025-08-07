@@ -11,6 +11,9 @@ const MICRONUTRIENT_SCHEMA = {
       "name": "string",
       "weight_g": "number",
       "kcal": "number",
+      "protein_g": "number",
+      "fat_g": "number",
+      "carbs_g": "number",
       "micronutrients": {
         "vitaminA_mcg": "number", // µg
         "vitaminC_mg": "number", // mg
@@ -344,6 +347,36 @@ function validateAndProcessNutritionData(data) {
   });
 
   // Use calculated totals to ensure accuracy with correct units
+  // If the model already provided totals, prefer them when our sums are zero
+  if (data.totals && typeof data.totals === 'object') {
+    const t = data.totals;
+    const useIfNumber = (val, fallback) => (typeof val === 'number' && !Number.isNaN(val) ? val : fallback);
+    if (calculatedTotals.calories === 0) calculatedTotals.calories = useIfNumber(t.calories, 0);
+    if (calculatedTotals.protein_g === 0) calculatedTotals.protein_g = useIfNumber(t.protein_g, 0);
+    if (calculatedTotals.fat_g === 0) calculatedTotals.fat_g = useIfNumber(t.fat_g, 0);
+    if (calculatedTotals.carbs_g === 0) calculatedTotals.carbs_g = useIfNumber(t.carbs_g, 0);
+    // Vitamins
+    const vKeys = [
+      'vitaminA_mcg','vitaminC_mg','vitaminD_mcg','vitaminE_mg','vitaminK_mcg',
+      'vitaminB1_mg','vitaminB2_mg','vitaminB3_mg','vitaminB5_mg','vitaminB6_mg',
+      'vitaminB7_mcg','vitaminB9_mcg','vitaminB12_mcg'
+    ];
+    vKeys.forEach(k => {
+      if (calculatedTotals[k] === 0) {
+        calculatedTotals[k] = useIfNumber(t[k], 0);
+      }
+    });
+    // Minerals
+    if (t.minerals && typeof t.minerals === 'object') {
+      const m = t.minerals;
+      Object.keys(calculatedTotals.minerals).forEach(mk => {
+        if (calculatedTotals.minerals[mk] === 0) {
+          calculatedTotals.minerals[mk] = useIfNumber(m[mk], 0);
+        }
+      });
+    }
+  }
+
   return {
     ingredients: data.ingredients,
     totals: calculatedTotals
@@ -391,14 +424,54 @@ async function analyzeNutrition(imageBase64) {
     carbs: totals.carbs_g || 0,
   };
 
-  // Optionally surface some minerals/vitamins if present in totals to help downstream consumers
+  // Flatten vitamins into snake_case keys expected by the Flutter app
+  const vitaminMap = {
+    vitaminA_mcg: 'vitamin_a',
+    vitaminC_mg: 'vitamin_c',
+    vitaminD_mcg: 'vitamin_d',
+    vitaminE_mg: 'vitamin_e',
+    vitaminK_mcg: 'vitamin_k',
+    vitaminB1_mg: 'vitamin_b1',
+    vitaminB2_mg: 'vitamin_b2',
+    vitaminB3_mg: 'vitamin_b3',
+    vitaminB5_mg: 'vitamin_b5',
+    vitaminB6_mg: 'vitamin_b6',
+    vitaminB7_mcg: 'vitamin_b7',
+    vitaminB9_mcg: 'vitamin_b9',
+    vitaminB12_mcg: 'vitamin_b12',
+  };
+
+  Object.entries(vitaminMap).forEach(([from, to]) => {
+    if (totals[from] != null) {
+      response[to] = totals[from];
+    }
+  });
+
+  // Flatten minerals
   if (totals.minerals && typeof totals.minerals === 'object') {
     const m = totals.minerals;
-    if (m.calcium_mg != null) response.calcium = m.calcium_mg;
-    if (m.iron_mg != null) response.iron = m.iron_mg;
-    if (m.potassium_mg != null) response.potassium = m.potassium_mg;
-    if (m.sodium_mg != null) response.sodium = m.sodium_mg;
-    if (m.zinc_mg != null) response.zinc = m.zinc_mg;
+    const mineralMap = {
+      calcium_mg: 'calcium',
+      chloride_mg: 'chloride',
+      chromium_mcg: 'chromium',
+      copper_mg: 'copper',
+      fluoride_mg: 'fluoride',
+      iodine_mcg: 'iodine',
+      iron_mg: 'iron',
+      magnesium_mg: 'magnesium',
+      manganese_mg: 'manganese',
+      molybdenum_mcg: 'molybdenum',
+      phosphorus_mg: 'phosphorus',
+      potassium_mg: 'potassium',
+      selenium_mcg: 'selenium',
+      sodium_mg: 'sodium',
+      zinc_mg: 'zinc',
+    };
+    Object.entries(mineralMap).forEach(([from, to]) => {
+      if (m[from] != null) {
+        response[to] = m[from];
+      }
+    });
   }
 
   return response;
