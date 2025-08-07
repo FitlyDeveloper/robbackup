@@ -175,7 +175,7 @@ CRITICAL UNIT RULES:
 - Vitamin A, D, K, B7, B9, B12: Use µg (micrograms)
 - Vitamin C, E, B1, B2, B3, B5, B6: Use mg (milligrams)
 - Minerals chromium, iodine, molybdenum, selenium: Use µg (micrograms)
-- All other minerals: Use mg (milligrams)
+- All other minerals: Use mg (milligrams)r
 
 Use temperature: 0 and response_format: "json" so the API returns parsed JSON.`;
 
@@ -351,9 +351,63 @@ function validateAndProcessNutritionData(data) {
 }
 
 // Export for use in server
+// High-level function expected by server.js
+// Adapts OpenAI vision output into the client schema used by the Flutter app
+async function analyzeNutrition(imageBase64) {
+  const visionData = await analyzeImageWithOpenAI(imageBase64);
+  // visionData shape: { ingredients: [...], totals: { calories, protein_g, fat_g, carbs_g, minerals:{...}, vitamins... } }
+
+  const ingredients = Array.isArray(visionData.ingredients) ? visionData.ingredients : [];
+
+  const mappedIngredients = ingredients.map((ing) => {
+    const weight = ing.weight_g || 100;
+    const name = ing.name || 'Ingredient';
+    const calories = Math.round(ing.kcal || 0);
+    const protein = typeof ing.protein_g === 'number' ? ing.protein_g : 0;
+    const fat = typeof ing.fat_g === 'number' ? ing.fat_g : 0;
+    const carbs = typeof ing.carbs_g === 'number' ? ing.carbs_g : 0;
+    return {
+      name,
+      amount: `${weight}g`,
+      calories,
+      protein,
+      fat,
+      carbs,
+    };
+  });
+
+  // Create a compact meal name
+  const meal_name = mappedIngredients.length > 0
+    ? mappedIngredients.slice(0, 2).map(i => i.name).join(' + ')
+    : 'Analyzed Meal';
+
+  const totals = visionData.totals || {};
+  const response = {
+    meal_name,
+    ingredients: mappedIngredients,
+    calories: totals.calories || 0,
+    protein: totals.protein_g || 0,
+    fat: totals.fat_g || 0,
+    carbs: totals.carbs_g || 0,
+  };
+
+  // Optionally surface some minerals/vitamins if present in totals to help downstream consumers
+  if (totals.minerals && typeof totals.minerals === 'object') {
+    const m = totals.minerals;
+    if (m.calcium_mg != null) response.calcium = m.calcium_mg;
+    if (m.iron_mg != null) response.iron = m.iron_mg;
+    if (m.potassium_mg != null) response.potassium = m.potassium_mg;
+    if (m.sodium_mg != null) response.sodium = m.sodium_mg;
+    if (m.zinc_mg != null) response.zinc = m.zinc_mg;
+  }
+
+  return response;
+}
+
 module.exports = {
   analyzeImageWithOpenAI,
   validateAndProcessNutritionData,
   MICRONUTRIENT_SCHEMA,
-  SYSTEM_PROMPT
-}; 
+  SYSTEM_PROMPT,
+  analyzeNutrition,
+};
