@@ -213,15 +213,15 @@ async function analyzeImageWithOpenAI(imageBase64) {
       name: 'ImageNutrition',
       schema: {
         type: 'object',
-        additionalProperties: true,
+        additionalProperties: false,
         properties: {
           meal_name: { type: 'string' },
           ingredients: {
             type: 'array',
             minItems: 1,
             items: {
-              type: 'object',
-              additionalProperties: true,
+            type: 'object',
+            additionalProperties: false,
               properties: {
                 name: { type: 'string' },
                 weight_g: { type: 'number' },
@@ -229,22 +229,22 @@ async function analyzeImageWithOpenAI(imageBase64) {
                 protein_g: { type: 'number' },
                 fat_g: { type: 'number' },
                 carbs_g: { type: 'number' },
-                micronutrients: { type: 'object', additionalProperties: true }
+              micronutrients: { type: 'object', additionalProperties: false }
               },
               required: ['name', 'weight_g', 'kcal']
             }
           },
           totals: {
-            type: 'object',
-            additionalProperties: true,
+          type: 'object',
+          additionalProperties: false,
             properties: {
               calories: { type: 'number' },
               protein_g: { type: 'number' },
               fat_g: { type: 'number' },
               carbs_g: { type: 'number' },
-              vitamins: { type: 'object', additionalProperties: true },
-              minerals: { type: 'object', additionalProperties: true },
-              other: { type: 'object', additionalProperties: true }
+            vitamins: { type: 'object', additionalProperties: false },
+            minerals: { type: 'object', additionalProperties: false },
+            other: { type: 'object', additionalProperties: false }
             },
             required: ['calories', 'protein_g', 'fat_g', 'carbs_g']
           }
