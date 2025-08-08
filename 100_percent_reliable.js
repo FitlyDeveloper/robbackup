@@ -314,24 +314,34 @@ async function analyzeImageWithOpenAI(imageBase64) {
 
     const content = data.choices[0].message.content;
     
-    // Parse with number sanitizer first; then robust cleanup + repair fallback
-    function sanitizeJsonNumbers(s) {
-      s = s.replace(/(:\s*)(-?\d+)\.(\s*[,}])/g, (_, a, n, b) => `${a}${n}.0${b}`);
-      s = s.replace(/(:\s*)\.(\d+)/g, (_, a, d) => `${a}0.${d}`);
-      s = s.replace(/,\s*([}\]])/g, '$1');
-      return s;
-    }
+    // Full sanitizer: slice outer JSON, fix numbers, missing commas, and repair
     function sliceOuterJson(s){
       const start = s.indexOf('{');
       const end = s.lastIndexOf('}');
       return start >= 0 && end > start ? s.slice(start, end + 1) : s;
     }
+    function sanitizeJson(s){
+      s = sliceOuterJson(s);
+      // Fix 0. -> 0.0
+      s = s.replace(/(:\s*)(-?\d+)\.(\s*[,}])/g, (_, a, n, b) => `${a}${n}.0${b}`);
+      // Fix .5 -> 0.5
+      s = s.replace(/(:\s*)\.(\d+)/g, (_, a, d) => `${a}0.${d}`);
+      // Remove trailing commas
+      s = s.replace(/,\s*([}\]])/g, '$1');
+      // Insert missing commas between a value and the next quoted key
+      s = s.replace(/([0-9}\]truefalsenull"])(\s*)("[-_A-Za-z0-9]+"\s*:)/g, '$1,$3');
+      // Kill NaN/Infinity just in case
+      s = s.replace(/\bNaN\b/g, '0').replace(/\bInfinity\b/g, '0');
+      // Final robust repair
+      try { s = jsonrepair(s); } catch {}
+      return s;
+    }
     let parsedData;
     try {
-      parsed = sanitizeJsonNumbers(sliceOuterJson(content));
-      parsedData = JSON.parse(parsed);
+      const cleaned0 = sanitizeJson(content);
+      parsedData = JSON.parse(cleaned0);
     } catch (e) {
-      let cleaned = sanitizeJsonNumbers(sliceOuterJson(content.trim()
+      let cleaned = sanitizeJson(content.trim()
         .replace(/^```json\s*/i, '')
         .replace(/^```/, '')
         .replace(/```\s*$/,'')));
@@ -341,7 +351,6 @@ async function analyzeImageWithOpenAI(imageBase64) {
       cleaned = cleaned.replace(/([\{,]\s*)([^"\{\}\[\]\s][^:\s]*)\s*:/g, function(_, prefix, key){
         return prefix + '"' + key.replace(/"/g,'') + '":';
       });
-      // Final repair pass
       try { cleaned = jsonrepair(cleaned); } catch {}
       try {
         parsedData = JSON.parse(cleaned);
