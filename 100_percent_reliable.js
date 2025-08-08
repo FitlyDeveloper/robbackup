@@ -87,7 +87,7 @@ const MICRONUTRIENT_SCHEMA = {
 };
 
 // Strict JSON-only system prompt with correct units
-const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an image, respond with valid JSON and nothing else. Use this exact schema, and ensure that each micronutrient uses the correct unit (µg or mg) as specified:
+const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an image, respond with valid JSON and nothing else. Use this exact schema, and ensure that each micronutrient uses the correct unit (µg or mg) as specified. IMPORTANT: include macronutrients (protein_g, fat_g, carbs_g) for EACH ingredient and also in totals.
 
 {
   "ingredients": [
@@ -95,6 +95,9 @@ const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an imag
       "name": "string",
       "weight_g": number,
       "kcal": number,
+      "protein_g": number,
+      "fat_g": number,
+      "carbs_g": number,
       "micronutrients": {
         "vitaminA_mcg": number, // µg
         "vitaminC_mg": number, // mg
@@ -178,7 +181,7 @@ CRITICAL UNIT RULES:
 - Vitamin A, D, K, B7, B9, B12: Use µg (micrograms)
 - Vitamin C, E, B1, B2, B3, B5, B6: Use mg (milligrams)
 - Minerals chromium, iodine, molybdenum, selenium: Use µg (micrograms)
-- All other minerals: Use mg (milligrams)r
+- All other minerals: Use mg (milligrams)
 
 Use temperature: 0 and response_format: "json" so the API returns parsed JSON.`;
 
