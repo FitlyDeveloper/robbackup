@@ -264,6 +264,8 @@ async function analyzeImageWithOpenAI(imageBase64) {
         .replace(/^```json\s*/i, '')
         .replace(/^```/, '')
         .replace(/```\s*$/,'');
+      // Remove any raw newlines that can split property names (e.g., "vitaminB3_\nmg")
+      cleaned = cleaned.replace(/\r?\n/g, '');
       // Replace numbers like 1. or 0. (trailing decimal) with 1.0 / 0.0
       cleaned = cleaned.replace(/(\d+)\.(?=[^0-9])/g, '$1.0');
       cleaned = cleaned.replace(/(\d+)\.(\s*[}\]])/g, '$1.0$2');
@@ -271,6 +273,12 @@ async function analyzeImageWithOpenAI(imageBase64) {
       cleaned = cleaned.replace(/(^|[^0-9])\.(\d+)/g, '$10.$2');
       // Remove trailing commas before closing braces/brackets
       cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+      // Fix split identifiers like vitaminB3_mg broken by whitespace/newlines around the underscore
+      cleaned = cleaned.replace(/(vitaminB[1-9])\s*_\s*mg/g, '$1_mg');
+      cleaned = cleaned.replace(/(vitamin[ADKE])\s*_\s*mcg/g, '$1_mcg');
+      cleaned = cleaned.replace(/(omega)\s*_\s*3\s*_\s*mg/g, 'omega_3_mg');
+      cleaned = cleaned.replace(/(omega)\s*_\s*6\s*_\s*g/g, 'omega_6_g');
+      cleaned = cleaned.replace(/(saturated)\s*_\s*(fats)\s*_\s*g/g, 'saturated_fats_g');
       // Ensure double-quoted property names if model omitted quotes
       cleaned = cleaned.replace(/([\{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
       // Convert single-quoted strings to double quotes
