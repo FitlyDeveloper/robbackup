@@ -474,6 +474,24 @@ async function analyzeNutrition(imageBase64) {
     });
   }
 
+  // Guarantee per-ingredient macros for client UI. If ingredient macros are all
+  // zero/missing but meal totals exist, distribute totals by ingredient calories.
+  const totalCalories = mappedIngredients.reduce((s, i) => s + (i.calories || 0), 0) || 1;
+  const sumP = mappedIngredients.reduce((s, i) => s + (i.protein || 0), 0);
+  const sumF = mappedIngredients.reduce((s, i) => s + (i.fat || 0), 0);
+  const sumC = mappedIngredients.reduce((s, i) => s + (i.carbs || 0), 0);
+  const needP = sumP === 0 && (response.protein || 0) > 0;
+  const needF = sumF === 0 && (response.fat || 0) > 0;
+  const needC = sumC === 0 && (response.carbs || 0) > 0;
+  if (needP || needF || needC) {
+    mappedIngredients.forEach(ing => {
+      const share = (ing.calories || 0) / totalCalories;
+      if (needP) ing.protein = +(response.protein * share).toFixed(1);
+      if (needF) ing.fat = +(response.fat * share).toFixed(1);
+      if (needC) ing.carbs = +(response.carbs * share).toFixed(1);
+    });
+  }
+
   return response;
 }
 
