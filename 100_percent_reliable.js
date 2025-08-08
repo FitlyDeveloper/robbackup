@@ -258,7 +258,7 @@ async function analyzeImageWithOpenAI(imageBase64) {
       model: 'gpt-4o-mini',
       temperature: 0,
       max_tokens: 2000,
-      response_format: { type: 'json_schema', json_schema: RESPONSE_JSON_SCHEMA },
+      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
