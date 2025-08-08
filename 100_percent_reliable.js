@@ -86,37 +86,6 @@ const MICRONUTRIENT_SCHEMA = {
   }
 };
 
-// JSON Schema forcing a minimal, valid structure from OpenAI to avoid parse glitches
-const RESPONSE_JSON_SCHEMA = {
-  name: 'ImageNutrition',
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      meal_name: { type: 'string' },
-      ingredients: {
-        type: 'array',
-        minItems: 1,
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            name: { type: 'string' },
-            weight_g: { type: 'number' },
-            calories: { type: 'number' },
-            protein_g: { type: 'number' },
-            fat_g: { type: 'number' },
-            carbs_g: { type: 'number' }
-          },
-          required: ['name', 'weight_g', 'calories']
-        }
-      }
-    },
-    required: ['ingredients']
-  },
-  strict: true
-};
-
 // Strict JSON-only system prompt with correct units
 const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an image, respond with valid JSON and nothing else. Use this exact schema, and ensure that each micronutrient uses the correct unit (µg or mg) as specified. IMPORTANT: include macronutrients (protein_g, fat_g, carbs_g) for EACH ingredient and also in totals. ALSO include the six "Other" nutrients we track for every ingredient and in totals: fiber_g, cholesterol_mg, sugar_g, saturated_fats_g, omega_3_mg, omega_6_g.
 
@@ -243,7 +212,7 @@ async function analyzeImageWithOpenAI(imageBase64) {
       model: 'gpt-4o-mini',
       temperature: 0,
       max_tokens: 2000,
-      response_format: { type: 'json_schema', json_schema: RESPONSE_JSON_SCHEMA },
+      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
@@ -295,8 +264,10 @@ async function analyzeImageWithOpenAI(imageBase64) {
         .replace(/^```json\s*/i, '')
         .replace(/^```/, '')
         .replace(/```\s*$/,'');
-      // Remove any raw newlines that can split property names (e.g., "vitaminB3_\nmg")
+      // Remove raw newlines that can split property names (e.g., "vitaminB3_\nmg")
       cleaned = cleaned.replace(/\r?\n/g, '');
+      // Collapse whitespace around underscores in keys: "vitaminB3 _ mg" → "vitaminB3_mg"
+      cleaned = cleaned.replace(/([A-Za-z0-9])\s*_\s*([A-Za-z0-9])/g, '$1_$2');
       // Replace numbers like 1. or 0. (trailing decimal) with 1.0 / 0.0
       cleaned = cleaned.replace(/(\d+)\.(?=[^0-9])/g, '$1.0');
       cleaned = cleaned.replace(/(\d+)\.(\s*[}\]])/g, '$1.0$2');
@@ -304,12 +275,6 @@ async function analyzeImageWithOpenAI(imageBase64) {
       cleaned = cleaned.replace(/(^|[^0-9])\.(\d+)/g, '$10.$2');
       // Remove trailing commas before closing braces/brackets
       cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
-      // Fix split identifiers like vitaminB3_mg broken by whitespace/newlines around the underscore
-      cleaned = cleaned.replace(/(vitaminB[1-9])\s*_\s*mg/g, '$1_mg');
-      cleaned = cleaned.replace(/(vitamin[ADKE])\s*_\s*mcg/g, '$1_mcg');
-      cleaned = cleaned.replace(/(omega)\s*_\s*3\s*_\s*mg/g, 'omega_3_mg');
-      cleaned = cleaned.replace(/(omega)\s*_\s*6\s*_\s*g/g, 'omega_6_g');
-      cleaned = cleaned.replace(/(saturated)\s*_\s*(fats)\s*_\s*g/g, 'saturated_fats_g');
       // Ensure double-quoted property names if model omitted quotes
       cleaned = cleaned.replace(/([\{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
       // Convert single-quoted strings to double quotes
