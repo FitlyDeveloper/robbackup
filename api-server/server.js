@@ -978,7 +978,26 @@ function processVisionResponse(visionResponse) {
   };
 
   // Compute meal-level micronutrient totals from ingredients and FLATTEN
-  const sumNested = (getter) => mappedIngredients.reduce((s, ing) => {
+  // Helper: sum from mapped nested fields, with fallback to pre-mapped flat fields
+  const sumNested = (getterMapped, getterFlat) => {
+    let sum = 0;
+    // Prefer mapped ingredients (nested objects)
+    sum = mappedIngredients.reduce((s, ing) => {
+      try {
+        const v = getterMapped(ing);
+        return s + (typeof v === 'number' && !Number.isNaN(v) ? v : 0);
+      } catch { return s; }
+    }, 0);
+    if (sum > 0) return sum;
+    // Fallback: read from convertedIngredients before mapping (flat keys like 'fiber')
+    try {
+      sum = convertedIngredients.reduce((s, ing) => {
+        const v = getterFlat ? getterFlat(ing) : 0;
+        return s + (typeof v === 'number' && !Number.isNaN(v) ? v : 0);
+      }, 0);
+    } catch {}
+    return sum;
+  };
     try {
       const v = getter(ing);
       return s + (typeof v === 'number' && !Number.isNaN(v) ? v : 0);
@@ -1002,7 +1021,10 @@ function processVisionResponse(visionResponse) {
     vitamin_B12_mcg: 'vitamin_b12'
   };
   Object.entries(vitaminsMap).forEach(([nestedKey, flatKey]) => {
-    const val = sumNested(ing => ing.vitamins ? ing.vitamins[nestedKey] : 0);
+    const val = sumNested(
+      ing => ing.vitamins ? ing.vitamins[nestedKey] : 0,
+      ing => ing[nestedKey.replace(/_.+$/, '')] // rough fallback, usually 0 for vitamins
+    );
     if (val > 0) response[flatKey] = +(val.toFixed(2));
   });
 
@@ -1025,7 +1047,10 @@ function processVisionResponse(visionResponse) {
     zinc_mg: 'zinc'
   };
   Object.entries(mineralsMap).forEach(([nestedKey, flatKey]) => {
-    const val = sumNested(ing => ing.minerals ? ing.minerals[nestedKey] : 0);
+    const val = sumNested(
+      ing => ing.minerals ? ing.minerals[nestedKey] : 0,
+      ing => ing[nestedKey.replace(/_.+$/, '')]
+    );
     if (val > 0) response[flatKey] = +(val.toFixed(2));
   });
 
@@ -1039,7 +1064,14 @@ function processVisionResponse(visionResponse) {
     omega_6_g: 'omega_6'
   };
   Object.entries(otherMap).forEach(([nestedKey, flatKey]) => {
-    const val = sumNested(ing => ing.other ? ing.other[nestedKey] : 0);
+    const val = sumNested(
+      ing => ing.other ? ing.other[nestedKey] : 0,
+      ing => {
+        // Map nested key back to flat (e.g., fiber_g -> fiber)
+        const flat = nestedKey.replace(/_(g|mg)$/,'');
+        return ing[flat];
+      }
+    );
     if (val > 0) response[flatKey] = +(val.toFixed(2));
   });
 
