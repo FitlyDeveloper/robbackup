@@ -268,6 +268,10 @@ async function analyzeImageWithOpenAI(imageBase64) {
       cleaned = cleaned.replace(/(\d+)\.(?=[^0-9])/g, '$1.0');
       // Remove trailing commas before closing braces/brackets
       cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+      // Ensure double-quoted property names if model omitted quotes
+      cleaned = cleaned.replace(/([\{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+      // Convert single-quoted strings to double quotes
+      cleaned = cleaned.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
       parsedData = JSON.parse(cleaned);
     }
     
