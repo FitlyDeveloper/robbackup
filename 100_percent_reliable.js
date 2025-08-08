@@ -330,6 +330,10 @@ async function analyzeImageWithOpenAI(imageBase64) {
       s = s.replace(/,\s*([}\]])/g, '$1');
       // Insert missing commas between a value and the next quoted key
       s = s.replace(/([0-9}\]truefalsenull"])(\s*)("[-_A-Za-z0-9]+"\s*:)/g, '$1,$3');
+      // Insert missing commas between a value and the next bare key (if unquoted)
+      s = s.replace(/([0-9}\]truefalsenull"])(\s*)([A-Za-z_][-A-Za-z0-9_]*\s*:)/g, '$1,$3');
+      // Ensure comma after closing brace before next key
+      s = s.replace(/}(\s*)(?=("|[A-Za-z_][-A-Za-z0-9_]*\s*:))/g, '},');
       // Kill NaN/Infinity just in case
       s = s.replace(/\bNaN\b/g, '0').replace(/\bInfinity\b/g, '0');
       // Final robust repair
@@ -351,6 +355,9 @@ async function analyzeImageWithOpenAI(imageBase64) {
       cleaned = cleaned.replace(/([\{,]\s*)([^"\{\}\[\]\s][^:\s]*)\s*:/g, function(_, prefix, key){
         return prefix + '"' + key.replace(/"/g,'') + '":';
       });
+      // After quoting, re-run comma insertion fixes
+      cleaned = cleaned.replace(/([0-9}\]truefalsenull"])(\s*)("[-_A-Za-z0-9]+"\s*:)/g, '$1,$3');
+      cleaned = cleaned.replace(/}(\s*)(?=\"[-_A-Za-z0-9]+\"\s*:)/g, '},');
       try { cleaned = jsonrepair(cleaned); } catch {}
       try {
         parsedData = JSON.parse(cleaned);
