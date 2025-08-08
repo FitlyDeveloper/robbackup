@@ -424,6 +424,14 @@ function validateAndProcessNutritionData(data) {
       selenium_mcg: 0, // µg
       sodium_mg: 0, // mg
       zinc_mg: 0 // mg
+    },
+    other: {
+      fiber_g: 0,
+      cholesterol_mg: 0,
+      sugar_g: 0,
+      saturated_fats_g: 0,
+      omega_3_mg: 0,
+      omega_6_g: 0
     }
   };
 
@@ -470,6 +478,15 @@ function validateAndProcessNutritionData(data) {
         calculatedTotals.minerals.sodium_mg += minerals.sodium_mg || 0; // mg
         calculatedTotals.minerals.zinc_mg += minerals.zinc_mg || 0; // mg
       }
+      if (ingredient.micronutrients.other) {
+        const other = ingredient.micronutrients.other;
+        calculatedTotals.other.fiber_g += other.fiber_g || 0;
+        calculatedTotals.other.cholesterol_mg += other.cholesterol_mg || 0;
+        calculatedTotals.other.sugar_g += other.sugar_g || 0;
+        calculatedTotals.other.saturated_fats_g += other.saturated_fats_g || 0;
+        calculatedTotals.other.omega_3_mg += other.omega_3_mg || 0;
+        calculatedTotals.other.omega_6_g += other.omega_6_g || 0;
+      }
     }
   });
 
@@ -498,6 +515,15 @@ function validateAndProcessNutritionData(data) {
       Object.keys(calculatedTotals.minerals).forEach(mk => {
         if (calculatedTotals.minerals[mk] === 0) {
           calculatedTotals.minerals[mk] = useIfNumber(m[mk], 0);
+        }
+      });
+    }
+    // Other
+    if (t.other && typeof t.other === 'object') {
+      const o = t.other;
+      Object.keys(calculatedTotals.other).forEach(ok => {
+        if (calculatedTotals.other[ok] === 0) {
+          calculatedTotals.other[ok] = useIfNumber(o[ok], 0);
         }
       });
     }
