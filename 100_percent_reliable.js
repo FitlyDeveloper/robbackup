@@ -401,6 +401,7 @@ async function analyzeNutrition(imageBase64) {
     const carbs = typeof ing.carbs_g === 'number' ? ing.carbs_g : 0;
     return {
       name,
+      weight_g: weight,
       amount: `${weight}g`,
       calories,
       protein,
@@ -415,13 +416,19 @@ async function analyzeNutrition(imageBase64) {
     : 'Analyzed Meal';
 
   const totals = visionData.totals || {};
+  // Compute sums to use as fallback when totals are missing/zero
+  const sumCalories = mappedIngredients.reduce((s, i) => s + (i.calories || 0), 0);
+  const sumProtein = mappedIngredients.reduce((s, i) => s + (i.protein || 0), 0);
+  const sumFat = mappedIngredients.reduce((s, i) => s + (i.fat || 0), 0);
+  const sumCarbs = mappedIngredients.reduce((s, i) => s + (i.carbs || 0), 0);
+
   const response = {
     meal_name,
     ingredients: mappedIngredients,
-    calories: totals.calories || 0,
-    protein: totals.protein_g || 0,
-    fat: totals.fat_g || 0,
-    carbs: totals.carbs_g || 0,
+    calories: (typeof totals.calories === 'number' && totals.calories > 0) ? totals.calories : sumCalories,
+    protein: (typeof totals.protein_g === 'number' && totals.protein_g > 0) ? totals.protein_g : sumProtein,
+    fat: (typeof totals.fat_g === 'number' && totals.fat_g > 0) ? totals.fat_g : sumFat,
+    carbs: (typeof totals.carbs_g === 'number' && totals.carbs_g > 0) ? totals.carbs_g : sumCarbs,
   };
 
   // Flatten vitamins into snake_case keys expected by the Flutter app
