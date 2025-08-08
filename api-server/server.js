@@ -977,18 +977,71 @@ function processVisionResponse(visionResponse) {
     carbs: total?.carbs_g || mappedIngredients.reduce((sum, ing) => sum + (ing.carbs_g || ing.carbs || 0), 0)
   };
 
-  // Add comprehensive nutrition data if available in totals
-  if (total?.vitamins) {
-    response.vitamins = total.vitamins;
-  }
+  // Compute meal-level micronutrient totals from ingredients and FLATTEN
+  const sumNested = (getter) => mappedIngredients.reduce((s, ing) => {
+    try {
+      const v = getter(ing);
+      return s + (typeof v === 'number' && !Number.isNaN(v) ? v : 0);
+    } catch { return s; }
+  }, 0);
 
-  if (total?.minerals) {
-    response.minerals = total.minerals;
-  }
+  // Vitamins (13)
+  const vitaminsMap = {
+    vitamin_A_mcg: 'vitamin_a',
+    vitamin_C_mg: 'vitamin_c',
+    vitamin_D_mcg: 'vitamin_d',
+    vitamin_E_mg: 'vitamin_e',
+    vitamin_K_mcg: 'vitamin_k',
+    vitamin_B1_mg: 'vitamin_b1',
+    vitamin_B2_mg: 'vitamin_b2',
+    vitamin_B3_mg: 'vitamin_b3',
+    vitamin_B5_mg: 'vitamin_b5',
+    vitamin_B6_mg: 'vitamin_b6',
+    vitamin_B7_mcg: 'vitamin_b7',
+    vitamin_B9_mcg: 'vitamin_b9',
+    vitamin_B12_mcg: 'vitamin_b12'
+  };
+  Object.entries(vitaminsMap).forEach(([nestedKey, flatKey]) => {
+    const val = sumNested(ing => ing.vitamins ? ing.vitamins[nestedKey] : 0);
+    if (val > 0) response[flatKey] = +(val.toFixed(2));
+  });
 
-  if (total?.other) {
-    response.other = total.other;
-  }
+  // Minerals (15)
+  const mineralsMap = {
+    calcium_mg: 'calcium',
+    chloride_mg: 'chloride',
+    chromium_mcg: 'chromium',
+    copper_mg: 'copper',
+    fluoride_mg: 'fluoride',
+    iodine_mcg: 'iodine',
+    iron_mg: 'iron',
+    magnesium_mg: 'magnesium',
+    manganese_mg: 'manganese',
+    molybdenum_mcg: 'molybdenum',
+    phosphorus_mg: 'phosphorus',
+    potassium_mg: 'potassium',
+    selenium_mcg: 'selenium',
+    sodium_mg: 'sodium',
+    zinc_mg: 'zinc'
+  };
+  Object.entries(mineralsMap).forEach(([nestedKey, flatKey]) => {
+    const val = sumNested(ing => ing.minerals ? ing.minerals[nestedKey] : 0);
+    if (val > 0) response[flatKey] = +(val.toFixed(2));
+  });
+
+  // Other (6)
+  const otherMap = {
+    fiber_g: 'fiber',
+    cholesterol_mg: 'cholesterol',
+    sugar_g: 'sugar',
+    saturated_fats_g: 'saturated_fats',
+    omega_3_mg: 'omega_3',
+    omega_6_g: 'omega_6'
+  };
+  Object.entries(otherMap).forEach(([nestedKey, flatKey]) => {
+    const val = sumNested(ing => ing.other ? ing.other[nestedKey] : 0);
+    if (val > 0) response[flatKey] = +(val.toFixed(2));
+  });
 
   // Also include ingredient_nutrients array for detailed per-ingredient nutrition
   if (mappedIngredients.length > 0) {
