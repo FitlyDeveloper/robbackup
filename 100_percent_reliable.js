@@ -3,6 +3,19 @@
 
 require('dotenv').config();
 const fetch = require('node-fetch');
+// Robust JSON repair (prefer module if available)
+let jsonrepair;
+try {
+  // Try normal resolution
+  ({ jsonrepair } = require('jsonrepair'));
+} catch (e1) {
+  try {
+    // Try resolving from api-server node_modules when service root is api-server
+    ({ jsonrepair } = require('./api-server/node_modules/jsonrepair/cjs/jsonrepair.cjs'));
+  } catch (e2) {
+    jsonrepair = (s) => s; // no-op fallback
+  }
+}
 
 // Strict JSON schema for OpenAI response with correct units
 const MICRONUTRIENT_SCHEMA = {
@@ -301,27 +314,35 @@ async function analyzeImageWithOpenAI(imageBase64) {
 
     const content = data.choices[0].message.content;
     
-    // Parse with number sanitizer first; then robust cleanup fallback
+    // Parse with number sanitizer first; then robust cleanup + repair fallback
     function sanitizeJsonNumbers(s) {
       s = s.replace(/(:\s*)(-?\d+)\.(\s*[,}])/g, (_, a, n, b) => `${a}${n}.0${b}`);
       s = s.replace(/(:\s*)\.(\d+)/g, (_, a, d) => `${a}0.${d}`);
       s = s.replace(/,\s*([}\]])/g, '$1');
       return s;
     }
+    function sliceOuterJson(s){
+      const start = s.indexOf('{');
+      const end = s.lastIndexOf('}');
+      return start >= 0 && end > start ? s.slice(start, end + 1) : s;
+    }
     let parsedData;
     try {
-      parsedData = JSON.parse(sanitizeJsonNumbers(content));
+      parsed = sanitizeJsonNumbers(sliceOuterJson(content));
+      parsedData = JSON.parse(parsed);
     } catch (e) {
-      let cleaned = sanitizeJsonNumbers(content.trim()
+      let cleaned = sanitizeJsonNumbers(sliceOuterJson(content.trim()
         .replace(/^```json\s*/i, '')
         .replace(/^```/, '')
-        .replace(/```\s*$/,''));
+        .replace(/```\s*$/,'')));
       cleaned = cleaned.replace(/\r?\n/g, '');
       cleaned = cleaned.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
       cleaned = cleaned.replace(/([A-Za-z0-9])\s*_\s*([A-Za-z0-9])/g, '$1_$2');
       cleaned = cleaned.replace(/([\{,]\s*)([^"\{\}\[\]\s][^:\s]*)\s*:/g, function(_, prefix, key){
         return prefix + '"' + key.replace(/"/g,'') + '":';
       });
+      // Final repair pass
+      try { cleaned = jsonrepair(cleaned); } catch {}
       try {
         parsedData = JSON.parse(cleaned);
       } catch (inner) {
