@@ -262,7 +262,7 @@ async function analyzeImageWithOpenAI(imageBase64) {
       messages: [
         {
           role: 'system',
-          content: SYSTEM_PROMPT
+          content: SYSTEM_PROMPT + "\n\nReturn ONLY valid JSON. No text outside JSON. Use numeric literals with either integers or decimals with a leading and trailing digit (e.g., 0.0, 0.1)."
         },
         {
           role: 'user', 
@@ -301,40 +301,32 @@ async function analyzeImageWithOpenAI(imageBase64) {
 
     const content = data.choices[0].message.content;
     
-    // Parse and validate JSON response with cleanup for common formatting glitches
+    // Parse with number sanitizer first; then robust cleanup fallback
+    function sanitizeJsonNumbers(s) {
+      s = s.replace(/(:\s*)(-?\d+)\.(\s*[,}])/g, (_, a, n, b) => `${a}${n}.0${b}`);
+      s = s.replace(/(:\s*)\.(\d+)/g, (_, a, d) => `${a}0.${d}`);
+      s = s.replace(/,\s*([}\]])/g, '$1');
+      return s;
+    }
     let parsedData;
     try {
-      parsedData = JSON.parse(content);
+      parsedData = JSON.parse(sanitizeJsonNumbers(content));
     } catch (e) {
-      let cleaned = content.trim()
+      let cleaned = sanitizeJsonNumbers(content.trim()
         .replace(/^```json\s*/i, '')
         .replace(/^```/, '')
-        .replace(/```\s*$/,'');
-      // Remove raw newlines that can split property names (e.g., "vitaminB3_\nmg")
+        .replace(/```\s*$/,''));
       cleaned = cleaned.replace(/\r?\n/g, '');
-      // Normalize fancy quotes to ASCII
       cleaned = cleaned.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
-      // Collapse whitespace around underscores in keys: "vitaminB3 _ mg" → "vitaminB3_mg"
       cleaned = cleaned.replace(/([A-Za-z0-9])\s*_\s*([A-Za-z0-9])/g, '$1_$2');
-      // Replace numbers like 1. or 0. (trailing decimal) with 1.0 / 0.0
-      cleaned = cleaned.replace(/(\d+)\.(?=[^0-9])/g, '$1.0');
-      cleaned = cleaned.replace(/(\d+)\.(\s*[}\]])/g, '$1.0$2');
-      // Replace .5 with 0.5
-      cleaned = cleaned.replace(/(^|[^0-9])\.(\d+)/g, '$10.$2');
-      // Remove trailing commas before closing braces/brackets
-      cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
-      // Ensure double-quoted property names if model omitted quotes (broad catch)
       cleaned = cleaned.replace(/([\{,]\s*)([^"\{\}\[\]\s][^:\s]*)\s*:/g, function(_, prefix, key){
         return prefix + '"' + key.replace(/"/g,'') + '":';
       });
-      // Convert single-quoted strings to double quotes
-      cleaned = cleaned.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
       try {
         parsedData = JSON.parse(cleaned);
       } catch (inner) {
-        console.error('JSON cleanup failed. Length:', cleaned.length);
-        console.error('Preview head:', cleaned.slice(0, 400));
-        console.error('Preview tail:', cleaned.slice(-400));
+        console.error('JSON parse failed. Head:', cleaned.slice(0, 200));
+        console.error('Tail:', cleaned.slice(-200));
         throw inner;
       }
     }
