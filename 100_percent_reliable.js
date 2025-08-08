@@ -255,8 +255,21 @@ async function analyzeImageWithOpenAI(imageBase64) {
 
     const content = data.choices[0].message.content;
     
-    // Parse and validate JSON response
-    const parsedData = JSON.parse(content);
+    // Parse and validate JSON response with cleanup for common formatting glitches
+    let parsedData;
+    try {
+      parsedData = JSON.parse(content);
+    } catch (e) {
+      let cleaned = content.trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```/, '')
+        .replace(/```\s*$/,'');
+      // Replace numbers like 1. or 0. (trailing decimal) with 1.0 / 0.0
+      cleaned = cleaned.replace(/(\d+)\.(?=[^0-9])/g, '$1.0');
+      // Remove trailing commas before closing braces/brackets
+      cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+      parsedData = JSON.parse(cleaned);
+    }
     
     // Validate and process the response with correct units
     const processedData = validateAndProcessNutritionData(parsedData);
