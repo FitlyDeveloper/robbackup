@@ -115,7 +115,8 @@ class NutritionDataManager {
 
     // Priority 1: Check memory cache
     if (_persistentData.containsKey(scanId)) {
-      return _deserializeAndApply(_persistentData[scanId]!, vitamins, minerals, other);
+      return _deserializeAndApply(
+          _persistentData[scanId]!, vitamins, minerals, other);
     }
 
     // Priority 2: Load from SharedPreferences with multiple key attempts
@@ -732,12 +733,20 @@ class _CodiaPage extends State<CodiaPage>
       }
     }
 
-    // Initialize default values first (to prevent null errors) - but track if this wipes data
+    // Initialize defaults ONLY when nothing is available anywhere
     int vitaminsBefore = vitamins.length;
     int mineralsBefore = minerals.length;
     int otherBefore = other.length;
 
-    _initializeDefaultValues();
+    final managerHasEntry = NutritionDataManager._persistentData.containsKey(_scanId);
+    final widgetHasData = widget.nutritionData != null && widget.nutritionData!.isNotEmpty;
+    final localEmpty = vitamins.isEmpty && minerals.isEmpty && other.isEmpty;
+
+    if (localEmpty && !managerHasEntry && !widgetHasData) {
+      _initializeDefaultValues();
+    } else {
+      print('🔒 Skipping _initializeDefaultValues because data exists (manager/widget/local).');
+    }
 
     // Check if _initializeDefaultValues wiped existing data
     int vitaminsAfter = vitamins.length;
@@ -2146,6 +2155,23 @@ class _CodiaPage extends State<CodiaPage>
     // QUESTION 3: Does _initializeDefaultValues() run when valid data exists?
     // ═══════════════════════════════════════════════════════════════
     print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
+    // Guard: if manager already has data for this scanId, do not overwrite with defaults
+    final hasManagerData = NutritionDataManager._persistentData.containsKey(_scanId);
+    if (hasManagerData) {
+      final entry = NutritionDataManager._persistentData[_scanId];
+      final v = (entry?['vitamins'] as Map?) ?? {};
+      final m = (entry?['minerals'] as Map?) ?? {};
+      final o = (entry?['other'] as Map?) ?? {};
+      final nonZero = () {
+        bool any(Map map) => map.values.any((val) =>
+            val is Map && ((val['progress'] ?? 0.0) as num) > 0);
+        return any(v) || any(m) || any(o);
+      }();
+      if (nonZero) {
+        print('🔒 Manager has non-zero data for $_scanId. Skipping defaults.');
+        return;
+      }
+    }
     print("🔧 Called at: ${DateTime.now()}");
     print("🔧 Current scanId: $_scanId");
     print("🔧 BEFORE - Vitamins map size: ${vitamins.length}");
