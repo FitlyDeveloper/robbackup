@@ -208,6 +208,52 @@ async function analyzeImageWithOpenAI(imageBase64) {
       throw new Error('OpenAI API key not configured');
     }
 
+    // JSON Schema to force well-formed JSON from OpenAI
+    const RESPONSE_JSON_SCHEMA = {
+      name: 'ImageNutrition',
+      schema: {
+        type: 'object',
+        additionalProperties: true,
+        properties: {
+          meal_name: { type: 'string' },
+          ingredients: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: true,
+              properties: {
+                name: { type: 'string' },
+                weight_g: { type: 'number' },
+                kcal: { type: 'number' },
+                protein_g: { type: 'number' },
+                fat_g: { type: 'number' },
+                carbs_g: { type: 'number' },
+                micronutrients: { type: 'object', additionalProperties: true }
+              },
+              required: ['name', 'weight_g', 'kcal']
+            }
+          },
+          totals: {
+            type: 'object',
+            additionalProperties: true,
+            properties: {
+              calories: { type: 'number' },
+              protein_g: { type: 'number' },
+              fat_g: { type: 'number' },
+              carbs_g: { type: 'number' },
+              vitamins: { type: 'object', additionalProperties: true },
+              minerals: { type: 'object', additionalProperties: true },
+              other: { type: 'object', additionalProperties: true }
+            },
+            required: ['calories', 'protein_g', 'fat_g', 'carbs_g']
+          }
+        },
+        required: ['ingredients', 'totals']
+      },
+      strict: true
+    };
+
     const requestBody = {
       model: 'gpt-4o-mini',
       temperature: 0,
