@@ -262,7 +262,7 @@ async function analyzeImageWithOpenAI(imageBase64) {
       messages: [
         {
           role: 'system',
-          content: SYSTEM_PROMPT + "\n\nReturn ONLY valid JSON. No text outside JSON. Use numeric literals with either integers or decimals with a leading and trailing digit (e.g., 0.0, 0.1)."
+          content: SYSTEM_PROMPT + "\n\nReturn ONLY valid JSON. No prose. Keys quoted. No trailing commas. Numbers must be like 0.0 (not 0.). No NaN/Infinity. Schema root: { ingredients: [...], totals: {...} }."
         },
         {
           role: 'user', 
