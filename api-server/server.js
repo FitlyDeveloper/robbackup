@@ -1053,6 +1053,20 @@ function processVisionResponse(visionResponse) {
     }));
   }
 
+  // Optional concise debug: per-ingredient macros (off by default)
+  try {
+    const logMacros = (process.env.LOG_INGREDIENT_MACROS === '1' || process.env.LOG_INGREDIENT_MACROS === 'true');
+    if (logMacros) {
+      console.log('\n🥗 INGREDIENT MACROS:');
+      mappedIngredients.forEach((ing, idx) => {
+        const p = (ing.protein ?? ing.protein_g ?? 0);
+        const f = (ing.fat ?? ing.fat_g ?? 0);
+        const c = (ing.carbs ?? ing.carbs_g ?? 0);
+        console.log(`  ${idx + 1}. ${ing.name} (${ing.amount || ing.weight_g + 'g'}): P ${p}g, F ${f}g, C ${c}g`);
+      });
+    }
+  } catch {}
+
   // Ensure ingredient macros present. If all zeros but totals exist, distribute by calories
   const totalCalories = mappedIngredients.reduce((s, i) => s + (i.calories || 0), 0) || 1;
   const sumP = mappedIngredients.reduce((s, i) => s + (i.protein ?? i.protein_g ?? 0), 0);
