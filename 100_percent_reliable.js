@@ -344,7 +344,7 @@ async function analyzeImageWithOpenAI(imageBase64) {
       let cleaned = sanitizeJson(content.trim()
         .replace(/^```json\s*/i, '')
         .replace(/^```/, '')
-        .replace(/```\s*$/,'')));
+        .replace(/```\s*$/,''));
       cleaned = cleaned.replace(/\r?\n/g, '');
       cleaned = cleaned.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
       cleaned = cleaned.replace(/([A-Za-z0-9])\s*_\s*([A-Za-z0-9])/g, '$1_$2');
