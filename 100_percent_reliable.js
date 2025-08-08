@@ -312,6 +312,8 @@ async function analyzeImageWithOpenAI(imageBase64) {
         .replace(/```\s*$/,'');
       // Remove raw newlines that can split property names (e.g., "vitaminB3_\nmg")
       cleaned = cleaned.replace(/\r?\n/g, '');
+      // Normalize fancy quotes to ASCII
+      cleaned = cleaned.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
       // Collapse whitespace around underscores in keys: "vitaminB3 _ mg" → "vitaminB3_mg"
       cleaned = cleaned.replace(/([A-Za-z0-9])\s*_\s*([A-Za-z0-9])/g, '$1_$2');
       // Replace numbers like 1. or 0. (trailing decimal) with 1.0 / 0.0
@@ -321,8 +323,10 @@ async function analyzeImageWithOpenAI(imageBase64) {
       cleaned = cleaned.replace(/(^|[^0-9])\.(\d+)/g, '$10.$2');
       // Remove trailing commas before closing braces/brackets
       cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
-      // Ensure double-quoted property names if model omitted quotes
-      cleaned = cleaned.replace(/([\{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+      // Ensure double-quoted property names if model omitted quotes (broad catch)
+      cleaned = cleaned.replace(/([\{,]\s*)([^"\{\}\[\]\s][^:\s]*)\s*:/g, function(_, prefix, key){
+        return prefix + '"' + key.replace(/"/g,'') + '":';
+      });
       // Convert single-quoted strings to double quotes
       cleaned = cleaned.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
       try {
