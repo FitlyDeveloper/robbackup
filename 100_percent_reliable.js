@@ -86,6 +86,37 @@ const MICRONUTRIENT_SCHEMA = {
   }
 };
 
+// JSON Schema forcing a minimal, valid structure from OpenAI to avoid parse glitches
+const RESPONSE_JSON_SCHEMA = {
+  name: 'ImageNutrition',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      meal_name: { type: 'string' },
+      ingredients: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string' },
+            weight_g: { type: 'number' },
+            calories: { type: 'number' },
+            protein_g: { type: 'number' },
+            fat_g: { type: 'number' },
+            carbs_g: { type: 'number' }
+          },
+          required: ['name', 'weight_g', 'calories']
+        }
+      }
+    },
+    required: ['ingredients']
+  },
+  strict: true
+};
+
 // Strict JSON-only system prompt with correct units
 const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an image, respond with valid JSON and nothing else. Use this exact schema, and ensure that each micronutrient uses the correct unit (µg or mg) as specified. IMPORTANT: include macronutrients (protein_g, fat_g, carbs_g) for EACH ingredient and also in totals. ALSO include the six "Other" nutrients we track for every ingredient and in totals: fiber_g, cholesterol_mg, sugar_g, saturated_fats_g, omega_3_mg, omega_6_g.
 
@@ -212,7 +243,7 @@ async function analyzeImageWithOpenAI(imageBase64) {
       model: 'gpt-4o-mini',
       temperature: 0,
       max_tokens: 2000,
-      response_format: { type: 'json_object' },
+      response_format: { type: 'json_schema', json_schema: RESPONSE_JSON_SCHEMA },
       messages: [
         {
           role: 'system',
