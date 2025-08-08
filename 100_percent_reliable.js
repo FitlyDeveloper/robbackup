@@ -386,9 +386,7 @@ function validateAndProcessNutritionData(data) {
     throw new Error('Invalid ingredients array in OpenAI response');
   }
 
-  if (!data.totals) {
-    throw new Error('Missing totals section in OpenAI response');
-  }
+  // totals may be absent; compute from ingredients and overlay if provided
 
   // Initialize calculated totals with correct units
   const calculatedTotals = {
@@ -475,15 +473,14 @@ function validateAndProcessNutritionData(data) {
     }
   });
 
-  // Use calculated totals to ensure accuracy with correct units
-  // If the model already provided totals, prefer them when our sums are zero
+  // Overlay model-provided totals if present
   if (data.totals && typeof data.totals === 'object') {
     const t = data.totals;
     const useIfNumber = (val, fallback) => (typeof val === 'number' && !Number.isNaN(val) ? val : fallback);
-    if (calculatedTotals.calories === 0) calculatedTotals.calories = useIfNumber(t.calories, 0);
-    if (calculatedTotals.protein_g === 0) calculatedTotals.protein_g = useIfNumber(t.protein_g, 0);
-    if (calculatedTotals.fat_g === 0) calculatedTotals.fat_g = useIfNumber(t.fat_g, 0);
-    if (calculatedTotals.carbs_g === 0) calculatedTotals.carbs_g = useIfNumber(t.carbs_g, 0);
+    calculatedTotals.calories = useIfNumber(t.calories, calculatedTotals.calories);
+    calculatedTotals.protein_g = useIfNumber(t.protein_g, calculatedTotals.protein_g);
+    calculatedTotals.fat_g = useIfNumber(t.fat_g, calculatedTotals.fat_g);
+    calculatedTotals.carbs_g = useIfNumber(t.carbs_g, calculatedTotals.carbs_g);
     // Vitamins
     const vKeys = [
       'vitaminA_mcg','vitaminC_mg','vitaminD_mcg','vitaminE_mg','vitaminK_mcg',
