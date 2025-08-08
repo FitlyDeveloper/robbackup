@@ -87,7 +87,7 @@ const MICRONUTRIENT_SCHEMA = {
 };
 
 // Strict JSON-only system prompt with correct units
-const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an image, respond with valid JSON and nothing else. Use this exact schema, and ensure that each micronutrient uses the correct unit (µg or mg) as specified. IMPORTANT: include macronutrients (protein_g, fat_g, carbs_g) for EACH ingredient and also in totals.
+const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an image, respond with valid JSON and nothing else. Use this exact schema, and ensure that each micronutrient uses the correct unit (µg or mg) as specified. IMPORTANT: include macronutrients (protein_g, fat_g, carbs_g) for EACH ingredient and also in totals. ALSO include the six "Other" nutrients we track for every ingredient and in totals: fiber_g, cholesterol_mg, sugar_g, saturated_fats_g, omega_3_mg, omega_6_g.
 
 {
   "ingredients": [
@@ -128,6 +128,14 @@ const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an imag
           "selenium_mcg": number, // µg
           "sodium_mg": number, // mg
           "zinc_mg": number // mg
+        },
+        "other": {
+          "fiber_g": number,           // grams
+          "cholesterol_mg": number,    // milligrams
+          "sugar_g": number,           // grams
+          "saturated_fats_g": number,  // grams
+          "omega_3_mg": number,        // milligrams
+          "omega_6_g": number          // grams
         }
       }
     }
@@ -167,6 +175,14 @@ const SYSTEM_PROMPT = `You are a JSON-only food analyzer. When I receive an imag
       "selenium_mcg": number,
       "sodium_mg": number,
       "zinc_mg": number
+    },
+    "other": {
+      "fiber_g": number,
+      "cholesterol_mg": number,
+      "sugar_g": number,
+      "saturated_fats_g": number,
+      "omega_3_mg": number,
+      "omega_6_g": number
     }
   }
 }
@@ -481,6 +497,22 @@ async function analyzeNutrition(imageBase64) {
       if (m[from] != null) {
         response[to] = m[from];
       }
+    });
+  }
+
+  // Flatten other totals when present
+  if (totals.other && typeof totals.other === 'object') {
+    const o = totals.other;
+    const otherMap = {
+      fiber_g: 'fiber',
+      cholesterol_mg: 'cholesterol',
+      sugar_g: 'sugar',
+      saturated_fats_g: 'saturated_fats',
+      omega_3_mg: 'omega_3',
+      omega_6_g: 'omega_6',
+    };
+    Object.entries(otherMap).forEach(([from, to]) => {
+      if (o[from] != null) response[to] = o[from];
     });
   }
 

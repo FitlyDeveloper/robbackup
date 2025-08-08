@@ -96,7 +96,7 @@ function getJobStatus(jobId) {
   }
 }
 
-// Convert flat nutrient structure from OpenAI to nested structure expected by app
+  // Convert flat nutrient structure from OpenAI to nested structure expected by app
 function convertFlatNutrientsToNested(ingredients) {
   return ingredients.map(ingredient => {
     const converted = {
@@ -139,12 +139,13 @@ function convertFlatNutrientsToNested(ingredients) {
         zinc_mg: ingredient.zinc || 0                   // 0/11 mg
       },
       other: {
-        fiber_g: ingredient.fiber || 0,                 // 0/30 g
-        cholesterol_mg: ingredient.cholesterol || 0,    // 0/300 mg
-        sugar_g: ingredient.sugar || 0,                 // 0/100 g
-        saturated_fats_g: ingredient.saturated_fats || 0, // 0/22 g
-        omega_3_mg: ingredient.omega_3 || 0,            // 0/1500 mg
-        omega_6_g: ingredient.omega_6 || 0              // 0/14 g
+        // Prefer unit-suffixed keys if model returned them; fallback to generic keys
+        fiber_g: (ingredient.fiber_g ?? ingredient.fiber) || 0,                 // 0/30 g
+        cholesterol_mg: (ingredient.cholesterol_mg ?? ingredient.cholesterol) || 0,    // 0/300 mg
+        sugar_g: (ingredient.sugar_g ?? ingredient.sugar) || 0,                 // 0/100 g
+        saturated_fats_g: (ingredient.saturated_fats_g ?? ingredient.saturated_fats) || 0, // 0/22 g
+        omega_3_mg: (ingredient.omega_3_mg ?? ingredient.omega_3) || 0,            // 0/1500 mg
+        omega_6_g: (ingredient.omega_6_g ?? ingredient.omega_6) || 0              // 0/14 g
       }
     };
     
