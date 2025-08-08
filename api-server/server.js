@@ -930,7 +930,12 @@ function processVisionResponse(visionResponse) {
       calories: calories,
       protein_g: item.protein_g || 0,
       fat_g: item.fat_g || 0,
-      carbs_g: item.carbs_g || 0
+      carbs_g: item.carbs_g || 0,
+      // Aliases for client compatibility
+      amount: `${weight}g`,
+      protein: item.protein_g || 0,
+      fat: item.fat_g || 0,
+      carbs: item.carbs_g || 0
     };
 
     // Log warning if OpenAI failed to provide weight
