@@ -539,7 +539,7 @@ Rules:
       },
           signal: controller.signal,
       body: JSON.stringify({
-            model: "gpt-4o", // Using gpt-4o which can handle images
+            model: "gpt-4o-mini", // cheaper image-capable model
             temperature: 0.1,  // Lower temperature for more predictable outputs
             response_format: { type: "json_object" },
         messages: [
@@ -1229,7 +1229,7 @@ Rules:
         },
         signal: controller.signal,
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: "gpt-4o-mini",
           temperature: 0.1,
           response_format: { type: "json_object" },
           messages: [
