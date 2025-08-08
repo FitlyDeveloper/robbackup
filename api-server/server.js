@@ -972,9 +972,9 @@ function processVisionResponse(visionResponse) {
     health_score: calculateHealthScore(mappedIngredients),
     // Basic macronutrients
     calories: total?.calories || mappedIngredients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
-    protein: total?.protein_g || mappedIngredients.reduce((sum, ing) => sum + (ing.protein_g || 0), 0),
-    fat: total?.fat_g || mappedIngredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0),
-    carbs: total?.carbs_g || mappedIngredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0)
+    protein: total?.protein_g || mappedIngredients.reduce((sum, ing) => sum + (ing.protein_g || ing.protein || 0), 0),
+    fat: total?.fat_g || mappedIngredients.reduce((sum, ing) => sum + (ing.fat_g || ing.fat || 0), 0),
+    carbs: total?.carbs_g || mappedIngredients.reduce((sum, ing) => sum + (ing.carbs_g || ing.carbs || 0), 0)
   };
 
   // Add comprehensive nutrition data if available in totals
@@ -998,6 +998,23 @@ function processVisionResponse(visionResponse) {
       minerals: ingredient.minerals || {},
       other: ingredient.other || {}
     }));
+  }
+
+  // Ensure ingredient macros present. If all zeros but totals exist, distribute by calories
+  const totalCalories = mappedIngredients.reduce((s, i) => s + (i.calories || 0), 0) || 1;
+  const sumP = mappedIngredients.reduce((s, i) => s + ((i.protein ?? i.protein_g) || 0), 0);
+  const sumF = mappedIngredients.reduce((s, i) => s + ((i.fat ?? i.fat_g) || 0), 0);
+  const sumC = mappedIngredients.reduce((s, i) => s + ((i.carbs ?? i.carbs_g) || 0), 0);
+  const needP = sumP === 0 && (response.protein || 0) > 0;
+  const needF = sumF === 0 && (response.fat || 0) > 0;
+  const needC = sumC === 0 && (response.carbs || 0) > 0;
+  if (needP || needF || needC) {
+    mappedIngredients.forEach(i => {
+      const share = (i.calories || 0) / totalCalories;
+      if (needP) i.protein = +(response.protein * share).toFixed(1);
+      if (needF) i.fat = +(response.fat * share).toFixed(1);
+      if (needC) i.carbs = +(response.carbs * share).toFixed(1);
+    });
   }
 
   return response;
