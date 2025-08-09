@@ -738,17 +738,13 @@ class _CodiaPage extends State<CodiaPage>
     int mineralsBefore = minerals.length;
     int otherBefore = other.length;
 
-    final managerHasEntry =
-        NutritionDataManager._persistentData.containsKey(_scanId);
-    final widgetHasData =
-        widget.nutritionData != null && widget.nutritionData!.isNotEmpty;
     final localEmpty = vitamins.isEmpty && minerals.isEmpty && other.isEmpty;
-
-    if (localEmpty && !managerHasEntry && !widgetHasData) {
+    // Always ensure local maps are initialized with targets/units.
+    // _initializeDefaultValues() only populates when maps are empty, so this is safe.
+    if (localEmpty) {
       _initializeDefaultValues();
     } else {
-      print(
-          '🔒 Skipping _initializeDefaultValues because data exists (manager/widget/local).');
+      print('🔒 Defaults already present in local maps; not reinitializing.');
     }
 
     // Check if _initializeDefaultValues wiped existing data
@@ -2490,7 +2486,9 @@ class _CodiaPage extends State<CodiaPage>
         '📊 BEFORE UPDATE - Vitamins: $vitaminsBefore, Minerals: $mineralsBefore, Other: $otherBefore');
 
     // Process flat nutrient data directly with proper unit conversion
-    data.forEach((key, value) {
+    data.forEach((rawKey, value) {
+      // Normalize keys to snake_case strings for consistent matching
+      final key = rawKey.toString().toLowerCase();
       double amount = _extractNumericValue(value.toString());
       if (amount >= 0) {
         // Map the key to the appropriate nutrient WITH UNIT CONVERSION
@@ -2584,11 +2582,11 @@ class _CodiaPage extends State<CodiaPage>
           _updateOtherNutrientWithValue('Cholesterol', amount);
         } else if (key.contains('sugar')) {
           _updateOtherNutrientWithValue('Sugar', amount);
-        } else if (key.contains('saturated_fats')) {
+        } else if (key.contains('saturated_fats') || key.contains('saturatedfat') || key.contains('saturated')) {
           _updateOtherNutrientWithValue('Saturated Fats', amount);
-        } else if (key.contains('omega_3')) {
+        } else if (key.contains('omega_3') || key.contains('omega3')) {
           _updateOtherNutrientWithValue('Omega-3', amount);
-        } else if (key.contains('omega_6')) {
+        } else if (key.contains('omega_6') || key.contains('omega6')) {
           _updateOtherNutrientWithValue('Omega-6', amount);
         }
       }
