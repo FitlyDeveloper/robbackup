@@ -2685,12 +2685,12 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           '💾 Additional Nutrients: ${widget.additionalNutrients!.keys.toList()}');
 
       // Initialize the NutritionDataManager if not already done
-      await nutrition.NutritionDataManager.initialize();
+      await nutrition_page.NutritionDataManager.initialize();
 
       // Convert additionalNutrients to the expected format for NutritionDataManager
-      Map<String, nutrition.NutrientInfo> vitamins = {};
-      Map<String, nutrition.NutrientInfo> minerals = {};
-      Map<String, nutrition.NutrientInfo> other = {};
+      Map<String, nutrition_page.NutrientInfo> vitamins = {};
+      Map<String, nutrition_page.NutrientInfo> minerals = {};
+      Map<String, nutrition_page.NutrientInfo> other = {};
 
       // Categorize the nutrients into vitamins, minerals, and other
       widget.additionalNutrients!.forEach((key, value) {
@@ -2710,7 +2710,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
         // Categorize nutrients using the same logic as SnapFood
         if (_isVitamin(normalizedKey)) {
-          vitamins[key] = nutrition.NutrientInfo(
+          vitamins[key] = nutrition_page.NutrientInfo(
             name: key,
             value: '$numValue ${_getUnitForVitamin(key)}',
             percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
@@ -2718,7 +2718,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             progressColor: Colors.orange,
           );
         } else if (_isMineral(normalizedKey)) {
-          minerals[key] = nutrition.NutrientInfo(
+          minerals[key] = nutrition_page.NutrientInfo(
             name: key,
             value: '$numValue ${_getUnitForMineral(key)}',
             percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
@@ -2726,7 +2726,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             progressColor: Colors.blue,
           );
         } else {
-          other[key] = nutrition.NutrientInfo(
+          other[key] = nutrition_page.NutrientInfo(
             name: key,
             value: '$numValue ${_getUnitForNutrient(key)}',
             percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
@@ -2746,7 +2746,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // Processing nutrition data
 
-      await nutrition.NutritionDataManager.storeNutritionData(
+      await nutrition_page.NutritionDataManager.storeNutritionData(
           widget.scanId, vitamins, minerals, other);
 
       print(
@@ -8446,7 +8446,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           updatedJson);
 
       // Clear the NutritionDataManager cache to force fresh reload
-      nutrition.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
+      nutrition_page.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
 
       // Convert flat micronutrients to structured format and store permanently
       await _convertAndStoreMicronutrients(
