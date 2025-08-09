@@ -1453,7 +1453,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             // Navigate back to main Codia page correctly
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const CodiaPage()),
+              MaterialPageRoute(builder: (context) => CodiaPage()),
             );
           });
         }
@@ -1466,7 +1466,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         // Navigate back to main Codia page correctly
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const CodiaPage()),
+          MaterialPageRoute(builder: (context) => CodiaPage()),
         );
       }
     }
