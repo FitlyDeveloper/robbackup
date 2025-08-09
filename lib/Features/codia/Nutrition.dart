@@ -738,14 +738,17 @@ class _CodiaPage extends State<CodiaPage>
     int mineralsBefore = minerals.length;
     int otherBefore = other.length;
 
-    final managerHasEntry = NutritionDataManager._persistentData.containsKey(_scanId);
-    final widgetHasData = widget.nutritionData != null && widget.nutritionData!.isNotEmpty;
+    final managerHasEntry =
+        NutritionDataManager._persistentData.containsKey(_scanId);
+    final widgetHasData =
+        widget.nutritionData != null && widget.nutritionData!.isNotEmpty;
     final localEmpty = vitamins.isEmpty && minerals.isEmpty && other.isEmpty;
 
     if (localEmpty && !managerHasEntry && !widgetHasData) {
       _initializeDefaultValues();
     } else {
-      print('🔒 Skipping _initializeDefaultValues because data exists (manager/widget/local).');
+      print(
+          '🔒 Skipping _initializeDefaultValues because data exists (manager/widget/local).');
     }
 
     // Check if _initializeDefaultValues wiped existing data
@@ -2156,15 +2159,16 @@ class _CodiaPage extends State<CodiaPage>
     // ═══════════════════════════════════════════════════════════════
     print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
     // Guard: if manager already has data for this scanId, do not overwrite with defaults
-    final hasManagerData = NutritionDataManager._persistentData.containsKey(_scanId);
+    final hasManagerData =
+        NutritionDataManager._persistentData.containsKey(_scanId);
     if (hasManagerData) {
       final entry = NutritionDataManager._persistentData[_scanId];
       final v = (entry?['vitamins'] as Map?) ?? {};
       final m = (entry?['minerals'] as Map?) ?? {};
       final o = (entry?['other'] as Map?) ?? {};
       final nonZero = () {
-        bool any(Map map) => map.values.any((val) =>
-            val is Map && ((val['progress'] ?? 0.0) as num) > 0);
+        bool any(Map map) => map.values
+            .any((val) => val is Map && ((val['progress'] ?? 0.0) as num) > 0);
         return any(v) || any(m) || any(o);
       }();
       if (nonZero) {
@@ -2792,7 +2796,8 @@ class _CodiaPage extends State<CodiaPage>
     print('📊 Nutrients with data: $nutrientsWithData');
     print('📊 _dataLoaded flag: $_dataLoaded');
 
-    bool isValid = mapsExist && totalNutrients > 0 && _dataLoaded;
+    // Consider data valid as soon as maps are populated; _dataLoaded is redundant here
+    bool isValid = mapsExist && totalNutrients > 0;
     print('📊 Final validation result: $isValid');
 
     return isValid;
@@ -2839,46 +2844,8 @@ class _CodiaPage extends State<CodiaPage>
 
     if (isDataLoading) {
       print('🛡️ BLOCKING UI RENDER - Data not ready, showing loading screen');
-      return Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/images/background4.jpg'),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: const SafeArea(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    'Loading nutrition data...',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontFamily: 'SF Pro',
-                      color: Colors.black,
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Please wait while we retrieve your food data',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'SF Pro',
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
+      // Instead of blocking, render current state so returning users see cached data
+      // and the screen can update progressively.
     }
 
     print('🛡️ ✅ UI GUARD PASSED - Rendering full nutrition interface');
