@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/cupertino.dart';
 import '../Features/codia/codia_page.dart';
+// Use a single import alias for Nutrition to avoid ambiguity
 import '../Features/codia/Nutrition.dart' as nutrition_page;
 import 'dart:math';
 import 'dart:ui';
@@ -14,7 +15,7 @@ import 'dart:async';
 import 'package:fitness_app/NewScreens/food_helper_methods.dart';
 import 'package:provider/provider.dart';
 import 'dialog_helper.dart';
-import '../Features/codia/Nutrition.dart' as nutrition;
+// Removed duplicate alias to prevent using two classes named CodiaPage from same file
 
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
@@ -5036,6 +5037,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             if (v is String) return double.tryParse(v) ?? 0;
             return 0;
           }
+
           return toNum(p) == 0 && toNum(f) == 0 && toNum(c) == 0;
         });
 
@@ -5051,8 +5053,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     }
 
     // Otherwise, calculate from ingredients if data exists or if no API data
-    bool shouldCalculateFromIngredients =
-        _ingredients.isNotEmpty && (!hasApiData || _hasUnsavedChanges || !allIngredientMacrosMissing);
+    bool shouldCalculateFromIngredients = _ingredients.isNotEmpty &&
+        (!hasApiData || _hasUnsavedChanges || !allIngredientMacrosMissing);
 
     if (!shouldCalculateFromIngredients) {
       // No reliable ingredient macros and no user edits; hold current values
@@ -7887,10 +7889,11 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     print('🔧 KEYS: ${guaranteedNutritionData.keys.toList()}');
 
     // Navigate to nutrition screen with GUARANTEED data
-    Navigator.push(
+    // Ensure we do not open multiple nutrition screens; replace current route
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => nutrition.CodiaPage(
+        builder: (context) => nutrition_page.CodiaPage(
           scanId: foodSpecificScanId,
           nutritionData: guaranteedNutritionData,
         ),
