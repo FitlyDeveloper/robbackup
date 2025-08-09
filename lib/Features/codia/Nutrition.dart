@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../codia/codia_page.dart' as main_codia;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -2582,7 +2581,9 @@ class _CodiaPage extends State<CodiaPage>
           _updateOtherNutrientWithValue('Cholesterol', amount);
         } else if (key.contains('sugar')) {
           _updateOtherNutrientWithValue('Sugar', amount);
-        } else if (key.contains('saturated_fats') || key.contains('saturatedfat') || key.contains('saturated')) {
+        } else if (key.contains('saturated_fats') ||
+            key.contains('saturatedfat') ||
+            key.contains('saturated')) {
           _updateOtherNutrientWithValue('Saturated Fats', amount);
         } else if (key.contains('omega_3') || key.contains('omega3')) {
           _updateOtherNutrientWithValue('Omega-3', amount);
