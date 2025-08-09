@@ -8242,12 +8242,12 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     print('📊 Input data: ${flatMicronutrients.keys.join(', ')}');
 
     // Import the nutrition data manager
-    await nutrition_page.NutritionDataManager.initialize();
+    await nutrition.NutritionDataManager.initialize();
 
     // Create structured maps for vitamins, minerals, and other nutrients
-    Map<String, nutrition_page.NutrientInfo> vitamins = {};
-    Map<String, nutrition_page.NutrientInfo> minerals = {};
-    Map<String, nutrition_page.NutrientInfo> other = {};
+    Map<String, nutrition.NutrientInfo> vitamins = {};
+    Map<String, nutrition.NutrientInfo> minerals = {};
+    Map<String, nutrition.NutrientInfo> other = {};
 
     // Vitamin mappings with target values and units (from Nutrition.dart) - REMOVED, USING STATIC MEMBER
 
@@ -8256,7 +8256,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     // Other nutrients mappings with target values and units (from Nutrition.dart) - REMOVED, USING STATIC MEMBER
 
     // Helper function to create NutrientInfo from flat data
-    nutrition_page.NutrientInfo _createNutrientInfoHelper(
+    nutrition.NutrientInfo _createNutrientInfoHelper(
         String displayName, // Renamed to avoid conflict
         Map<String, dynamic> target,
         Map<String, dynamic> flatData) {
@@ -8294,7 +8294,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       String valueText =
           "${currentValue.toStringAsFixed(1)}/${targetValue.toStringAsFixed(targetValue == targetValue.round() ? 0 : 1)} $unit";
 
-      return nutrition_page.NutrientInfo(
+      return nutrition.NutrientInfo(
         name: displayName,
         value: valueText,
         percent: percentText,
