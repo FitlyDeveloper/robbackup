@@ -7,15 +7,13 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/cupertino.dart';
 import '../Features/codia/codia_page.dart';
-// Use a single import alias for Nutrition to avoid ambiguity
-import '../Features/codia/Nutrition.dart' as nutrition_page;
 import 'dart:math';
 import 'dart:ui';
 import 'dart:async';
 import 'package:fitness_app/NewScreens/food_helper_methods.dart';
 import 'package:provider/provider.dart';
 import 'dialog_helper.dart';
-// Removed duplicate alias to prevent using two classes named CodiaPage from same file
+import '../Features/codia/Nutrition.dart' as nutrition;
 
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
@@ -2685,12 +2683,12 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           '💾 Additional Nutrients: ${widget.additionalNutrients!.keys.toList()}');
 
       // Initialize the NutritionDataManager if not already done
-      await nutrition_page.NutritionDataManager.initialize();
+      await nutrition.NutritionDataManager.initialize();
 
       // Convert additionalNutrients to the expected format for NutritionDataManager
-      Map<String, nutrition_page.NutrientInfo> vitamins = {};
-      Map<String, nutrition_page.NutrientInfo> minerals = {};
-      Map<String, nutrition_page.NutrientInfo> other = {};
+      Map<String, nutrition.NutrientInfo> vitamins = {};
+      Map<String, nutrition.NutrientInfo> minerals = {};
+      Map<String, nutrition.NutrientInfo> other = {};
 
       // Categorize the nutrients into vitamins, minerals, and other
       widget.additionalNutrients!.forEach((key, value) {
@@ -2710,7 +2708,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
         // Categorize nutrients using the same logic as SnapFood
         if (_isVitamin(normalizedKey)) {
-          vitamins[key] = nutrition_page.NutrientInfo(
+          vitamins[key] = nutrition.NutrientInfo(
             name: key,
             value: '$numValue ${_getUnitForVitamin(key)}',
             percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
@@ -2718,7 +2716,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             progressColor: Colors.orange,
           );
         } else if (_isMineral(normalizedKey)) {
-          minerals[key] = nutrition_page.NutrientInfo(
+          minerals[key] = nutrition.NutrientInfo(
             name: key,
             value: '$numValue ${_getUnitForMineral(key)}',
             percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
@@ -2726,7 +2724,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             progressColor: Colors.blue,
           );
         } else {
-          other[key] = nutrition_page.NutrientInfo(
+          other[key] = nutrition.NutrientInfo(
             name: key,
             value: '$numValue ${_getUnitForNutrient(key)}',
             percent: '${(numValue * 100 / 100).toStringAsFixed(0)}%',
@@ -2746,7 +2744,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // Processing nutrition data
 
-      await nutrition_page.NutritionDataManager.storeNutritionData(
+      await nutrition.NutritionDataManager.storeNutritionData(
           widget.scanId, vitamins, minerals, other);
 
       print(
@@ -7889,11 +7887,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     print('🔧 KEYS: ${guaranteedNutritionData.keys.toList()}');
 
     // Navigate to nutrition screen with GUARANTEED data
-    // Ensure we do not open multiple nutrition screens; replace current route
-    Navigator.pushReplacement(
+    Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => nutrition_page.CodiaPage(
+        builder: (context) => nutrition.CodiaPage(
           scanId: foodSpecificScanId,
           nutritionData: guaranteedNutritionData,
         ),
@@ -8446,7 +8443,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           updatedJson);
 
       // Clear the NutritionDataManager cache to force fresh reload
-      nutrition_page.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
+      nutrition.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
 
       // Convert flat micronutrients to structured format and store permanently
       await _convertAndStoreMicronutrients(
