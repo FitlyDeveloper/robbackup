@@ -1450,10 +1450,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             // Restore original ingredients directly from our backup
             _restoreOriginalIngredients();
 
-            // Always navigate to CodiaPage instead of using pop()
+            // Navigate back to main Codia page correctly
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => CodiaPage()),
+              MaterialPageRoute(builder: (context) => const CodiaPage()),
             );
           });
         }
@@ -1463,10 +1463,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     } else {
       // No unsaved changes, navigate to CodiaPage
       if (mounted) {
-        // Always navigate to CodiaPage instead of using pop()
+        // Navigate back to main Codia page correctly
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => CodiaPage()),
+          MaterialPageRoute(builder: (context) => const CodiaPage()),
         );
       }
     }
