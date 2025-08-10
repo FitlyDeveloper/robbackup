@@ -737,13 +737,14 @@ class _CodiaPage extends State<CodiaPage>
     int mineralsBefore = minerals.length;
     int otherBefore = other.length;
 
-    final managerEntryEmpty = hasDataForScanId &&
+    final bool _managerHasEntry =
+        NutritionDataManager._persistentData.containsKey(_scanId);
+    final managerEntryEmpty = _managerHasEntry &&
         ((NutritionDataManager._persistentData[_scanId]?['vitamins']
                     as Map?)
                 ?.isEmpty ??
             true) &&
-        ((NutritionDataManager._persistentData[_scanId]?['minerals']
-                    as Map?)
+        ((NutritionDataManager._persistentData[_scanId]?['minerals'] as Map?)
                 ?.isEmpty ??
             true) &&
         ((NutritionDataManager._persistentData[_scanId]?['other'] as Map?)
