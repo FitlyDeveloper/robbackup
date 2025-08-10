@@ -556,16 +556,16 @@ class _CodiaPage extends State<CodiaPage>
 
     // Prefill from widget data immediately to avoid first-empty render
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      vitamins.clear();
-      minerals.clear();
-      other.clear();
-      _initializeDefaultValues();
+      if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
+        _initializeDefaultValues();
+      }
       _updateNutrientValuesFromData(widget.nutritionData!);
       vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
       mineralCount = minerals.values.where((v) => v.progress > 0).length;
       otherCount = other.values.where((v) => v.progress > 0).length;
       _dataLoaded = vitaminCount + mineralCount + otherCount > 0;
-      print('⚡ Prefilled from widget data: V=$vitaminCount M=$mineralCount O=$otherCount');
+      print(
+          '⚡ Prefilled from widget data: V=$vitaminCount M=$mineralCount O=$otherCount');
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2195,24 +2195,9 @@ class _CodiaPage extends State<CodiaPage>
     // QUESTION 3: Does _initializeDefaultValues() run when valid data exists?
     // ═══════════════════════════════════════════════════════════════
     print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
-    // Guard: if manager already has data for this scanId, do not overwrite with defaults
-    final hasManagerData =
-        NutritionDataManager._persistentData.containsKey(_scanId);
-    if (hasManagerData) {
-      final entry = NutritionDataManager._persistentData[_scanId];
-      final v = (entry?['vitamins'] as Map?) ?? {};
-      final m = (entry?['minerals'] as Map?) ?? {};
-      final o = (entry?['other'] as Map?) ?? {};
-      final nonZero = () {
-        bool any(Map map) => map.values
-            .any((val) => val is Map && ((val['progress'] ?? 0.0) as num) > 0);
-        return any(v) || any(m) || any(o);
-      }();
-      if (nonZero) {
-        print('🔒 Manager has non-zero data for $_scanId. Skipping defaults.');
-        return;
-      }
-    }
+    // Do NOT early-return based on manager cache. We still need local maps
+    // initialized so _updateNutrientValuesFromData can populate values.
+    // We will only initialize when local maps are empty (see below).
     print("🔧 Called at: ${DateTime.now()}");
     print("🔧 Current scanId: $_scanId");
     print("🔧 BEFORE - Vitamins map size: ${vitamins.length}");
@@ -2525,6 +2510,11 @@ class _CodiaPage extends State<CodiaPage>
     int otherBefore = other.values.where((v) => v.progress > 0).length;
     print(
         '📊 BEFORE UPDATE - Vitamins: $vitaminsBefore, Minerals: $mineralsBefore, Other: $otherBefore');
+
+    // Ensure local maps are initialized before mapping incoming values
+    if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
+      _initializeDefaultValues();
+    }
 
     // Process flat nutrient data directly with proper unit conversion
     data.forEach((rawKey, value) {
