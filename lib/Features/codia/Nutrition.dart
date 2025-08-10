@@ -3172,27 +3172,50 @@ class _CodiaPage extends State<CodiaPage>
       print(
           '🔍 Found ${nutritionKeys.length} nutrition-related keys: $nutritionKeys');
 
-      // Try to load from the global key first
-      String globalKey = 'PERMANENT_GLOBAL_NUTRITION_DATA';
-      String? savedData = prefs.getString(globalKey);
+      // STRICT: Prefer scanId-specific keys; only use global if it matches this scanId
       String dataSource = '';
+      String? savedData;
 
-      print('🔄 Checking global key: "$globalKey"');
+      // Specific key first
+      String specificKey = 'nutrition_data_$_scanId';
+      print('🔄 Checking specific key: "$specificKey"');
+      savedData = prefs.getString(specificKey);
       if (savedData != null && savedData.isNotEmpty) {
-        dataSource = globalKey;
-        print('✅ Found data in "$globalKey" (${savedData.length} bytes)');
+        dataSource = specificKey;
+        print('✅ Found data in "$specificKey" (${savedData.length} bytes)');
       } else {
-        print('❌ "$globalKey" is ${savedData == null ? "NULL" : "EMPTY"}');
-
-        // If global doesn't exist, try the specific scan ID
-        String specificKey = 'nutrition_data_$_scanId';
-        print('🔄 Checking specific key: "$specificKey"');
-        savedData = prefs.getString(specificKey);
+        print('❌ "$specificKey" is ${savedData == null ? "NULL" : "EMPTY"}');
+        // Alternate specific key
+        String altSpecificKey = 'food_nutrition_data_$_scanId';
+        print('🔄 Checking alt specific key: "$altSpecificKey"');
+        savedData = prefs.getString(altSpecificKey);
         if (savedData != null && savedData.isNotEmpty) {
-          dataSource = specificKey;
-          print('✅ Found data in "$specificKey" (${savedData.length} bytes)');
+          dataSource = altSpecificKey;
+          print('✅ Found data in "$altSpecificKey" (${savedData.length} bytes)');
+        }
+      }
+
+      // If still not found, consider global but only if embedded scanId matches
+      if (savedData == null || savedData.isEmpty) {
+        String globalKey = 'PERMANENT_GLOBAL_NUTRITION_DATA';
+        print('🔄 Checking global key: "$globalKey"');
+        final globalData = prefs.getString(globalKey);
+        if (globalData != null && globalData.isNotEmpty) {
+          try {
+            final probe = jsonDecode(globalData);
+            final embeddedId = probe is Map ? (probe['scanId']?.toString() ?? '') : '';
+            if (embeddedId == _scanId) {
+              savedData = globalData;
+              dataSource = globalKey;
+              print('✅ Using global data that matches scanId ($_scanId)');
+            } else {
+              print('⚠️ Ignoring global data (scanId $embeddedId != $_scanId)');
+            }
+          } catch (e) {
+            print('⚠️ Invalid JSON in global key; skipping: $e');
+          }
         } else {
-          print('❌ "$specificKey" is ${savedData == null ? "NULL" : "EMPTY"}');
+          print('❌ "$globalKey" is ${globalData == null ? "NULL" : "EMPTY"}');
         }
       }
 
@@ -3201,6 +3224,12 @@ class _CodiaPage extends State<CodiaPage>
             '🔄 Found saved nutrition data from $dataSource, parsing JSON...');
 
         Map<String, dynamic> data = jsonDecode(savedData);
+        // Validate embedded scanId
+        final embeddedId = data['scanId']?.toString() ?? '';
+        if (embeddedId.isNotEmpty && embeddedId != _scanId) {
+          print('⚠️ Data source $dataSource has scanId $embeddedId, expected $_scanId. Aborting load.');
+          return false;
+        }
         print('🔄 Successfully parsed JSON data');
         print('🔄 Data keys: ${data.keys.toList()}');
         print('🔄 Data scanId: ${data['scanId']}');
