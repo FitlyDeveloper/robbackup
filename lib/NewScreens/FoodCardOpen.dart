@@ -7882,6 +7882,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     // Navigate to nutrition screen with GUARANTEED data
     // Ensure any pending saves are flushed before navigation to avoid races
     await Future.sync(() {});
+    // Always open the colored Nutrition screen from lib/Features/codia/Nutrition.dart
     await Navigator.push(
       context,
       MaterialPageRoute(

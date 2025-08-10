@@ -703,14 +703,31 @@ class _CodiaPage extends State<CodiaPage>
 
     // Apply seed micronutrients synchronously if provided
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      final keys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
-      final hasMicros = keys.any((k) => k.startsWith('vitamin_') ||
-          k == 'calcium' || k == 'chloride' || k == 'chromium' || k == 'copper' ||
-          k == 'fluoride' || k == 'iodine' || k == 'iron' || k == 'magnesium' ||
-          k == 'manganese' || k == 'molybdenum' || k == 'phosphorus' ||
-          k == 'potassium' || k == 'selenium' || k == 'sodium' || k == 'zinc' ||
-          k == 'fiber' || k == 'cholesterol' || k == 'sugar' ||
-          k == 'saturated_fats' || k == 'omega_3' || k == 'omega_6');
+      final keys =
+          widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final hasMicros = keys.any((k) =>
+          k.startsWith('vitamin_') ||
+          k == 'calcium' ||
+          k == 'chloride' ||
+          k == 'chromium' ||
+          k == 'copper' ||
+          k == 'fluoride' ||
+          k == 'iodine' ||
+          k == 'iron' ||
+          k == 'magnesium' ||
+          k == 'manganese' ||
+          k == 'molybdenum' ||
+          k == 'phosphorus' ||
+          k == 'potassium' ||
+          k == 'selenium' ||
+          k == 'sodium' ||
+          k == 'zinc' ||
+          k == 'fiber' ||
+          k == 'cholesterol' ||
+          k == 'sugar' ||
+          k == 'saturated_fats' ||
+          k == 'omega_3' ||
+          k == 'omega_6');
 
       if (hasMicros) {
         if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
@@ -729,7 +746,8 @@ class _CodiaPage extends State<CodiaPage>
               _scanId, vitamins, minerals, other);
           await _saveNutritionData();
         });
-        print('🧪 hydrate done | source=widget | nonZero=${vitaminCount + mineralCount + otherCount}');
+        print(
+            '🧪 hydrate done | source=widget | nonZero=${vitaminCount + mineralCount + otherCount}');
         return;
       }
     }
@@ -738,12 +756,17 @@ class _CodiaPage extends State<CodiaPage>
     final ok = await _loadSavedDataBulletproof();
     if (!mounted) return;
     _dataLoaded = ok;
+    if (!ok && vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
+      // Ensure defaults so UI has rows; never render empty cards
+      _initializeDefaultValues();
+    }
     _ready = true;
     setState(() {});
     final nonZero = vitamins.values.where((v) => v.progress > 0).length +
         minerals.values.where((v) => v.progress > 0).length +
         other.values.where((v) => v.progress > 0).length;
-    print('🧪 hydrate done | source=${ok ? 'storage' : 'none'} | nonZero=$nonZero');
+    print(
+        '🧪 hydrate done | source=${ok ? 'storage' : 'none'} | nonZero=$nonZero');
   }
 
   // Initialize NutritionDataManager and load data
@@ -2996,6 +3019,7 @@ class _CodiaPage extends State<CodiaPage>
 
   @override
   Widget build(BuildContext context) {
+    // Force colorful variant: this file is the only Nutrition screen.
     // Never paint defaults before data; show skeleton until ready
     if (!_ready) {
       return const Scaffold(
