@@ -3005,7 +3005,7 @@ class _CodiaPageState extends State<CodiaPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => Nutrition.CodiaPage(
+        builder: (context) => Nutrition.NutritionPage(
           nutritionData: existingNutritionData != null
               ? (existingNutritionData['nutritionData'] ??
                   existingNutritionData)

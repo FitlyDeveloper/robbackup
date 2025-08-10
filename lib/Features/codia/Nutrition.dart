@@ -454,23 +454,23 @@ class NutritionDataManager {
   }
 }
 
-class CodiaPage extends StatefulWidget {
+class NutritionPage extends StatefulWidget {
   // Add parameters to receive nutrition data
   final Map<String, dynamic>? nutritionData;
   // STRICT: scanId must be provided - no defaults allowed
   final String scanId;
 
-  const CodiaPage({
+  const NutritionPage({
     super.key,
     this.nutritionData,
     required this.scanId,
   });
 
   @override
-  State<StatefulWidget> createState() => _CodiaPage();
+  State<StatefulWidget> createState() => _NutritionPage();
 }
 
-class _CodiaPage extends State<CodiaPage>
+class _NutritionPage extends State<NutritionPage>
     with WidgetsBindingObserver, RouteAware {
   // Define color constants with the specified hex codes
   final Color yellowColor = const Color(0xFFF3D960);
@@ -756,8 +756,8 @@ class _CodiaPage extends State<CodiaPage>
     final ok = await _loadSavedDataBulletproof();
     if (!mounted) return;
     _dataLoaded = ok;
-    if (!ok && vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
-      // Ensure defaults so UI has rows; never render empty cards
+    // Ensure maps exist even if storage returned an empty structured payload
+    if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
       _initializeDefaultValues();
     }
     _ready = true;

@@ -7886,7 +7886,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => nutrition.CodiaPage(
+        builder: (context) => nutrition.NutritionPage(
           scanId: foodSpecificScanId,
           nutritionData: guaranteedNutritionData,
         ),
