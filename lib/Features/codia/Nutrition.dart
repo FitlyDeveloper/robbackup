@@ -556,7 +556,8 @@ class _CodiaPage extends State<CodiaPage>
 
     // Prefill only if widget contains micronutrients; otherwise load saved data first
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      final dataKeys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final dataKeys =
+          widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
       final hasMicros = dataKeys.any((k) =>
           k.startsWith('vitamin_') ||
           k == 'calcium' ||
@@ -2235,9 +2236,71 @@ class _CodiaPage extends State<CodiaPage>
     // QUESTION 3: Does _initializeDefaultValues() run when valid data exists?
     // ═══════════════════════════════════════════════════════════════
     print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
-    // Do NOT early-return based on manager cache. We still need local maps
-    // initialized so _updateNutrientValuesFromData can populate values.
-    // We will only initialize when local maps are empty (see below).
+    // If manager already has non-zero data for this scanId, hydrate from cache
+    final managerHasData =
+        NutritionDataManager._persistentData.containsKey(_scanId);
+    if (managerHasData) {
+      final entry = NutritionDataManager._persistentData[_scanId];
+      final Map? v = (entry?['vitamins'] as Map?);
+      final Map? m = (entry?['minerals'] as Map?);
+      final Map? o = (entry?['other'] as Map?);
+      bool anyNonZero(Map? map) {
+        if (map == null) return false;
+        return map.values.any((val) =>
+            val is Map && ((val['progress'] ?? 0.0) as num).toDouble() > 0.0);
+      }
+      if (anyNonZero(v) || anyNonZero(m) || anyNonZero(o)) {
+        print('🔒 Manager has non-zero data for $_scanId. Hydrating from cache.');
+        if (v != null && v.isNotEmpty) {
+          v.forEach((key, value) {
+            if (value is Map) {
+              vitamins[key] = NutrientInfo(
+                name: value['name'] ?? key,
+                value: value['value'] ?? '0',
+                percent: value['percent'] ?? '0%',
+                progress: (value['progress'] ?? 0.0).toDouble(),
+                progressColor:
+                    _getProgressColor((value['progress'] ?? 0.0).toDouble()),
+              );
+            }
+          });
+        }
+        if (m != null && m.isNotEmpty) {
+          m.forEach((key, value) {
+            if (value is Map) {
+              minerals[key] = NutrientInfo(
+                name: value['name'] ?? key,
+                value: value['value'] ?? '0',
+                percent: value['percent'] ?? '0%',
+                progress: (value['progress'] ?? 0.0).toDouble(),
+                progressColor:
+                    _getProgressColor((value['progress'] ?? 0.0).toDouble()),
+              );
+            }
+          });
+        }
+        if (o != null && o.isNotEmpty) {
+          o.forEach((key, value) {
+            if (value is Map) {
+              other[key] = NutrientInfo(
+                name: value['name'] ?? key,
+                value: value['value'] ?? '0',
+                percent: value['percent'] ?? '0%',
+                progress: (value['progress'] ?? 0.0).toDouble(),
+                progressColor:
+                    _getProgressColor((value['progress'] ?? 0.0).toDouble()),
+              );
+            }
+          });
+        }
+        // Counters
+        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+        mineralCount = minerals.values.where((v) => v.progress > 0).length;
+        otherCount = other.values.where((v) => v.progress > 0).length;
+        print('🔒 Hydration complete. V:$vitaminCount M:$mineralCount O:$otherCount');
+        return; // Skip default initialization to avoid wiping valid data
+      }
+    }
     print("🔧 Called at: ${DateTime.now()}");
     print("🔧 Current scanId: $_scanId");
     print("🔧 BEFORE - Vitamins map size: ${vitamins.length}");
