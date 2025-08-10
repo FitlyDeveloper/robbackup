@@ -263,9 +263,10 @@ class _SnapFoodState extends State<SnapFood> {
               e.toString().contains("JSON")) {
             errorMessage =
                 "There was an issue processing the analysis results. Please try again.";
-          } else if (e.toString().contains("Failed to fetch")) {
+          } else if (e.toString().contains("Failed to fetch") ||
+              e.toString().contains("Failed to analyze image")) {
             errorMessage =
-                "Unable to connect to our servers. Please check your internet connection and try again.";
+                "Unable to reach the analysis service. Please try again. Details: ${e.toString()}";
           } else {
             errorMessage =
                 "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection.";

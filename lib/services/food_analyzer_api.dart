@@ -90,11 +90,15 @@ class FoodAnalyzerApi {
               'return_ingredient_nutrition': true,
             }),
           )
-          .timeout(const Duration(seconds: 120));
+          .timeout(const Duration(seconds: 180));
 
       // Check for HTTP errors
       if (response.statusCode != 200) {
-        throw Exception('Failed to analyze image: ${response.statusCode}');
+        final bodyPreview = response.body.length > 200
+            ? response.body.substring(0, 200)
+            : response.body;
+        throw Exception(
+            'Failed to analyze image: ${response.statusCode} ${response.reasonPhrase ?? ''} :: $bodyPreview');
       }
 
       // Parse the response
@@ -102,7 +106,7 @@ class FoodAnalyzerApi {
       try {
         responseData = jsonDecode(response.body);
       } catch (e) {
-        throw Exception('Invalid response format from server');
+        throw Exception('Invalid response format from server: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
       }
 
       // Check for API-level errors
