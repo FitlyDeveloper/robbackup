@@ -3430,6 +3430,14 @@ class _CodiaPage extends State<CodiaPage>
   // Save nutrition data - SIMPLE VERSION
   Future<void> _saveNutritionData() async {
     try {
+      // Do not persist empty maps; this would overwrite good data with zeros
+      final allZero = _areAllNutrientsZero(vitamins) &&
+          _areAllNutrientsZero(minerals) &&
+          _areAllNutrientsZero(other);
+      if (allZero) {
+        print('🛑 Skip save: all nutrient maps are zero; preserving existing data');
+        return;
+      }
       final prefs = await SharedPreferences.getInstance();
 
       // Create a data object with nutrition data
@@ -3464,9 +3472,10 @@ class _CodiaPage extends State<CodiaPage>
       // Convert to JSON
       String dataJson = jsonEncode(nutritionData);
 
-      // Save to multiple keys for redundancy
-      await prefs.setString('PERMANENT_GLOBAL_NUTRITION_DATA', dataJson);
+      // Save to multiple keys for redundancy (global only as a backup)
       await prefs.setString('nutrition_data_$_scanId', dataJson);
+      // Keep PERMANENT_GLOBAL_NUTRITION_DATA for last-scan backup, but do not rely on it for loads
+      await prefs.setString('PERMANENT_GLOBAL_NUTRITION_DATA', dataJson);
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
