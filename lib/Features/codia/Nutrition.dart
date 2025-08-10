@@ -560,12 +560,16 @@ class _CodiaPage extends State<CodiaPage>
         _initializeDefaultValues();
       }
       _updateNutrientValuesFromData(widget.nutritionData!);
+      // Immediately persist to both memory cache and SharedPreferences
+      await NutritionDataManager.storeNutritionData(
+          _scanId, vitamins, minerals, other);
+      await _saveNutritionData();
       vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
       mineralCount = minerals.values.where((v) => v.progress > 0).length;
       otherCount = other.values.where((v) => v.progress > 0).length;
       _dataLoaded = vitaminCount + mineralCount + otherCount > 0;
       print(
-          '⚡ Prefilled from widget data: V=$vitaminCount M=$mineralCount O=$otherCount');
+          '⚡ Prefilled from widget data and persisted: V=$vitaminCount M=$mineralCount O=$otherCount');
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3191,7 +3195,8 @@ class _CodiaPage extends State<CodiaPage>
         savedData = prefs.getString(altSpecificKey);
         if (savedData != null && savedData.isNotEmpty) {
           dataSource = altSpecificKey;
-          print('✅ Found data in "$altSpecificKey" (${savedData.length} bytes)');
+          print(
+              '✅ Found data in "$altSpecificKey" (${savedData.length} bytes)');
         }
       }
 
@@ -3203,7 +3208,8 @@ class _CodiaPage extends State<CodiaPage>
         if (globalData != null && globalData.isNotEmpty) {
           try {
             final probe = jsonDecode(globalData);
-            final embeddedId = probe is Map ? (probe['scanId']?.toString() ?? '') : '';
+            final embeddedId =
+                probe is Map ? (probe['scanId']?.toString() ?? '') : '';
             if (embeddedId == _scanId) {
               savedData = globalData;
               dataSource = globalKey;
@@ -3227,7 +3233,8 @@ class _CodiaPage extends State<CodiaPage>
         // Validate embedded scanId
         final embeddedId = data['scanId']?.toString() ?? '';
         if (embeddedId.isNotEmpty && embeddedId != _scanId) {
-          print('⚠️ Data source $dataSource has scanId $embeddedId, expected $_scanId. Aborting load.');
+          print(
+              '⚠️ Data source $dataSource has scanId $embeddedId, expected $_scanId. Aborting load.');
           return false;
         }
         print('🔄 Successfully parsed JSON data');
@@ -3326,6 +3333,9 @@ class _CodiaPage extends State<CodiaPage>
         }
 
         int totalLoaded = vitaminCount + mineralCount + otherCount;
+        // Persist loaded data to memory cache for quick reuse on re-entry
+        await NutritionDataManager.storeNutritionData(
+            _scanId, vitamins, minerals, other);
         print('✅ ===== BULLETPROOF LOAD COMPLETE =====');
         print('✅ Successfully loaded $totalLoaded nutrients with values');
         print(
