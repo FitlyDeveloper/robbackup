@@ -866,17 +866,27 @@ class _CodiaPage extends State<CodiaPage>
       print('🔄 UI state updated after loading saved data');
     }
 
-    // PRIORITY 2: If we have fresh widget data, use it and save it
+    // PRIORITY 2: If widget has micro values, merge them with saved data instead of replacing
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      print('🆕 Fresh widget data provided, updating...');
+      print('🆕 Fresh widget data provided, updating (merge)...');
       print('🆕 Widget data keys: ${widget.nutritionData!.keys.toList()}');
 
-      _updateNutrientValuesFromData(widget.nutritionData!);
-      await _saveNutritionData();
-      await NutritionDataManager.storeNutritionData(
-          _scanId, vitamins, minerals, other);
+      // Only apply micronutrient keys; ignore plain macros-only payloads
+      final keys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final hasMicros = keys.any((k) => k.startsWith('vitamin_') ||
+          k == 'calcium' || k == 'iron' || k == 'magnesium' || k == 'potassium' ||
+          k == 'sodium' || k == 'zinc' || k == 'fiber' || k == 'cholesterol' ||
+          k == 'sugar' || k == 'saturated_fats' || k == 'omega_3' || k == 'omega_6');
 
-      print('💾 Fresh data saved successfully');
+      if (hasMicros) {
+        _updateNutrientValuesFromData(widget.nutritionData!);
+        await _saveNutritionData();
+        await NutritionDataManager.storeNutritionData(
+            _scanId, vitamins, minerals, other);
+        print('💾 Fresh micronutrients merged and saved');
+      } else {
+        print('ℹ️ Widget data has no micronutrients; keeping saved values');
+      }
     }
 
     // FALLBACK: If all maps are still empty/zero, try emergency recovery
@@ -2236,73 +2246,19 @@ class _CodiaPage extends State<CodiaPage>
     // QUESTION 3: Does _initializeDefaultValues() run when valid data exists?
     // ═══════════════════════════════════════════════════════════════
     print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
-    // If manager already has non-zero data for this scanId, hydrate from cache
-    final managerHasData =
-        NutritionDataManager._persistentData.containsKey(_scanId);
-    if (managerHasData) {
-      final entry = NutritionDataManager._persistentData[_scanId];
-      final Map? v = (entry?['vitamins'] as Map?);
-      final Map? m = (entry?['minerals'] as Map?);
-      final Map? o = (entry?['other'] as Map?);
-      bool anyNonZero(Map? map) {
-        if (map == null) return false;
-        return map.values.any((val) =>
-            val is Map && ((val['progress'] ?? 0.0) as num).toDouble() > 0.0);
-      }
-
-      if (anyNonZero(v) || anyNonZero(m) || anyNonZero(o)) {
-        print(
-            '🔒 Manager has non-zero data for $_scanId. Hydrating from cache.');
-        if (v != null && v.isNotEmpty) {
-          v.forEach((key, value) {
-            if (value is Map) {
-              vitamins[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: (value['progress'] ?? 0.0).toDouble(),
-                progressColor:
-                    _getProgressColor((value['progress'] ?? 0.0).toDouble()),
-              );
-            }
-          });
-        }
-        if (m != null && m.isNotEmpty) {
-          m.forEach((key, value) {
-            if (value is Map) {
-              minerals[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: (value['progress'] ?? 0.0).toDouble(),
-                progressColor:
-                    _getProgressColor((value['progress'] ?? 0.0).toDouble()),
-              );
-            }
-          });
-        }
-        if (o != null && o.isNotEmpty) {
-          o.forEach((key, value) {
-            if (value is Map) {
-              other[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: (value['progress'] ?? 0.0).toDouble(),
-                progressColor:
-                    _getProgressColor((value['progress'] ?? 0.0).toDouble()),
-              );
-            }
-          });
-        }
-        // Counters
-        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
-        mineralCount = minerals.values.where((v) => v.progress > 0).length;
-        otherCount = other.values.where((v) => v.progress > 0).length;
-        print(
-            '🔒 Hydration complete. V:$vitaminCount M:$mineralCount O:$otherCount');
-        return; // Skip default initialization to avoid wiping valid data
-      }
+    // If cache already has non-zero data for this scanId, do not reinitialize defaults
+    final cached = NutritionDataManager._persistentData[_scanId];
+    final cacheHasValues = cached != null && ((cached['vitamins'] as Map?)?.values
+            ?.any((v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) == true ||
+        (cached['minerals'] as Map?)?.values
+                ?.any((v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
+            true ||
+        (cached['other'] as Map?)?.values
+                ?.any((v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
+            true);
+    if (cacheHasValues) {
+      print('🔒 Cache has non-zero data; skipping defaults to preserve values');
+      return;
     }
     print("🔧 Called at: ${DateTime.now()}");
     print("🔧 Current scanId: $_scanId");
@@ -2318,9 +2274,9 @@ class _CodiaPage extends State<CodiaPage>
         "🔧 BEFORE - With actual data: Vitamins: $existingVitamins, Minerals: $existingMinerals, Other: $existingOther");
 
     // Check if NutritionDataManager has data for this scanId BEFORE we potentially wipe anything
-    bool hasManagerDataDuplicateCheck =
+    bool managerHasData =
         NutritionDataManager._persistentData.containsKey(_scanId);
-    print("🔧 NutritionDataManager has data for $_scanId: $hasManagerDataDuplicateCheck");
+    print("🔧 NutritionDataManager has data for $_scanId: $managerHasData");
 
     if (managerHasData) {
       var cachedData = NutritionDataManager._persistentData[_scanId];
