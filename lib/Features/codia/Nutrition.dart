@@ -2804,6 +2804,10 @@ class _CodiaPage extends State<CodiaPage>
 
   @override
   Widget build(BuildContext context) {
+    // Ensure default maps exist to avoid empty header-only render
+    if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
+      _initializeDefaultValues();
+    }
     // ═══════════════════════════════════════════════════════════════
     // QUESTION 6: Does UI build depend on non-null map values?
     // ═══════════════════════════════════════════════════════════════
@@ -2950,7 +2954,7 @@ class _CodiaPage extends State<CodiaPage>
 
   int _countNonZeroValues(Map<String, NutrientInfo> nutrientMap) {
     return nutrientMap.values
-        .where((nutrient) => nutrient.progress >= 1.0)
+        .where((nutrient) => nutrient.progress > 0.0)
         .length;
   }
 
