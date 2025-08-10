@@ -1353,9 +1353,15 @@ Rules:
 
       if (!response.ok) {
         console.log('🔥 OpenAI API error - FAILING:', response.status);
-        return res.status(500).json({
+        const errorText = await response.text();
+        let errorMsg = errorText;
+        try {
+          const parsed = JSON.parse(errorText);
+          errorMsg = parsed?.error?.message || errorText;
+        } catch (_) {}
+        return res.status(response.status).json({
           success: false,
-          error: `OpenAI API error: ${response.status}`
+          error: `OpenAI API error: ${response.status} - ${errorMsg}`
         });
       }
 
