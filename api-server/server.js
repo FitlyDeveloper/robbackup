@@ -1317,9 +1317,9 @@ Rules:
       // Make OpenAI API call with timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('🔥 OpenAI timeout - FAILING');
+        console.log('🔥 OpenAI timeout - FAILING (aborting at 90s)');
         controller.abort();
-      }, 30000); // 30 second timeout
+      }, 90000); // 90 second timeout (stay under Render free-tier limit)
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -1394,6 +1394,13 @@ Rules:
         });
       }
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('🔥 OpenAI call aborted due to timeout');
+        return res.status(504).json({
+          success: false,
+          error: 'OpenAI request timed out'
+        });
+      }
       console.log('🔥 OpenAI call failed - FAILING:', error.message);
       return res.status(500).json({
         success: false,
