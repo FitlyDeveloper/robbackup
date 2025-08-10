@@ -3001,12 +3001,14 @@ class _CodiaPageState extends State<CodiaPage> {
 
     // Navigate only when explicitly requested (from bottom nav tap)
     if (!mounted) return;
+    // Open ONLY the Nutrition screen defined in lib/Features/codia/Nutrition.dart
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => Nutrition.CodiaPage(
           nutritionData: existingNutritionData != null
-              ? (existingNutritionData['nutritionData'] ?? existingNutritionData)
+              ? (existingNutritionData['nutritionData'] ??
+                  existingNutritionData)
               : null,
           scanId: finalScanId,
         ),
