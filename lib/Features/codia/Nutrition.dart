@@ -574,9 +574,8 @@ class _CodiaPage extends State<CodiaPage>
           k == 'omega_6');
 
       if (hasMicros) {
-        if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
-          _initializeDefaultValues();
-        }
+        // Do not initialize defaults here; preserve cached values and only fill in
+        // missing entries via _updateNutrientValuesFromData
         _updateNutrientValuesFromData(widget.nutritionData!);
         NutritionDataManager.storeNutritionData(
             _scanId, vitamins, minerals, other);
@@ -872,11 +871,22 @@ class _CodiaPage extends State<CodiaPage>
       print('🆕 Widget data keys: ${widget.nutritionData!.keys.toList()}');
 
       // Only apply micronutrient keys; ignore plain macros-only payloads
-      final keys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
-      final hasMicros = keys.any((k) => k.startsWith('vitamin_') ||
-          k == 'calcium' || k == 'iron' || k == 'magnesium' || k == 'potassium' ||
-          k == 'sodium' || k == 'zinc' || k == 'fiber' || k == 'cholesterol' ||
-          k == 'sugar' || k == 'saturated_fats' || k == 'omega_3' || k == 'omega_6');
+      final keys =
+          widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final hasMicros = keys.any((k) =>
+          k.startsWith('vitamin_') ||
+          k == 'calcium' ||
+          k == 'iron' ||
+          k == 'magnesium' ||
+          k == 'potassium' ||
+          k == 'sodium' ||
+          k == 'zinc' ||
+          k == 'fiber' ||
+          k == 'cholesterol' ||
+          k == 'sugar' ||
+          k == 'saturated_fats' ||
+          k == 'omega_3' ||
+          k == 'omega_6');
 
       if (hasMicros) {
         _updateNutrientValuesFromData(widget.nutritionData!);
@@ -2248,14 +2258,16 @@ class _CodiaPage extends State<CodiaPage>
     print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
     // If cache already has non-zero data for this scanId, do not reinitialize defaults
     final cached = NutritionDataManager._persistentData[_scanId];
-    final cacheHasValues = cached != null && ((cached['vitamins'] as Map?)?.values
-            ?.any((v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) == true ||
-        (cached['minerals'] as Map?)?.values
-                ?.any((v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
-            true ||
-        (cached['other'] as Map?)?.values
-                ?.any((v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
-            true);
+    final cacheHasValues = cached != null &&
+        ((cached['vitamins'] as Map?)?.values?.any(
+                    (v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
+                true ||
+            (cached['minerals'] as Map?)?.values?.any(
+                    (v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
+                true ||
+            (cached['other'] as Map?)?.values?.any(
+                    (v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
+                true);
     if (cacheHasValues) {
       print('🔒 Cache has non-zero data; skipping defaults to preserve values');
       return;
