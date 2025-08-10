@@ -70,6 +70,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   String _privacyStatus =
       'Private'; // Default privacy status changed to Private
   bool _hasUnsavedChanges = false; // Track whether user has made changes
+  bool _isNavigatingToNutrition = false; // Prevent double navigation
   // Original values to compare for changes
   String _originalFoodName = '';
   String _originalHealthScore = '';
@@ -3496,7 +3497,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                         _originalCarbs = _carbs;
                         _originalCounter = _counter;
                       });
-                      // Always navigate to CodiaPage instead of popping
+                      // Return to main Codia page (not nutrition)
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (context) => CodiaPage()),
@@ -7785,6 +7786,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Open the Nutrition screen to see updated nutrient values
   void _openNutritionScreen() async {
+    if (_isNavigatingToNutrition) return; // guard
+    _isNavigatingToNutrition = true;
     // CRITICAL: Save nutrition data BEFORE navigating to ensure persistence
     await _saveNutritionDataOnExit();
 
@@ -7887,7 +7890,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     print('🔧 KEYS: ${guaranteedNutritionData.keys.toList()}');
 
     // Navigate to nutrition screen with GUARANTEED data
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => nutrition.CodiaPage(
@@ -7896,6 +7899,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         ),
       ),
     );
+    _isNavigatingToNutrition = false;
   }
 
   // Helper method to generate a scanId specific to this food
