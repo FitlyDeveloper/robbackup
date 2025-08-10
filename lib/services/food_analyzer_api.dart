@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:fitness_app/core/env.dart';
 
 class FoodAnalyzerApi {
-  // Primary URL - try this first
-  static const String primaryUrl = 'https://snap-food.onrender.com';
+  // Primary URL from centralized env config
+  static String get primaryUrl => AppEnv.baseUrl;
 
   // New endpoints for job-based architecture
   static const String jobsEndpoint = '/api/jobs';
@@ -106,7 +107,8 @@ class FoodAnalyzerApi {
       try {
         responseData = jsonDecode(response.body);
       } catch (e) {
-        throw Exception('Invalid response format from server: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
+        throw Exception(
+            'Invalid response format from server: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
       }
 
       // Check for API-level errors

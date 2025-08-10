@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:fitness_app/core/env.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:math' as math;
@@ -16,7 +17,7 @@ class NutritionDataManager {
 
   // GLOBAL SCANID MANAGEMENT - Track the last used scanId for fallback navigation
   static String _lastUsedScanId = '';
-  static const String _lastScanIdKey = 'GLOBAL_LAST_USED_SCANID';
+  static final String _lastScanIdKey = AppEnv.key('GLOBAL_LAST_USED_SCANID');
 
   // Initialize the manager
   static Future<void> initialize() async {
@@ -123,11 +124,11 @@ class NutritionDataManager {
 
     // Prefer structured keys first; only consider global as a last resort
     List<String> possibleKeys = [
-      'nutrition_data_$scanId',
-      'food_nutrition_data_$scanId',
-      'nutrition_bulletproof_$scanId',
-      'nutrition_backup_$scanId',
-      'PERMANENT_GLOBAL_NUTRITION_DATA',
+      AppEnv.key('nutrition_data_$scanId'),
+      AppEnv.key('food_nutrition_data_$scanId'),
+      AppEnv.key('nutrition_bulletproof_$scanId'),
+      AppEnv.key('nutrition_backup_$scanId'),
+      AppEnv.key('PERMANENT_GLOBAL_NUTRITION_DATA'),
     ];
 
     for (String key in possibleKeys) {
@@ -138,7 +139,7 @@ class NutritionDataManager {
           Map<String, dynamic> data = jsonDecode(dataJson);
 
           // If using global backup, ensure it matches this scanId
-          if (key == 'PERMANENT_GLOBAL_NUTRITION_DATA' &&
+          if (key.endsWith('PERMANENT_GLOBAL_NUTRITION_DATA') &&
               data is Map &&
               data.containsKey('scanId') &&
               data['scanId'] != scanId) {
@@ -181,10 +182,10 @@ class NutritionDataManager {
 
       // Save to multiple keys for maximum redundancy
       List<String> keys = [
-        'nutrition_bulletproof_$scanId',
-        'nutrition_backup_$scanId',
-        'food_nutrition_data_$scanId',
-        'nutrition_data_$scanId',
+        AppEnv.key('nutrition_bulletproof_$scanId'),
+        AppEnv.key('nutrition_backup_$scanId'),
+        AppEnv.key('food_nutrition_data_$scanId'),
+        AppEnv.key('nutrition_data_$scanId'),
       ];
 
       for (String key in keys) {
@@ -196,7 +197,7 @@ class NutritionDataManager {
       }
 
       // Also save as global backup
-      String globalKey = 'PERMANENT_GLOBAL_NUTRITION_DATA';
+      String globalKey = AppEnv.key('PERMANENT_GLOBAL_NUTRITION_DATA');
       try {
         await prefs.setString(globalKey, dataJson);
       } catch (e) {
@@ -769,7 +770,8 @@ class _CodiaPage extends State<CodiaPage>
 
     // If widget carries micronutrients, apply immediately and return.
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      final keys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final keys =
+          widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
       final hasMicros = keys.any((k) =>
           k.startsWith('vitamin_') ||
           k == 'calcium' ||

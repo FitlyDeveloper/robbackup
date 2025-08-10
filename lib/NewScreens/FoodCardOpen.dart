@@ -1,3 +1,4 @@
+import 'package:fitness_app/core/env.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1125,9 +1126,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // NutritionDataManager (nutrition_* / food_nutrition_data_*). Those
       // contain the vitamins/minerals/other maps. We only keep a separate
       // permanent copy for reference and a single global backup.
+      // Scope keys by environment to avoid staging/prod collisions
       List<String> saveKeys = [
-        'PERMANENT_NUTRITION_$scanId',
-        'GLOBAL_NUTRITION_BACKUP',
+        AppEnv.key('PERMANENT_NUTRITION_$scanId'),
+        AppEnv.key('GLOBAL_NUTRITION_BACKUP'),
       ];
 
       int successfulSaves = 0;
@@ -7878,6 +7880,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     print('🔧 KEYS: ${guaranteedNutritionData.keys.toList()}');
 
     // Navigate to nutrition screen with GUARANTEED data
+    // Ensure any pending saves are flushed before navigation to avoid races
+    await Future.sync(() {});
     await Navigator.push(
       context,
       MaterialPageRoute(
