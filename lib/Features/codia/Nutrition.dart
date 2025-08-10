@@ -561,9 +561,10 @@ class _CodiaPage extends State<CodiaPage>
       }
       _updateNutrientValuesFromData(widget.nutritionData!);
       // Immediately persist to both memory cache and SharedPreferences
-      await NutritionDataManager.storeNutritionData(
+      NutritionDataManager.storeNutritionData(
           _scanId, vitamins, minerals, other);
-      await _saveNutritionData();
+      // Save asynchronously without awaiting inside initState
+      Future.microtask(() => _saveNutritionData());
       vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
       mineralCount = minerals.values.where((v) => v.progress > 0).length;
       otherCount = other.values.where((v) => v.progress > 0).length;
