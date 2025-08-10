@@ -554,6 +554,20 @@ class _CodiaPage extends State<CodiaPage>
     _scanId = widget.scanId;
     print('✅ STRICT: Using exact provided scanId: "${_scanId}"');
 
+    // Prefill from widget data immediately to avoid first-empty render
+    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+      vitamins.clear();
+      minerals.clear();
+      other.clear();
+      _initializeDefaultValues();
+      _updateNutrientValuesFromData(widget.nutritionData!);
+      vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+      mineralCount = minerals.values.where((v) => v.progress > 0).length;
+      otherCount = other.values.where((v) => v.progress > 0).length;
+      _dataLoaded = vitaminCount + mineralCount + otherCount > 0;
+      print('⚡ Prefilled from widget data: V=$vitaminCount M=$mineralCount O=$otherCount');
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // QUESTION 2: What is the value of _scanId and NutritionDataManager content?
     // ═══════════════════════════════════════════════════════════════
