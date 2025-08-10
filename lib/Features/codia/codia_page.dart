@@ -1641,6 +1641,8 @@ class _CodiaPageState extends State<CodiaPage> {
                 imageBase64: base64Image,
                 ingredients: processedIngredients,
                 healthScore: foodCard['health_score'] ?? '8/10',
+                scanId: foodCard['scan_id'] ??
+                    'codia_${name.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}',
               ),
             ),
           ).then((_) {
@@ -2855,18 +2857,15 @@ class _CodiaPageState extends State<CodiaPage> {
           try {
             Map<String, dynamic> foodCard = jsonDecode(cardJson);
 
-            // Generate the proper scan ID using the same format as FoodCardOpen.dart
-            if (foodCard.containsKey('name') &&
-                foodCard.containsKey('calories')) {
+            // Generate the proper scan ID using the same format as SnapFood.dart
+            if (foodCard.containsKey('name')) {
               String foodName = foodCard['name']
                   .toString()
                   .toLowerCase()
                   .trim()
                   .replaceAll(' ', '_');
-              String caloriesId =
-                  foodCard['calories'].toString().replaceAll('.', '_');
-              String foodSpecificScanId =
-                  "food_nutrition_${foodName}_${caloriesId}";
+              // FIXED: Use simple format matching SnapFood.dart (no calories)
+              String foodSpecificScanId = "food_nutrition_$foodName";
 
               // Try to load nutrition data with this ID - check multiple possible keys
               List<String> possibleKeys = [
@@ -3000,14 +2999,14 @@ class _CodiaPageState extends State<CodiaPage> {
       // Keep using the default ID set above
     }
 
-    // Always navigate, using either the found ID or the default
+    // Navigate only when explicitly requested (from bottom nav tap)
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => Nutrition.CodiaPage(
           nutritionData: existingNutritionData != null
-              ? (existingNutritionData['nutritionData'] ??
-                  existingNutritionData)
+              ? (existingNutritionData['nutritionData'] ?? existingNutritionData)
               : null,
           scanId: finalScanId,
         ),
@@ -3029,7 +3028,9 @@ class _CodiaPageState extends State<CodiaPage> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => const FoodCardOpen(),
+        builder: (context) => FoodCardOpen(
+          scanId: 'codia_general_${DateTime.now().millisecondsSinceEpoch}',
+        ),
       ),
     );
     // Note: No .then() callback needed since we're replacing the current screen
