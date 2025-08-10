@@ -769,6 +769,16 @@ class _CodiaPage extends State<CodiaPage>
     await _debugSharedPreferencesKeys();
 
     // PRIORITY 1: ALWAYS try to load saved data first
+    // Fast path: if widget.nutritionData is provided, apply it immediately
+    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+      _updateNutrientValuesFromData(widget.nutritionData!);
+      setState(() {
+        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+        mineralCount = minerals.values.where((v) => v.progress > 0).length;
+        otherCount = other.values.where((v) => v.progress > 0).length;
+      });
+    }
+
     bool savedDataLoaded = await _loadSavedDataBulletproof();
     print('📖 Saved data loaded: $savedDataLoaded');
 
