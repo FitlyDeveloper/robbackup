@@ -8432,8 +8432,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}',
           updatedJson);
 
-      // Clear the NutritionDataManager cache to force fresh reload
-      nutrition.NutritionDataManager.clearDataForScanId(foodSpecificScanId);
+      // Do not clear NutritionDataManager cache; keep cache warm for persistence
 
       // Convert flat micronutrients to structured format and store permanently
       await _convertAndStoreMicronutrients(
