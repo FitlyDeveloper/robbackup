@@ -1105,8 +1105,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
             '🔧 Extracted ${extractedNutrients.keys.length} nutrients from ingredients');
       }
 
-      // 3. Add basic macros
+      // 3. Add basic macros and identifiers
       nutritionData.addAll({
+        'scanId': scanId,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
         'calories': _calories,
         'protein': _protein,
         'fat': _fat,
@@ -1119,11 +1121,11 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       final prefs = await SharedPreferences.getInstance();
       String nutritionJson = jsonEncode(nutritionData);
 
+      // IMPORTANT: Do NOT overwrite the structured keys managed by
+      // NutritionDataManager (nutrition_* / food_nutrition_data_*). Those
+      // contain the vitamins/minerals/other maps. We only keep a separate
+      // permanent copy for reference and a single global backup.
       List<String> saveKeys = [
-        'nutrition_data_$scanId',
-        'nutrition_bulletproof_$scanId',
-        'nutrition_backup_$scanId',
-        'food_nutrition_data_$scanId',
         'PERMANENT_NUTRITION_$scanId',
         'GLOBAL_NUTRITION_BACKUP',
       ];
