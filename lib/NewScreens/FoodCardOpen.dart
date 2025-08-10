@@ -7808,23 +7808,10 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     print('✅ STRICT: Using exact scanId from SnapFood: "$foodSpecificScanId"');
     print("🔧 SAVED nutrition data before navigation to ensure persistence");
 
-    // CLEAR ALL POSSIBLE CACHED DATA to force nutrition screen to use updated additionalNutrients
+    // Do NOT clear persisted nutrition here; we want Nutrition.dart to reuse
+    // previously saved micronutrients on re-entry.
     final prefs = await SharedPreferences.getInstance();
-
-    // Clear all possible cache keys for this food
     String foodName = _foodName.toLowerCase().trim().replaceAll(' ', '_');
-    List<String> keysToRemove = [
-      'food_nutrition_data_$foodSpecificScanId',
-      'nutrition_data_$foodSpecificScanId',
-      'food_nutrition_data_$foodName',
-      'nutrition_data_$foodName',
-      'PERMANENT_GLOBAL_NUTRITION_DATA',
-    ];
-
-    for (String key in keysToRemove) {
-      await prefs.remove(key);
-      print("Cleared cached nutrition data for key: $key");
-    }
 
     // Save this ID in our food's data to make it discoverable later
     // Use a simple standardized key based on the food name
@@ -7860,7 +7847,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
     print("Passing nutrition data to Nutrition.dart: $totalNutrition");
 
-    // CRITICAL FIX: Always provide nutrition data, even if we have to reconstruct it
+    // CRITICAL: Always provide nutrition data, even if we have to reconstruct it
     // This ensures the nutrition screen ALWAYS gets the data it needs
     Map<String, dynamic> guaranteedNutritionData = {};
 
