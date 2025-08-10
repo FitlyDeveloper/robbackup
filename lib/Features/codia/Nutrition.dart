@@ -2249,8 +2249,10 @@ class _CodiaPage extends State<CodiaPage>
         return map.values.any((val) =>
             val is Map && ((val['progress'] ?? 0.0) as num).toDouble() > 0.0);
       }
+
       if (anyNonZero(v) || anyNonZero(m) || anyNonZero(o)) {
-        print('🔒 Manager has non-zero data for $_scanId. Hydrating from cache.');
+        print(
+            '🔒 Manager has non-zero data for $_scanId. Hydrating from cache.');
         if (v != null && v.isNotEmpty) {
           v.forEach((key, value) {
             if (value is Map) {
@@ -2297,7 +2299,8 @@ class _CodiaPage extends State<CodiaPage>
         vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
-        print('🔒 Hydration complete. V:$vitaminCount M:$mineralCount O:$otherCount');
+        print(
+            '🔒 Hydration complete. V:$vitaminCount M:$mineralCount O:$otherCount');
         return; // Skip default initialization to avoid wiping valid data
       }
     }
@@ -2315,9 +2318,9 @@ class _CodiaPage extends State<CodiaPage>
         "🔧 BEFORE - With actual data: Vitamins: $existingVitamins, Minerals: $existingMinerals, Other: $existingOther");
 
     // Check if NutritionDataManager has data for this scanId BEFORE we potentially wipe anything
-    bool managerHasData =
+    bool hasManagerDataDuplicateCheck =
         NutritionDataManager._persistentData.containsKey(_scanId);
-    print("🔧 NutritionDataManager has data for $_scanId: $managerHasData");
+    print("🔧 NutritionDataManager has data for $_scanId: $hasManagerDataDuplicateCheck");
 
     if (managerHasData) {
       var cachedData = NutritionDataManager._persistentData[_scanId];
