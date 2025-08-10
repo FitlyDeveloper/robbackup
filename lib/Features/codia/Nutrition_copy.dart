@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+@deprecated
 class CodiaPage extends StatefulWidget {
   CodiaPage({super.key});
 
