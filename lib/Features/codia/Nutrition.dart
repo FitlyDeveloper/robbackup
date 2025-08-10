@@ -554,23 +554,58 @@ class _CodiaPage extends State<CodiaPage>
     _scanId = widget.scanId;
     print('✅ STRICT: Using exact provided scanId: "${_scanId}"');
 
-    // Prefill from widget data immediately to avoid first-empty render
+    // Prefill only if widget contains micronutrients; otherwise load saved data first
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
-        _initializeDefaultValues();
+      final dataKeys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final hasMicros = dataKeys.any((k) =>
+          k.startsWith('vitamin_') ||
+          k == 'calcium' ||
+          k == 'iron' ||
+          k == 'magnesium' ||
+          k == 'potassium' ||
+          k == 'sodium' ||
+          k == 'zinc' ||
+          k == 'fiber' ||
+          k == 'cholesterol' ||
+          k == 'sugar' ||
+          k == 'saturated_fats' ||
+          k == 'omega_3' ||
+          k == 'omega_6');
+
+      if (hasMicros) {
+        if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
+          _initializeDefaultValues();
+        }
+        _updateNutrientValuesFromData(widget.nutritionData!);
+        NutritionDataManager.storeNutritionData(
+            _scanId, vitamins, minerals, other);
+        Future.microtask(() => _saveNutritionData());
+        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+        mineralCount = minerals.values.where((v) => v.progress > 0).length;
+        otherCount = other.values.where((v) => v.progress > 0).length;
+        _dataLoaded = vitaminCount + mineralCount + otherCount > 0;
+        print('⚡ Prefilled from widget micronutrients and persisted');
+      } else {
+        // No micronutrients in widget; attempt to load saved data instead
+        Future.microtask(() async {
+          final ok = await _loadSavedDataBulletproof();
+          if (ok && mounted) {
+            setState(() {
+              _dataLoaded = true;
+            });
+          }
+        });
       }
-      _updateNutrientValuesFromData(widget.nutritionData!);
-      // Immediately persist to both memory cache and SharedPreferences
-      NutritionDataManager.storeNutritionData(
-          _scanId, vitamins, minerals, other);
-      // Save asynchronously without awaiting inside initState
-      Future.microtask(() => _saveNutritionData());
-      vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
-      mineralCount = minerals.values.where((v) => v.progress > 0).length;
-      otherCount = other.values.where((v) => v.progress > 0).length;
-      _dataLoaded = vitaminCount + mineralCount + otherCount > 0;
-      print(
-          '⚡ Prefilled from widget data and persisted: V=$vitaminCount M=$mineralCount O=$otherCount');
+    } else {
+      // No widget data; attempt to load saved data
+      Future.microtask(() async {
+        final ok = await _loadSavedDataBulletproof();
+        if (ok && mounted) {
+          setState(() {
+            _dataLoaded = true;
+          });
+        }
+      });
     }
 
     // ═══════════════════════════════════════════════════════════════
