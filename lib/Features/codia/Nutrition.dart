@@ -737,10 +737,23 @@ class _CodiaPage extends State<CodiaPage>
     int mineralsBefore = minerals.length;
     int otherBefore = other.length;
 
+    final managerEntryEmpty = hasDataForScanId &&
+        ((NutritionDataManager._persistentData[_scanId]?['vitamins']
+                    as Map?)
+                ?.isEmpty ??
+            true) &&
+        ((NutritionDataManager._persistentData[_scanId]?['minerals']
+                    as Map?)
+                ?.isEmpty ??
+            true) &&
+        ((NutritionDataManager._persistentData[_scanId]?['other'] as Map?)
+                ?.isEmpty ??
+            true);
+
     final localEmpty = vitamins.isEmpty && minerals.isEmpty && other.isEmpty;
     // Always ensure local maps are initialized with targets/units.
     // _initializeDefaultValues() only populates when maps are empty, so this is safe.
-    if (localEmpty) {
+    if (localEmpty || managerEntryEmpty) {
       _initializeDefaultValues();
     } else {
       print('🔒 Defaults already present in local maps; not reinitializing.');
@@ -771,6 +784,10 @@ class _CodiaPage extends State<CodiaPage>
     // PRIORITY 1: ALWAYS try to load saved data first
     // Fast path: if widget.nutritionData is provided, apply it immediately
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+      vitamins.clear();
+      minerals.clear();
+      other.clear();
+      _initializeDefaultValues();
       _updateNutrientValuesFromData(widget.nutritionData!);
       setState(() {
         vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
