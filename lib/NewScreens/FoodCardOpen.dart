@@ -275,8 +275,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print('Cleared additional nutrients (no original backup)');
     }
 
-    // CRITICAL: Clear cached nutrition data in SharedPreferences to force fresh load
-    _clearCachedNutritionData();
+    // Do not clear persisted nutrition here; keep saved micronutrients intact
   }
 
   // Clear cached nutrition data to force fresh load from restored values
