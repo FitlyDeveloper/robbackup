@@ -147,8 +147,9 @@ class NutritionDataManager {
           }
 
           // Require structured maps to avoid legacy flat payloads
-          final hasStructured =
-              (data['vitamins'] is Map) && (data['minerals'] is Map) && (data['other'] is Map);
+          final hasStructured = (data['vitamins'] is Map) &&
+              (data['minerals'] is Map) &&
+              (data['other'] is Map);
           if (!hasStructured) {
             // Try next key; this payload can't populate the UI
             continue;
@@ -764,6 +765,55 @@ class _CodiaPage extends State<CodiaPage>
           ? widget.scanId
           : 'emergency_${DateTime.now().millisecondsSinceEpoch}';
       print('🔧 Fixed scanId to: $_scanId');
+    }
+
+    // If widget carries micronutrients, apply immediately and return.
+    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+      final keys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final hasMicros = keys.any((k) =>
+          k.startsWith('vitamin_') ||
+          k == 'calcium' ||
+          k == 'chloride' ||
+          k == 'chromium' ||
+          k == 'copper' ||
+          k == 'fluoride' ||
+          k == 'iodine' ||
+          k == 'iron' ||
+          k == 'magnesium' ||
+          k == 'manganese' ||
+          k == 'molybdenum' ||
+          k == 'phosphorus' ||
+          k == 'potassium' ||
+          k == 'selenium' ||
+          k == 'sodium' ||
+          k == 'zinc' ||
+          k == 'fiber' ||
+          k == 'cholesterol' ||
+          k == 'sugar' ||
+          k == 'saturated_fats' ||
+          k == 'omega_3' ||
+          k == 'omega_6');
+
+      if (hasMicros) {
+        if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
+          _initializeDefaultValues();
+        }
+        _updateNutrientValuesFromData(widget.nutritionData!);
+        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+        mineralCount = minerals.values.where((v) => v.progress > 0).length;
+        otherCount = other.values.where((v) => v.progress > 0).length;
+        _dataLoaded = true;
+        setState(() {});
+        // Persist without blocking UI
+        Future.microtask(() async {
+          await NutritionDataManager.storeNutritionData(
+              _scanId, vitamins, minerals, other);
+          await _saveNutritionData();
+        });
+        print('⚡ Immediate apply from widget micronutrients and early return');
+        await _debugCompleteDataFlow('IMMEDIATE_APPLY');
+        return;
+      }
     }
 
     // Log initial map sizes
