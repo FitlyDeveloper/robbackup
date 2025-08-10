@@ -487,6 +487,10 @@ class _CodiaPage extends State<CodiaPage>
 
   // Track whether data was loaded successfully
   bool _dataLoaded = false;
+  // Memoized hydration state
+  late final Future<void> _load;
+  bool _ready = false;
+  bool _hydratedOnce = false;
 
   // Flag to track if there are unsaved changes
   bool _hasUnsavedChanges = false;
@@ -580,60 +584,8 @@ class _CodiaPage extends State<CodiaPage>
     // Use the exact scanId provided - NO FALLBACKS, NO MODIFICATIONS
     _scanId = widget.scanId;
     print('✅ STRICT: Using exact provided scanId: "${_scanId}"');
-
-    // Prefill only if widget contains micronutrients; otherwise load saved data first
-    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      final dataKeys =
-          widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
-      final hasMicros = dataKeys.any((k) =>
-          k.startsWith('vitamin_') ||
-          k == 'calcium' ||
-          k == 'iron' ||
-          k == 'magnesium' ||
-          k == 'potassium' ||
-          k == 'sodium' ||
-          k == 'zinc' ||
-          k == 'fiber' ||
-          k == 'cholesterol' ||
-          k == 'sugar' ||
-          k == 'saturated_fats' ||
-          k == 'omega_3' ||
-          k == 'omega_6');
-
-      if (hasMicros) {
-        // Do not initialize defaults here; preserve cached values and only fill in
-        // missing entries via _updateNutrientValuesFromData
-        _updateNutrientValuesFromData(widget.nutritionData!);
-        NutritionDataManager.storeNutritionData(
-            _scanId, vitamins, minerals, other);
-        Future.microtask(() => _saveNutritionData());
-        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
-        mineralCount = minerals.values.where((v) => v.progress > 0).length;
-        otherCount = other.values.where((v) => v.progress > 0).length;
-        _dataLoaded = vitaminCount + mineralCount + otherCount > 0;
-        print('⚡ Prefilled from widget micronutrients and persisted');
-      } else {
-        // No micronutrients in widget; attempt to load saved data instead
-        Future.microtask(() async {
-          final ok = await _loadSavedDataBulletproof();
-          if (ok && mounted) {
-            setState(() {
-              _dataLoaded = true;
-            });
-          }
-        });
-      }
-    } else {
-      // No widget data; attempt to load saved data
-      Future.microtask(() async {
-        final ok = await _loadSavedDataBulletproof();
-        if (ok && mounted) {
-          setState(() {
-            _dataLoaded = true;
-          });
-        }
-      });
-    }
+    // Memoized hydration
+    _load = _hydrateOnce();
 
     // ═══════════════════════════════════════════════════════════════
     // QUESTION 2: What is the value of _scanId and NutritionDataManager content?
@@ -736,8 +688,62 @@ class _CodiaPage extends State<CodiaPage>
       }
     }
 
-    // Initialize NutritionDataManager if not already done
-    _initializeAndLoadData();
+    // Initialize NutritionDataManager if not already done, but avoid duplicate loads
+    if (!_hydratedOnce) {
+      _load.ignore();
+    }
+  }
+
+  // Single-run hydration routine
+  Future<void> _hydrateOnce() async {
+    if (_hydratedOnce) return;
+    _hydratedOnce = true;
+    final seedKeys = widget.nutritionData?.keys.length ?? 0;
+    print('🧪 hydrate start | scanId=$_scanId | seedMicrosKeys=$seedKeys');
+
+    // Apply seed micronutrients synchronously if provided
+    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+      final keys = widget.nutritionData!.keys.map((k) => k.toString().toLowerCase());
+      final hasMicros = keys.any((k) => k.startsWith('vitamin_') ||
+          k == 'calcium' || k == 'chloride' || k == 'chromium' || k == 'copper' ||
+          k == 'fluoride' || k == 'iodine' || k == 'iron' || k == 'magnesium' ||
+          k == 'manganese' || k == 'molybdenum' || k == 'phosphorus' ||
+          k == 'potassium' || k == 'selenium' || k == 'sodium' || k == 'zinc' ||
+          k == 'fiber' || k == 'cholesterol' || k == 'sugar' ||
+          k == 'saturated_fats' || k == 'omega_3' || k == 'omega_6');
+
+      if (hasMicros) {
+        if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
+          _initializeDefaultValues();
+        }
+        _updateNutrientValuesFromData(widget.nutritionData!);
+        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+        mineralCount = minerals.values.where((v) => v.progress > 0).length;
+        otherCount = other.values.where((v) => v.progress > 0).length;
+        _dataLoaded = true;
+        _ready = true;
+        if (mounted) setState(() {});
+        // Persist in background
+        Future.microtask(() async {
+          await NutritionDataManager.storeNutritionData(
+              _scanId, vitamins, minerals, other);
+          await _saveNutritionData();
+        });
+        print('🧪 hydrate done | source=widget | nonZero=${vitaminCount + mineralCount + otherCount}');
+        return;
+      }
+    }
+
+    // Load from storage once
+    final ok = await _loadSavedDataBulletproof();
+    if (!mounted) return;
+    _dataLoaded = ok;
+    _ready = true;
+    setState(() {});
+    final nonZero = vitamins.values.where((v) => v.progress > 0).length +
+        minerals.values.where((v) => v.progress > 0).length +
+        other.values.where((v) => v.progress > 0).length;
+    print('🧪 hydrate done | source=${ok ? 'storage' : 'none'} | nonZero=$nonZero');
   }
 
   // Initialize NutritionDataManager and load data
@@ -1826,9 +1832,12 @@ class _CodiaPage extends State<CodiaPage>
     // ═══════════════════════════════════════════════════════════════
     // QUESTION 1: Call _initializeAndLoadData() to test full reload
     // ═══════════════════════════════════════════════════════════════
-    print('🧠 === CALLING _initializeAndLoadData() FROM DIDPOPNEXT ===');
-    await _initializeAndLoadData();
-    print('🧠 ANSWER 1: _initializeAndLoadData() WAS called on re-entry');
+    if (!_ready) {
+      print('🧠 === calling memoized hydrate from didPopNext ===');
+      await _load;
+    } else {
+      print('🧠 didPopNext: already ready; no reload');
+    }
 
     // ALWAYS reload saved data when returning to screen
     bool reloadSuccess = await _loadSavedDataBulletproof();
@@ -2987,9 +2996,11 @@ class _CodiaPage extends State<CodiaPage>
 
   @override
   Widget build(BuildContext context) {
-    // Ensure default maps exist to avoid empty header-only render
-    if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
-      _initializeDefaultValues();
+    // Never paint defaults before data; show skeleton until ready
+    if (!_ready) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
     // ═══════════════════════════════════════════════════════════════
     // QUESTION 6: Does UI build depend on non-null map values?
