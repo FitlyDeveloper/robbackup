@@ -121,11 +121,12 @@ class NutritionDataManager {
     // Priority 2: Load from SharedPreferences with multiple key attempts
     final prefs = await SharedPreferences.getInstance();
 
+    // Prefer structured keys first; only consider global as a last resort
     List<String> possibleKeys = [
+      'nutrition_data_$scanId',
+      'food_nutrition_data_$scanId',
       'nutrition_bulletproof_$scanId',
       'nutrition_backup_$scanId',
-      'food_nutrition_data_$scanId',
-      'nutrition_data_$scanId',
       'PERMANENT_GLOBAL_NUTRITION_DATA',
     ];
 
@@ -136,10 +137,30 @@ class NutritionDataManager {
         try {
           Map<String, dynamic> data = jsonDecode(dataJson);
 
+          // If using global backup, ensure it matches this scanId
+          if (key == 'PERMANENT_GLOBAL_NUTRITION_DATA' &&
+              data is Map &&
+              data.containsKey('scanId') &&
+              data['scanId'] != scanId) {
+            // Skip unrelated global entry
+            continue;
+          }
+
+          // Require structured maps to avoid legacy flat payloads
+          final hasStructured =
+              (data['vitamins'] is Map) && (data['minerals'] is Map) && (data['other'] is Map);
+          if (!hasStructured) {
+            // Try next key; this payload can't populate the UI
+            continue;
+          }
+
           // Store in memory cache for next time
           _persistentData[scanId] = data;
 
-          return _deserializeAndApply(data, vitamins, minerals, other);
+          // Apply; only succeed if non-zero values were applied
+          final applied = _deserializeAndApply(data, vitamins, minerals, other);
+          if (applied) return true;
+          // Otherwise keep searching other keys
         } catch (e) {
           print('❌ Error parsing JSON from key "$key": $e');
           continue;
@@ -328,6 +349,7 @@ class NutritionDataManager {
       Map<String, NutrientInfo> minerals,
       Map<String, NutrientInfo> other) {
     try {
+      int appliedCount = 0;
       // Apply vitamins
       if (data.containsKey('vitamins')) {
         Map<String, dynamic> vitaminData = data['vitamins'];
@@ -341,6 +363,7 @@ class NutritionDataManager {
               progressColor: Color(value['progressColor']),
               hasInfo: value['hasInfo'],
             );
+            appliedCount++;
           }
         });
       }
@@ -358,6 +381,7 @@ class NutritionDataManager {
               progressColor: Color(value['progressColor']),
               hasInfo: value['hasInfo'],
             );
+            appliedCount++;
           }
         });
       }
@@ -375,6 +399,7 @@ class NutritionDataManager {
               progressColor: Color(value['progressColor']),
               hasInfo: value['hasInfo'],
             );
+            appliedCount++;
           }
         });
       }
@@ -385,7 +410,7 @@ class NutritionDataManager {
       other.values.forEach((n) => {if (n.progress > 0) restoredCount++});
 
       print('✅ Restored $restoredCount non-zero nutrition values');
-      return true;
+      return restoredCount > 0;
     } catch (e) {
       print('❌ Error deserializing nutrition data: $e');
       return false;
@@ -3435,7 +3460,8 @@ class _CodiaPage extends State<CodiaPage>
           _areAllNutrientsZero(minerals) &&
           _areAllNutrientsZero(other);
       if (allZero) {
-        print('🛑 Skip save: all nutrient maps are zero; preserving existing data');
+        print(
+            '🛑 Skip save: all nutrient maps are zero; preserving existing data');
         return;
       }
       final prefs = await SharedPreferences.getInstance();
