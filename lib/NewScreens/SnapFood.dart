@@ -269,7 +269,7 @@ class _SnapFoodState extends State<SnapFood> {
                 "Unable to reach the analysis service. Please try again. Details: ${e.toString()}";
           } else {
             errorMessage =
-                "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection.";
+                "We couldn't analyze your food image. Please try again with a clearer photo or check your internet connection. Details: ${e.toString()}";
           }
 
           // Show error dialog
