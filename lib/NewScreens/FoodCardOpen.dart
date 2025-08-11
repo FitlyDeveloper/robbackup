@@ -1023,6 +1023,27 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     }
   }
 
+  // Minimal snapshot saver for persistence on exit/re-entry
+  Future<void> _saveConsolidatedSnapshotMinimal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String foodId = _foodName.replaceAll(' ', '_').toLowerCase();
+      final Map<String, dynamic> minimal = {
+        'foodName': _foodName,
+        'calories': _calories,
+        'protein': _protein,
+        'fat': _fat,
+        'carbs': _carbs,
+        'ingredients': _ingredients,
+        'lastSaved': DateTime.now().millisecondsSinceEpoch,
+      };
+      await prefs.setString('food_data_$foodId', jsonEncode(minimal));
+      print('Persisted minimal consolidated snapshot for $foodId');
+    } catch (e) {
+      print('Error saving minimal snapshot: $e');
+    }
+  }
+
   // Optimized method to update food_cards with minimal storage operations
   Future<void> _updateFoodCardsOptimized(
       SharedPreferences prefs, Map<String, dynamic> data) async {
@@ -1191,6 +1212,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       if (flatMicros.isNotEmpty) {
         await _convertAndStoreMicronutrients(flatMicros, scanId);
       }
+
+      // Persist a consolidated snapshot so ingredient macros persist on re-entry
+      await _saveConsolidatedSnapshotMinimal();
     } catch (e) {
       print('❌ CRITICAL ERROR saving nutrition data on exit: $e');
     }
@@ -2428,12 +2452,12 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
         // Start with an empty result with basic macros
         Map<String, dynamic> result = {
-          'calories':
-              _extractNumericValue(nutritionMap, ['calories', 'kcal', 'energy']),
+          'calories': _extractNumericValue(
+              nutritionMap, ['calories', 'kcal', 'energy']),
           'protein':
               _extractNumericValue(nutritionMap, ['protein', 'proteins']),
-          'carbs': _extractNumericValue(
-              nutritionMap, ['carbs', 'carbohydrates']),
+          'carbs':
+              _extractNumericValue(nutritionMap, ['carbs', 'carbohydrates']),
           'fat':
               _extractNumericValue(nutritionMap, ['fat', 'fats', 'total_fat']),
         };
