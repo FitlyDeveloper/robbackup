@@ -721,7 +721,8 @@ class _NutritionPage extends State<NutritionPage>
         _dataLoaded = true;
         _ready = true;
         if (mounted) setState(() {});
-        print('🧪 hydrate done | source=manager-cache | nonZero=${vitaminCount + mineralCount + otherCount}');
+        print(
+            '🧪 hydrate done | source=manager-cache | nonZero=${vitaminCount + mineralCount + otherCount}');
         return;
       }
     }

@@ -33,6 +33,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
     // DateTime.weekday: Mon=1 ... Sun=7; we want 0-based offset for grid
     return DateTime(year, month, 1).weekday - 1;
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -47,14 +48,14 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              children: [
                 // Header with back button and title
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 29)
                       .copyWith(top: 16, bottom: 8.5),
-              child: Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+                    children: [
                       // Back button (styled like signin.dart - simple IconButton)
                       IconButton(
                         icon: const Icon(Icons.arrow_back,
@@ -67,7 +68,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                       ),
 
                       // Memories title (sized like 'Today' text but centered position)
-                    Text(
+                      Text(
                         'Memories',
                         style: TextStyle(
                           fontSize: 24,
@@ -80,9 +81,9 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
 
                       // Empty space to balance the header (same width as back button)
                       SizedBox(width: 24),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
                 // Slim gray divider line
                 Container(
@@ -93,9 +94,9 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
 
                 // Current month calendar (real time)
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 20, bottom: 8),
-                        child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 29)
+                      .copyWith(top: 20, bottom: 8),
+                  child: Container(
                     padding: EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -105,17 +106,18 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                           color: Colors.black.withOpacity(0.05),
                           blurRadius: 10,
                           offset: Offset(0, 5),
-                      ),
-                    ],
-                  ),
-              child: Column(
-                children: [
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
                         // Month header (current)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 20),
                           child: Builder(builder: (context) {
                             final now = DateTime.now();
-                            final currentTitle = '${_monthNames[now.month - 1]} ${now.year}';
+                            final currentTitle =
+                                '${_monthNames[now.month - 1]} ${now.year}';
                             return Text(
                               currentTitle,
                               style: TextStyle(
@@ -147,8 +149,10 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                         Builder(builder: (context) {
                           final now = DateTime.now();
                           final days = _daysInMonth(now.year, now.month);
-                          final offset = _firstWeekdayOffset(now.year, now.month);
-                          return _buildCalendarGrid(days, now.day, leadingEmpty: offset);
+                          final offset =
+                              _firstWeekdayOffset(now.year, now.month);
+                          return _buildCalendarGrid(days, now.day,
+                              leadingEmpty: offset);
                         }),
                       ],
                     ),
@@ -157,9 +161,9 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
 
                 // Previous month calendar
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 8, bottom: 8),
-                        child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 29)
+                      .copyWith(top: 8, bottom: 8),
+                  child: Container(
                     padding: EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -169,24 +173,25 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                           color: Colors.black.withOpacity(0.05),
                           blurRadius: 10,
                           offset: Offset(0, 5),
-                      ),
-                    ],
-                  ),
-              child: Column(
-                children: [
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
                         // Month header (previous)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 20),
                           child: Builder(builder: (context) {
                             final now = DateTime.now();
                             final prev = DateTime(now.year, now.month - 1, 1);
-                            final title = '${_monthNames[prev.month - 1]} ${prev.year}';
+                            final title =
+                                '${_monthNames[prev.month - 1]} ${prev.year}';
                             return Text(
                               title,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black,
                               ),
                             );
                           }),
@@ -213,8 +218,10 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                           final now = DateTime.now();
                           final prev = DateTime(now.year, now.month - 1, 1);
                           final days = _daysInMonth(prev.year, prev.month);
-                          final offset = _firstWeekdayOffset(prev.year, prev.month);
-                          return _buildCalendarGrid(days, null, leadingEmpty: offset);
+                          final offset =
+                              _firstWeekdayOffset(prev.year, prev.month);
+                          return _buildCalendarGrid(days, null,
+                              leadingEmpty: offset);
                         }),
                       ],
                     ),
@@ -225,9 +232,9 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                 SizedBox(height: 90),
               ],
             ),
-                          ),
-                        ),
-                      ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -273,7 +280,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
         shape: BoxShape.circle,
       ),
       child: Center(
-                          child: Text(
+        child: Text(
           day.toString(),
           style: TextStyle(
             fontSize: 14,
