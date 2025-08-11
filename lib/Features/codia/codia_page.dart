@@ -1334,6 +1334,10 @@ class _CodiaPageState extends State<CodiaPage> {
                     'amount': ingredient['amount'] ?? '1 serving',
                     'calories':
                         normalizeIngredientValue(ingredient['calories']),
+                    // Preserve macros if present so flip-side values survive re-entry
+                    'protein': normalizeIngredientValue(ingredient['protein']),
+                    'fat': normalizeIngredientValue(ingredient['fat']),
+                    'carbs': normalizeIngredientValue(ingredient['carbs']),
                   };
 
                   // Use the normalized ingredient
