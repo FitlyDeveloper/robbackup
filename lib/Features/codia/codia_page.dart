@@ -1809,9 +1809,65 @@ class _CodiaPageState extends State<CodiaPage> {
     );
   }
 
+  // Always-available default test card to quickly test flows like "Fix with AI"
+  Map<String, dynamic> _defaultTestFoodCard() {
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+    return <String, dynamic>{
+      'id': 'default_test_card',
+      'timestamp': nowMs + 1, // ensure it appears first
+      'name': 'Test Meal (Sample)',
+      'calories': 420,
+      'protein': 25,
+      'fat': 12,
+      'carbs': 55,
+      'health_score': '8/10',
+      'image': '', // placeholder image
+      'ingredients': <Map<String, dynamic>>[
+        {
+          'name': 'Grilled Chicken',
+          'amount': '120 g',
+          'calories': 198,
+          'protein': 36,
+          'fat': 4,
+          'carbs': 0,
+        },
+        {
+          'name': 'Brown Rice',
+          'amount': '150 g',
+          'calories': 165,
+          'protein': 4,
+          'fat': 1,
+          'carbs': 34,
+        },
+        {
+          'name': 'Broccoli',
+          'amount': '80 g',
+          'calories': 27,
+          'protein': 2,
+          'fat': 0,
+          'carbs': 5,
+        },
+      ],
+      // minimal micronutrient placeholders (FoodCardOpen can edit/AI-fix)
+      'additional_nutrients': <String, dynamic>{
+        'fiber_g': 5,
+        'sugar_g': 3,
+        'saturated_fat_g': 2,
+        'cholesterol_mg': 60,
+        'omega_3_mg': 100,
+        'omega_6_mg': 500,
+      },
+    };
+  }
+
   // Build a list of widgets for the Recent Activity section
   List<Widget> _buildDynamicFoodCards() {
     final List<Widget> widgets = [];
+
+    // Always show a default test card at the top for quick testing
+    try {
+      widgets.add(_buildFoodCard(_defaultTestFoodCard()));
+    } catch (_) {}
 
     // Only show loading indicator if we're still loading AND there are food cards to show
     if (_isLoadingFoodCards && _foodCards.isNotEmpty) {
