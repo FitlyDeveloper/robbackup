@@ -1454,11 +1454,15 @@ class _CodiaPageState extends State<CodiaPage> {
     );
   }
 
-  // Helper method to create a square food card image
+  // Helper method to create a food card image with rounded left corners only
   Widget _buildFoodCardImage(String? base64Image) {
+    const BorderRadius leftRoundedOnly = BorderRadius.only(
+      topLeft: Radius.circular(16),
+      bottomLeft: Radius.circular(16),
+    );
     if (base64Image == null || base64Image.isEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: leftRoundedOnly,
         child: _buildDefaultImageContainer(),
       );
     }
@@ -1472,23 +1476,26 @@ class _CodiaPageState extends State<CodiaPage> {
             'Image too large for display: ${(bytes.length / 1024 / 1024).toStringAsFixed(2)}MB, using original');
         // Just return original image for now to avoid display issues
         final dpr = MediaQuery.of(context).devicePixelRatio;
-        return Image.memory(
-          bytes,
-          width: 92,
-          height: 92,
-          fit: BoxFit.cover,
-          cacheWidth: (92 * dpr).ceil(),
-          filterQuality: FilterQuality.medium,
-          gaplessPlayback: true,
-          errorBuilder: (context, error, stackTrace) {
-            print('Error loading food card image: $error');
-            return _buildDefaultImageContainer();
-          },
+        return ClipRRect(
+          borderRadius: leftRoundedOnly,
+          child: Image.memory(
+            bytes,
+            width: 92,
+            height: 92,
+            fit: BoxFit.cover,
+            cacheWidth: (92 * dpr).ceil(),
+            filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              print('Error loading food card image: $error');
+              return _buildDefaultImageContainer();
+            },
+          ),
         );
       }
 
       return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: leftRoundedOnly,
         child: Image.memory(
           bytes,
           width: 92,
@@ -1506,7 +1513,7 @@ class _CodiaPageState extends State<CodiaPage> {
     } catch (e) {
       print('Error decoding food card image: $e');
       return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: leftRoundedOnly,
         child: _buildDefaultImageContainer(),
       );
     }
