@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:grouped_list/grouped_list.dart';
+// Memories calendar, now synced to real time
 
 class MemoriesScreen extends StatefulWidget {
   const MemoriesScreen({super.key});
@@ -9,6 +9,30 @@ class MemoriesScreen extends StatefulWidget {
 }
 
 class _MemoriesScreenState extends State<MemoriesScreen> {
+  final List<String> _monthNames = const [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  int _daysInMonth(int year, int month) {
+    // Day 0 of next month is the last day of current month
+    return DateTime(year, month + 1, 0).day;
+  }
+
+  int _firstWeekdayOffset(int year, int month) {
+    // DateTime.weekday: Mon=1 ... Sun=7; we want 0-based offset for grid
+    return DateTime(year, month, 1).weekday - 1;
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -67,7 +91,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                   color: Color(0xFFBDBDBD),
                 ),
 
-                // January 2025 Calendar
+                // Current month calendar (real time)
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 20, bottom: 8),
@@ -86,23 +110,27 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                   ),
               child: Column(
                 children: [
-                        // Month header
+                        // Month header (current)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 20),
-                          child: Text(
-                            'January 2025',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black,
-                          ),
+                          child: Builder(builder: (context) {
+                            final now = DateTime.now();
+                            final currentTitle = '${_monthNames[now.month - 1]} ${now.year}';
+                            return Text(
+                              currentTitle,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black,
+                              ),
+                            );
+                          }),
                         ),
-                      ),
 
                         // Weekday headers
-                  Row(
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
+                          children: [
                             _buildWeekdayHeader('Mon'),
                             _buildWeekdayHeader('Tue'),
                             _buildWeekdayHeader('Wed'),
@@ -115,15 +143,19 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
 
                         SizedBox(height: 15),
 
-                        // Calendar days
-                        _buildCalendarGrid(
-                            31, 15), // January has 31 days, highlight day 15
+                        // Calendar days (current)
+                        Builder(builder: (context) {
+                          final now = DateTime.now();
+                          final days = _daysInMonth(now.year, now.month);
+                          final offset = _firstWeekdayOffset(now.year, now.month);
+                          return _buildCalendarGrid(days, now.day, leadingEmpty: offset);
+                        }),
                       ],
                     ),
                   ),
                 ),
 
-                // December 2024 Calendar
+                // Previous month calendar
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 8, bottom: 8),
@@ -142,23 +174,28 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                   ),
               child: Column(
                 children: [
-                        // Month header
+                        // Month header (previous)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 20),
-                          child: Text(
-                            'December 2024',
+                          child: Builder(builder: (context) {
+                            final now = DateTime.now();
+                            final prev = DateTime(now.year, now.month - 1, 1);
+                            final title = '${_monthNames[prev.month - 1]} ${prev.year}';
+                            return Text(
+                              title,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w500,
                               color: Colors.black,
-                          ),
+                              ),
+                            );
+                          }),
                         ),
-                      ),
 
                         // Weekday headers
-                  Row(
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
+                          children: [
                             _buildWeekdayHeader('Mon'),
                             _buildWeekdayHeader('Tue'),
                             _buildWeekdayHeader('Wed'),
@@ -171,9 +208,14 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
 
                         SizedBox(height: 15),
 
-                        // Calendar days
-                        _buildCalendarGrid(
-                            31, null), // December has 31 days, no highlight
+                        // Calendar days (previous month – no highlight)
+                        Builder(builder: (context) {
+                          final now = DateTime.now();
+                          final prev = DateTime(now.year, now.month - 1, 1);
+                          final days = _daysInMonth(prev.year, prev.month);
+                          final offset = _firstWeekdayOffset(prev.year, prev.month);
+                          return _buildCalendarGrid(days, null, leadingEmpty: offset);
+                        }),
                       ],
                     ),
                   ),
@@ -200,7 +242,8 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
     );
   }
 
-  Widget _buildCalendarGrid(int daysInMonth, int? highlightDay) {
+  Widget _buildCalendarGrid(int daysInMonth, int? highlightDay,
+      {int leadingEmpty = 0}) {
     return GridView.builder(
       shrinkWrap: true,
       physics: NeverScrollableScrollPhysics(),
@@ -209,9 +252,12 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
       ),
-      itemCount: daysInMonth,
+      itemCount: leadingEmpty + daysInMonth,
       itemBuilder: (context, index) {
-        final day = index + 1;
+        if (index < leadingEmpty) {
+          return const SizedBox.shrink();
+        }
+        final day = index - leadingEmpty + 1;
         return _buildCalendarDay(day, isHighlighted: day == highlightDay);
       },
     );
