@@ -25,24 +25,7 @@ class SlowScrollPhysics extends ScrollPhysics {
     return SlowScrollPhysics(parent: buildParent(ancestor));
   }
 
-  // Compute serving size from total ingredient amounts (best-effort for API requirement)
-  String _computeServingSize() {
-    try {
-      double grams = 0;
-      for (final ing in _ingredients) {
-        final amt = (ing['amount'] ?? '').toString();
-        final match = RegExp(r"([0-9]+\.?[0-9]*)\s*(g|gram|grams)", caseSensitive: false)
-            .firstMatch(amt);
-        if (match != null) {
-          grams += double.tryParse(match.group(1)!) ?? 0.0;
-        }
-      }
-      if (grams <= 0) return '1 serving';
-      return '${grams.round()} g';
-    } catch (_) {
-      return '1 serving';
-    }
-  }
+  // (removed serving size helper; moved to state class)
 
   @override
   double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
@@ -126,6 +109,26 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   Set<String> _flippedCards = {}; // Track flipped cards
   Map<String, AnimationController> _flipAnimationControllers = {};
   Map<String, Animation<double>> _flipAnimations = {};
+
+  // Compute serving size from total ingredient amounts (best-effort for API requirement)
+  String _computeServingSize() {
+    try {
+      double grams = 0;
+      for (final ing in _ingredients) {
+        final amt = (ing['amount'] ?? '').toString();
+        final match = RegExp(r"([0-9]+\.?[0-9]*)\s*(g|gram|grams)",
+                caseSensitive: false)
+            .firstMatch(amt);
+        if (match != null) {
+          grams += double.tryParse(match.group(1)!) ?? 0.0;
+        }
+      }
+      if (grams <= 0) return '1 serving';
+      return '${grams.round()} g';
+    } catch (_) {
+      return '1 serving';
+    }
+  }
 
   // Make nutrient target maps static class members for broader access
   static const Map<String, Map<String, dynamic>> vitaminTargets = {
@@ -7631,7 +7634,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                     ),
                     child: Container(
                       width: 311,
-                      padding: EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                      padding:
+                          EdgeInsets.symmetric(vertical: 32, horizontal: 24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
