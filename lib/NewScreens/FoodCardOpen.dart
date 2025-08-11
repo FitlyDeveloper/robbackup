@@ -1086,6 +1086,12 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print(
           '🔧 Additional nutrients keys: ${widget.additionalNutrients?.keys ?? 'null'}');
 
+      // If no micronutrients on the widget, attempt to hydrate from storage
+      if (widget.additionalNutrients == null ||
+          widget.additionalNutrients!.isEmpty) {
+        await _loadCurrentMicronutrientsFromStorage();
+      }
+
       // Extract comprehensive nutrition data if available
       Map<String, dynamic> nutritionData = {};
 
@@ -1151,7 +1157,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // Build a flat micronutrient map to convert into structured NutrientInfo maps.
       final Map<String, dynamic> flatMicros = {};
       // Prefer widget.additionalNutrients (authoritative from backend)
-      if (widget.additionalNutrients != null && widget.additionalNutrients!.isNotEmpty) {
+      if (widget.additionalNutrients != null &&
+          widget.additionalNutrients!.isNotEmpty) {
         flatMicros.addAll(widget.additionalNutrients!);
       }
       // Merge any extracted from ingredients
@@ -8348,9 +8355,11 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     try {
       await nutrition.NutritionDataManager.storeNutritionData(
           scanId, vitamins, minerals, other);
-      print('💾 FOODCARDOPEN: Stored structured micronutrients via NutritionDataManager for $scanId');
+      print(
+          '💾 FOODCARDOPEN: Stored structured micronutrients via NutritionDataManager for $scanId');
     } catch (e) {
-      print('❌ FOODCARDOPEN: Failed to store structured micronutrients via manager: $e');
+      print(
+          '❌ FOODCARDOPEN: Failed to store structured micronutrients via manager: $e');
     }
   }
 
@@ -8362,10 +8371,14 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // Try multiple storage keys to find current micronutrients
       List<String> possibleKeys = [
-        'food_nutrition_data_$foodSpecificScanId',
+        // Prefer env-scoped structured keys (what Nutrition.dart writes)
+        AppEnv.key('nutrition_data_$foodSpecificScanId'),
+        AppEnv.key('food_nutrition_data_$foodSpecificScanId'),
+        // Unscoped fallbacks (older saves)
         'nutrition_data_$foodSpecificScanId',
+        'food_nutrition_data_$foodSpecificScanId',
+        // Name-based fallbacks
         'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}',
-        // Fallback to the scan ID without calories if it's a generic food item not yet saved with calories
         'food_nutrition_${_foodName.toLowerCase().trim().replaceAll(' ', '_')}_${_calories.replaceAll('.', '_')}'
       ];
 
@@ -8386,41 +8399,61 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
       }
 
-      // Build an allowlist of known individual micronutrient API keys
-      Set<String> knownMicronutrientApiKeys = {};
-      _FoodCardOpenState.vitaminTargets.forEach(
-          (_, target) => knownMicronutrientApiKeys.add(target['api_key']));
-      _FoodCardOpenState.mineralTargets.forEach(
-          (_, target) => knownMicronutrientApiKeys.add(target['api_key']));
-      _FoodCardOpenState.otherTargets.forEach(
-          (_, target) => knownMicronutrientApiKeys.add(target['api_key']));
+      // Helper to extract the current value from structured "value": "x/target unit"
+      double _extractCurrentFromStructured(String v) {
+        final beforeSlash = v.split('/').first;
+        final numeric =
+            RegExp(r"[0-9]+\.?[0-9]*").firstMatch(beforeSlash)?.group(0);
+        return double.tryParse(numeric ?? '0') ?? 0.0;
+      }
 
-      if (storedData != null && widget.additionalNutrients != null) {
-        // Clear existing micronutrients
-        widget.additionalNutrients!.clear();
+      if (storedData != null) {
+        // Attempt to read structured format: { vitamins: {DisplayName:{value:..}}, minerals:{}, other:{} }
+        final vitaminsMap = storedData['vitamins'];
+        final mineralsMap = storedData['minerals'];
+        final otherMap = storedData['other'];
 
-        storedData.forEach((key, value) {
-          // Only add keys that are known individual micronutrient API keys
-          if (knownMicronutrientApiKeys.contains(key)) {
-            double numericValue = 0.0;
-            if (value is num) {
-              numericValue = value.toDouble();
-            } else if (value is String) {
-              numericValue = double.tryParse(value) ?? 0.0;
-            }
-            widget.additionalNutrients![key] = numericValue;
-          }
+        // Build inverse map DisplayName -> api_key
+        final Map<String, String> displayToApi = {};
+        _FoodCardOpenState.vitaminTargets.forEach((display, tgt) {
+          displayToApi[display] = tgt['api_key'];
+        });
+        _FoodCardOpenState.mineralTargets.forEach((display, tgt) {
+          displayToApi[display] = tgt['api_key'];
+        });
+        _FoodCardOpenState.otherTargets.forEach((display, tgt) {
+          displayToApi[display] = tgt['api_key'];
         });
 
-        print(
-            '📥 Loaded ${widget.additionalNutrients!.length} micronutrients from storage ($foundKey) using API key allowlist.');
-      } else {
-        print(
-            '⚠️ No stored micronutrients found or widget.additionalNutrients is null. Clearing existing.');
-        if (widget.additionalNutrients != null) {
-          widget.additionalNutrients!
-              .clear(); // Ensure it's empty if no data loaded
+        final Map<String, double> flat = {};
+        void harvest(Map? section) {
+          if (section == null) return;
+          section.forEach((disp, obj) {
+            try {
+              final api = displayToApi[disp] ?? '';
+              if (api.isEmpty) return;
+              final valStr = (obj is Map && obj['value'] is String)
+                  ? obj['value'] as String
+                  : '';
+              final cur = _extractCurrentFromStructured(valStr);
+              if (cur > 0) flat[api] = cur;
+            } catch (_) {}
+          });
         }
+
+        harvest(vitaminsMap as Map?);
+        harvest(mineralsMap as Map?);
+        harvest(otherMap as Map?);
+
+        if (widget.additionalNutrients != null) {
+          widget.additionalNutrients!.clear();
+          widget.additionalNutrients!.addAll(flat);
+        }
+
+        print(
+            '📥 Loaded ${flat.length} micronutrients from structured storage ($foundKey).');
+      } else {
+        print('⚠️ No stored micronutrients found.');
       }
     } catch (e) {
       print('❌ Error loading micronutrients from storage: $e');

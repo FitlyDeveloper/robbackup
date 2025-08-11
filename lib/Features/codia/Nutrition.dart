@@ -157,11 +157,13 @@ class NutritionDataManager {
           }
 
           // Store in memory cache for next time
-          _persistentData[scanId] = data;
-
           // Apply; only succeed if non-zero values were applied
           final applied = _deserializeAndApply(data, vitamins, minerals, other);
-          if (applied) return true;
+          if (applied) {
+            // Cache only successful, non-zero structured entries
+            _persistentData[scanId] = data;
+            return true;
+          }
           // Otherwise keep searching other keys
         } catch (e) {
           print('❌ Error parsing JSON from key "$key": $e');
@@ -459,11 +461,14 @@ class NutritionPage extends StatefulWidget {
   final Map<String, dynamic>? nutritionData;
   // STRICT: scanId must be provided - no defaults allowed
   final String scanId;
+  // When true, apply widget.nutritionData immediately and skip initial storage load
+  final bool forceUseWidgetDataOnce;
 
   const NutritionPage({
     super.key,
     this.nutritionData,
     required this.scanId,
+    this.forceUseWidgetDataOnce = false,
   });
 
   @override
@@ -701,6 +706,26 @@ class _NutritionPage extends State<NutritionPage>
     final seedKeys = widget.nutritionData?.keys.length ?? 0;
     print('🧪 hydrate start | scanId=$_scanId | seedMicrosKeys=$seedKeys');
 
+    // 0) Fast-path: if manager already has structured data for this scanId, apply it synchronously
+    if (NutritionDataManager._persistentData.containsKey(_scanId)) {
+      final cached = NutritionDataManager._persistentData[_scanId]!;
+      if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
+        _initializeDefaultValues();
+      }
+      final applied = NutritionDataManager._deserializeAndApply(
+          cached, vitamins, minerals, other);
+      if (applied) {
+        vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+        mineralCount = minerals.values.where((v) => v.progress > 0).length;
+        otherCount = other.values.where((v) => v.progress > 0).length;
+        _dataLoaded = true;
+        _ready = true;
+        if (mounted) setState(() {});
+        print('🧪 hydrate done | source=manager-cache | nonZero=${vitaminCount + mineralCount + otherCount}');
+        return;
+      }
+    }
+
     // Apply seed micronutrients synchronously if provided
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
       final keys =
@@ -729,6 +754,7 @@ class _NutritionPage extends State<NutritionPage>
           k == 'omega_3' ||
           k == 'omega_6');
 
+      // Only use widget seed on first open when it actually contains micronutrients
       if (hasMicros) {
         if (vitamins.isEmpty && minerals.isEmpty && other.isEmpty) {
           _initializeDefaultValues();
@@ -2365,22 +2391,7 @@ class _NutritionPage extends State<NutritionPage>
     // QUESTION 3: Does _initializeDefaultValues() run when valid data exists?
     // ═══════════════════════════════════════════════════════════════
     print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
-    // If cache already has non-zero data for this scanId, do not reinitialize defaults
-    final cached = NutritionDataManager._persistentData[_scanId];
-    final cacheHasValues = cached != null &&
-        ((cached['vitamins'] as Map?)?.values?.any(
-                    (v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
-                true ||
-            (cached['minerals'] as Map?)?.values?.any(
-                    (v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
-                true ||
-            (cached['other'] as Map?)?.values?.any(
-                    (v) => v is Map && ((v['progress'] ?? 0.0) as num) > 0) ==
-                true);
-    if (cacheHasValues) {
-      print('🔒 Cache has non-zero data; skipping defaults to preserve values');
-      return;
-    }
+    // Do NOT skip defaults based on cache; we need local maps to exist to map values.
     print("🔧 Called at: ${DateTime.now()}");
     print("🔧 Current scanId: $_scanId");
     print("🔧 BEFORE - Vitamins map size: ${vitamins.length}");
@@ -3019,13 +3030,7 @@ class _NutritionPage extends State<NutritionPage>
 
   @override
   Widget build(BuildContext context) {
-    // Force colorful variant: this file is the only Nutrition screen.
-    // Never paint defaults before data; show skeleton until ready
-    if (!_ready) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    // Always render the nutrition UI; rows will update as soon as data maps in
     // ═══════════════════════════════════════════════════════════════
     // QUESTION 6: Does UI build depend on non-null map values?
     // ═══════════════════════════════════════════════════════════════
@@ -3585,10 +3590,14 @@ class _NutritionPage extends State<NutritionPage>
       // Convert to JSON
       String dataJson = jsonEncode(nutritionData);
 
-      // Save to multiple keys for redundancy (global only as a backup)
-      await prefs.setString('nutrition_data_$_scanId', dataJson);
-      // Keep PERMANENT_GLOBAL_NUTRITION_DATA for last-scan backup, but do not rely on it for loads
-      await prefs.setString('PERMANENT_GLOBAL_NUTRITION_DATA', dataJson);
+      // Save to env-scoped keys used by the loader (both variants) plus env-scoped global backup
+      final keyPrimary = AppEnv.key('nutrition_data_$_scanId');
+      final keyFood = AppEnv.key('food_nutrition_data_$_scanId');
+      final keyGlobal = AppEnv.key('PERMANENT_GLOBAL_NUTRITION_DATA');
+
+      await prefs.setString(keyPrimary, dataJson);
+      await prefs.setString(keyFood, dataJson);
+      await prefs.setString(keyGlobal, dataJson);
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
