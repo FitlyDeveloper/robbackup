@@ -1,83 +1,25 @@
 import 'dart:convert';
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:fitness_app/core/env.dart';
 
 class FoodAnalyzerApi {
-  // Primary URL from centralized env config
-  static String get primaryUrl => AppEnv.baseUrl;
+  // Base URL of our Render.com API server
+  static const String baseUrl = 'https://snap-food.onrender.com';
 
-  // New endpoints for job-based architecture
-  static const String jobsEndpoint = '/api/jobs';
-  static const String jobStatusEndpoint = '/api/jobs/';
-
-  // Legacy endpoint (kept for backward compatibility)
+  // Endpoint for food analysis
   static const String analyzeEndpoint = '/api/analyze-food';
 
-  // No client-side emergency modes or alternate endpoints
-
-  // Define vitamin units for API consistency
-  static const Map<String, String> vitaminUnits = {
-    'vitamin_a': 'mcg',
-    'vitamin_c': 'mg',
-    'vitamin_d': 'mcg',
-    'vitamin_e': 'mg',
-    'vitamin_k': 'mcg',
-    'vitamin_b1': 'mg',
-    'vitamin_b2': 'mg',
-    'vitamin_b3': 'mg',
-    'vitamin_b5': 'mg',
-    'vitamin_b6': 'mg',
-    'vitamin_b7': 'mcg',
-    'vitamin_b9': 'mcg',
-    'vitamin_b12': 'mcg',
-  };
-
-  // Define mineral units for API consistency
-  static const Map<String, String> mineralUnits = {
-    'calcium': 'mg',
-    'chloride': 'mg',
-    'chromium': 'mcg',
-    'copper': 'mcg',
-    'fluoride': 'mg',
-    'iodine': 'mcg',
-    'iron': 'mg',
-    'magnesium': 'mg',
-    'manganese': 'mg',
-    'molybdenum': 'mcg',
-    'phosphorus': 'mg',
-    'potassium': 'mg',
-    'selenium': 'mcg',
-    'sodium': 'mg',
-    'zinc': 'mg',
-  };
-
-  // Define other nutrient units for API consistency
-  static const Map<String, String> otherNutrientUnits = {
-    'fiber': 'g',
-    'cholesterol': 'mg',
-    'sugar': 'g',
-    'saturated_fats': 'g',
-    'omega_3': 'mg',
-    'omega_6': 'g',
-  };
-
-  // Analyze a food image using only the primary API endpoint (no fallbacks)
+  // Method to analyze a food image
   static Future<Map<String, dynamic>> analyzeFoodImage(
       Uint8List imageBytes) async {
-    return await _tryAnalyzeWithEndpoint(primaryUrl, imageBytes);
-  }
-
-  // Helper method to try analysis with a specific endpoint
-  static Future<Map<String, dynamic>> _tryAnalyzeWithEndpoint(
-      String baseUrl, Uint8List imageBytes) async {
     try {
       // Convert image bytes to base64
       final String base64Image = base64Encode(imageBytes);
       final String dataUri = 'data:image/jpeg;base64,$base64Image';
 
-      // Use the working /api/analyze-food endpoint directly
+      print('Calling API endpoint: $baseUrl$analyzeEndpoint');
+
+      // Call our secure API endpoint
       final response = await http
           .post(
             Uri.parse('$baseUrl$analyzeEndpoint'),
@@ -89,66 +31,72 @@ class FoodAnalyzerApi {
               'detail_level': 'high',
               'include_ingredient_macros': true,
               'return_ingredient_nutrition': true,
+              'include_additional_nutrition': true,
+              'include_vitamins_minerals': true,
             }),
           )
-          .timeout(const Duration(seconds: 180));
+          .timeout(const Duration(
+              seconds:
+                  180)); // Increased timeout to 3 minutes for render.com cold starts which can take 60-120+ seconds
 
       // Check for HTTP errors
       if (response.statusCode != 200) {
-        final bodyPreview = response.body.length > 200
-            ? response.body.substring(0, 200)
-            : response.body;
-        throw Exception(
-            'Failed to analyze image: ${response.statusCode} ${response.reasonPhrase ?? ''} :: $bodyPreview');
+        print('API error: ${response.statusCode}, ${response.body}');
+        throw Exception('Failed to analyze image: ${response.statusCode}');
       }
 
       // Parse the response
-      final Map<String, dynamic> responseData;
-      try {
-        responseData = jsonDecode(response.body);
-      } catch (e) {
-        throw Exception(
-            'Invalid response format from server: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
-      }
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       // Check for API-level errors
       if (responseData['success'] != true) {
         throw Exception('API error: ${responseData['error']}');
       }
 
-      // Return the data directly (no job polling needed)
-      final data = responseData['data'];
-      if (data != null) {
-        return data;
-      } else {
-        throw Exception('No data returned from API');
+      // If we got here, confirm that we received the expected format
+      print(
+          'API response format: ${responseData['data'] is Map ? 'Map' : 'Other type'}');
+      if (responseData['data'] is Map) {
+        print('Keys in data: ${(responseData['data'] as Map).keys.join(', ')}');
+
+        // Log additional nutritional information when available
+        final data = responseData['data'] as Map<String, dynamic>;
+
+        if (data.containsKey('vitamins')) {
+          print('Vitamins detected in API response');
+        }
+
+        if (data.containsKey('minerals')) {
+          print('Minerals detected in API response');
+        }
+
+        if (data.containsKey('amino_acids')) {
+          print('Amino acids detected in API response');
+        }
+
+        if (data.containsKey('nutrition_other')) {
+          print('Other nutrition values detected in API response');
+        }
       }
+
+      // Return the data
+      return responseData['data'];
     } catch (e) {
+      print('Error analyzing food image: $e');
       rethrow;
     }
   }
-
-  // Job polling method removed - now using direct API endpoint
-
-  // removed unused: _validateNutrientUnits
-  // ignore: unused_element
-  static void _validateNutrientUnits(Map<String, dynamic> data) {}
 
   // Check if the API is available
   static Future<bool> checkApiAvailability() async {
     try {
       final response = await http
-          .get(Uri.parse(primaryUrl))
+          .get(Uri.parse(baseUrl))
           .timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        return true;
-      }
+      return response.statusCode == 200;
     } catch (e) {
-      // swallow error and return false
+      print('API unavailable: $e');
+      return false;
     }
-    return false;
   }
-
-  // Utility method for min (missing from Dart core)
-  static int min(num a, num b) => a < b ? a.toInt() : b.toInt();
 }

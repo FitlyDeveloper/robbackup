@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/painting.dart';
 import 'package:device_preview/device_preview.dart';
 import 'Features/onboarding_screen.dart';
 import 'firebase_options.dart';
 import 'core/utils/device_size_adapter.dart';
 import 'dart:ui' as ui;
 import 'widgets/health_tracking_card.dart';
-import 'dart:async';
 import 'Features/codia/Nutrition.dart' as nutrition; // Import for RouteObserver
+import 'package:provider/provider.dart';
+import 'WorkoutSession/WorkoutSessionProvider.dart';
 
 // Custom binding to disable overflow errors
 class NoOverflowErrorsFlutterBinding extends WidgetsFlutterBinding {
@@ -65,15 +65,6 @@ void main() async {
   // Initialize the Flutter binding first
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize NutritionDataManager EARLY to preload cached data
-  print('🚀 Initializing NutritionDataManager early in main()...');
-  try {
-    await nutrition.NutritionDataManager.initialize();
-    print('✅ NutritionDataManager initialized successfully in main()');
-  } catch (e) {
-    print('❌ Failed to initialize NutritionDataManager in main(): $e');
-  }
-
   // Disable ALL debug rendering features
   debugPaintSizeEnabled = false;
   debugPaintBaselinesEnabled = false;
@@ -90,56 +81,13 @@ void main() async {
     // Continue without Firebase - the app will use mock services
   }
 
-  // Slightly increase image cache budget to reduce jank when showing multiple photos
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 120 << 20; // 120 MB
-
-  // Strict debug filter: allow only errors/warnings; drop everything else to stop spam
-  final List<String> _allowOnly = <String>[
-    '❌',
-    'ERROR',
-    'Exception',
-    'Unhandled',
-    'FlutterError',
-    'TypeError',
-    'SocketException',
-    'TimeoutException',
-  ];
-
-  bool _allow(String line) {
-    if (!kDebugMode) return true; // release unaffected
-    for (final p in _allowOnly) {
-      if (line.contains(p)) return true;
-    }
-    return false;
-  }
-
-  runZonedGuarded(
-    () {
-      // Route debugPrint through filter
-      debugPrint = (String? message, {int? wrapWidth}) {
-        final m = message ?? '';
-        if (_allow(m)) {
-          // ignore: avoid_print
-          print(m);
-        }
-      };
-
-      runApp(
-        DevicePreview(
-          enabled: !kReleaseMode,
-          builder: (context) => const MyApp(),
-        ),
-      );
-    },
-    (error, stack) {
-      FlutterError.reportError(
-        FlutterErrorDetails(exception: error, stack: stack),
-      );
-    },
-    zoneSpecification: ZoneSpecification(
-      print: (self, parent, zone, line) {
-        if (_allow(line)) parent.print(zone, line);
-      },
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => WorkoutSessionProvider(),
+      child: DevicePreview(
+        enabled: !kReleaseMode,
+        builder: (context) => const MyApp(),
+      ),
     ),
   );
 }

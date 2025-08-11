@@ -3,7 +3,10 @@ import 'package:grouped_list/grouped_list.dart';
 import '../Features/codia/codia_page.dart';
 import 'LogRunning.dart';
 import 'LogDescribeExercise.dart';
-import 'WeightLifting.dart';
+import '../Screens/WeightLifting.dart';
+import '../Widgets/WorkoutSessionBanner.dart';
+import '../WorkoutSession/WorkoutSessionProvider.dart';
+import 'package:provider/provider.dart';
 
 class ChooseWorkout extends StatefulWidget {
   const ChooseWorkout({Key? key}) : super(key: key);
@@ -17,21 +20,20 @@ class _ChooseWorkoutState extends State<ChooseWorkout> {
 
   @override
   Widget build(BuildContext context) {
+    final isBannerVisible = Provider.of<WorkoutSessionProvider>(context).isActive;
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
           // Background image
           Container(
-            height: MediaQuery.of(context).size.height,
             decoration: BoxDecoration(
               image: DecorationImage(
                 image: AssetImage('assets/images/background4.jpg'),
-                fit: BoxFit.fill,
+                fit: BoxFit.cover,
               ),
             ),
           ),
-          // Main content
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,36 +68,30 @@ class _ChooseWorkoutState extends State<ChooseWorkout> {
 
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(
-                      left: 29,
-                      right: 29,
-                      bottom: 120, // Increased to prevent overflow
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 29),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Spacer(flex: 2),
                         // Weight Lifting Option
                         _buildWorkoutCard(
                           'Weight Lifting',
-                          'Build strength with machines or free weights',
+                          'Lift with machines or free weights',
                           'assets/images/dumbbell.png',
                           () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const WeightLifting(),
+                                builder: (context) => WeightLifting(),
                               ),
                             );
                           },
                         ),
-                        const SizedBox(
-                            height: 12), // Reduced spacing between cards
+                        SizedBox(height: 12),
 
                         // Running Option
                         _buildWorkoutCard(
                           'Running',
-                          'Track your runs, jogs, sprints etc.',
+                          'Track your runs, jogs, sprints etc',
                           'assets/images/Shoe.png',
                           () {
                             Navigator.push(
@@ -106,8 +102,7 @@ class _ChooseWorkoutState extends State<ChooseWorkout> {
                             );
                           },
                         ),
-                        const SizedBox(
-                            height: 12), // Reduced spacing between cards
+                        SizedBox(height: 12),
 
                         // More Option
                         _buildWorkoutCard(
@@ -123,6 +118,7 @@ class _ChooseWorkoutState extends State<ChooseWorkout> {
                             );
                           },
                         ),
+                        Spacer(flex: 3),
                       ],
                     ),
                   ),
@@ -130,8 +126,13 @@ class _ChooseWorkoutState extends State<ChooseWorkout> {
               ],
             ),
           ),
-
-          // Bottom navigation bar
+          if (isBannerVisible)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 90.0 - 0.5, // align exactly with nav bar, account for divider
+              child: WorkoutSessionBanner(),
+            ),
           Positioned(
             left: 0,
             right: 0,
@@ -140,7 +141,7 @@ class _ChooseWorkoutState extends State<ChooseWorkout> {
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
-                boxShadow: [
+                boxShadow: isBannerVisible ? [] : [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
                     blurRadius: 10,

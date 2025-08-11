@@ -2,7 +2,18 @@ import 'package:flutter/material.dart';
 import 'SaveWorkout.dart';
 
 class LogRunning extends StatefulWidget {
-  const LogRunning({Key? key}) : super(key: key);
+  final double? initialDistance; // in km
+  final int? initialTime; // in minutes
+  final String? initialTitle; // for editing existing runs
+  final String? runId; // ID of the run being edited (null for new runs)
+  
+  const LogRunning({
+    Key? key, 
+    this.initialDistance, 
+    this.initialTime,
+    this.initialTitle,
+    this.runId,
+  }) : super(key: key);
 
   @override
   State<LogRunning> createState() => _LogRunningState();
@@ -17,6 +28,52 @@ class _LogRunningState extends State<LogRunning> {
 
   final List<String> distances = ['1 km', '5 km', '10 km', '15 km'];
   final List<String> times = ['15 min', '30 min', '60 min', '90 min'];
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Debug logging for initState
+    print('=== LogRunning InitState Debug ===');
+    print('Initial distance: ${widget.initialDistance}');
+    print('Initial time: ${widget.initialTime}');
+    print('Initial title: ${widget.initialTitle}');
+    print('Run ID: ${widget.runId}');
+    
+    // Add listener to distance controller to track changes
+    _distanceController.addListener(() {
+      print('=== Distance Controller Listener ===');
+      print('Controller text changed to: "${_distanceController.text}"');
+      print('====================================');
+    });
+    
+    // Pre-fill controllers with initial values if provided
+    if (widget.initialDistance != null) {
+      _distanceController.text = widget.initialDistance!.toString();
+      
+      // Check if the initial distance matches any preset button
+      String distanceWithUnit = '${widget.initialDistance!.toStringAsFixed(widget.initialDistance! % 1 == 0 ? 0 : 1)} km';
+      if (distances.contains(distanceWithUnit)) {
+        selectedDistance = distanceWithUnit;
+      }
+      
+      print('Distance controller set to: ${_distanceController.text}');
+      print('Selected distance preset: $selectedDistance');
+    }
+    if (widget.initialTime != null) {
+      _timeController.text = widget.initialTime!.toString();
+      
+      // Check if the initial time matches any preset button
+      String timeWithUnit = '${widget.initialTime} min';
+      if (times.contains(timeWithUnit)) {
+        selectedTime = timeWithUnit;
+      }
+      
+      print('Time controller set to: ${_timeController.text}');
+      print('Selected time preset: $selectedTime');
+    }
+    print('==================================');
+  }
 
   @override
   void dispose() {
@@ -54,41 +111,29 @@ class _LogRunningState extends State<LogRunning> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 29)
-                                .copyWith(top: 16, bottom: 8.5),
-                            child: Stack(
+                            padding: const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 16, bottom: 8.5),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Center(
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Running',
-                                        style: TextStyle(
-                                          color: Colors.black,
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          fontFamily: 'SF Pro Display',
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Image.asset(
-                                        'assets/images/Shoe.png',
-                                        width: 24,
-                                        height: 24,
-                                      ),
-                                    ],
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_back, color: Colors.black, size: 24),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                  },
+                                  padding: EdgeInsets.zero,
+                                  constraints: BoxConstraints(),
+                                ),
+                                Text(
+                                  'Log Running',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'SF Pro Display',
+                                    color: Colors.black,
+                                    decoration: TextDecoration.none,
                                   ),
                                 ),
-                                Positioned(
-                                  left: 0,
-                                  child: IconButton(
-                                    icon: Icon(Icons.arrow_back, color: Colors.black, size: 24),
-                                    onPressed: () => Navigator.pop(context),
-                                    padding: EdgeInsets.zero,
-                                    constraints: BoxConstraints(),
-                                  ),
-                                ),
+                                SizedBox(width: 24),
                               ],
                             ),
                           ),
@@ -150,7 +195,24 @@ class _LogRunningState extends State<LogRunning> {
                                     setState(() {
                                       selectedDistance = selected ? distance : null;
                                       if (selected) {
-                                        _distanceController.text = distance.replaceAll(' km', '');
+                                        // Extract just the numeric value from the preset (e.g., "10 km" -> "10")
+                                        String numericValue = distance.replaceAll(' km', '');
+                                        
+                                        // Update the controller text
+                                        _distanceController.text = numericValue;
+                                        
+                                        // Debug logging for preset selection
+                                        print('=== Preset Distance Debug ===');
+                                        print('Preset selected: $distance');
+                                        print('Numeric value extracted: $numericValue');
+                                        print('Text controller updated to: ${_distanceController.text}');
+                                        print('=============================');
+                                      } else {
+                                        // Clear the text field when preset is deselected
+                                        _distanceController.clear();
+                                        print('=== Preset Distance Debug ===');
+                                        print('Preset deselected, text field cleared');
+                                        print('=============================');
                                       }
                                     });
                                   },
@@ -194,6 +256,21 @@ class _LogRunningState extends State<LogRunning> {
                                 cursorWidth: 1.2,
                                 textAlign: TextAlign.left,
                                 textAlignVertical: TextAlignVertical.center,
+                                onChanged: (value) {
+                                  // Clear selected preset when user types manually
+                                  if (selectedDistance != null) {
+                                    setState(() {
+                                      selectedDistance = null;
+                                    });
+                                  }
+                                  
+                                  // Debug logging for manual input
+                                  print('=== Manual Distance Input Debug ===');
+                                  print('Manual input value: "$value"');
+                                  print('Text controller text: "${_distanceController.text}"');
+                                  print('Selected distance preset: $selectedDistance');
+                                  print('=====================================');
+                                },
                                 style: TextStyle(
                                   fontSize: 13.6,
                                   fontWeight: FontWeight.w400,
@@ -262,7 +339,9 @@ class _LogRunningState extends State<LogRunning> {
                                     setState(() {
                                       selectedTime = selected ? time : null;
                                       if (selected) {
-                                        _timeController.text = time.replaceAll(' min', '');
+                                        // Extract just the numeric value from the preset (e.g., "60 min" -> "60")
+                                        String numericValue = time.replaceAll(' min', '');
+                                        _timeController.text = numericValue;
                                       }
                                     });
                                   },
@@ -306,6 +385,14 @@ class _LogRunningState extends State<LogRunning> {
                                 cursorWidth: 1.2,
                                 textAlign: TextAlign.left,
                                 textAlignVertical: TextAlignVertical.center,
+                                onChanged: (value) {
+                                  // Clear selected preset when user types manually
+                                  if (selectedTime != null) {
+                                    setState(() {
+                                      selectedTime = null;
+                                    });
+                                  }
+                                },
                                 style: TextStyle(
                                   fontSize: 13.6,
                                   fontWeight: FontWeight.w400,
@@ -370,9 +457,38 @@ class _LogRunningState extends State<LogRunning> {
                   ),
                   child: TextButton(
                     onPressed: () {
+                      // Get the distance and time values from user input
+                      // Clean the distance text to ensure proper parsing
+                      String cleanDistanceText = _distanceController.text.trim();
+                      double distanceInKm = double.tryParse(cleanDistanceText) ?? 0.0;
+                      int timeInMinutes = int.tryParse(_timeController.text.trim()) ?? 0;
+                      
+                      // Convert distance from kilometers to meters for storage
+                      double distanceInMeters = distanceInKm * 1000;
+                      
+                      // Enhanced debug logging to verify the values
+                      print('=== LogRunning Debug ===');
+                      print('LogRunning - Raw distance controller text: "${_distanceController.text}"');
+                      print('LogRunning - Cleaned distance text: "$cleanDistanceText"');
+                      print('LogRunning - Parsed distance in km: $distanceInKm');
+                      print('LogRunning - Converted distance in meters: $distanceInMeters');
+                      print('LogRunning - Selected distance preset: $selectedDistance');
+                      print('LogRunning - Time controller text: "${_timeController.text}"');
+                      print('LogRunning - Parsed time in minutes: $timeInMinutes');
+                      print('LogRunning - Time in seconds: ${timeInMinutes * 60}');
+                      print('=======================');
+                      
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => SaveWorkout()),
+                        MaterialPageRoute(builder: (context) => SaveWorkout(
+                          duration: timeInMinutes * 60, // Convert to seconds
+                          volume: 0, 
+                          prs: 0, 
+                          workoutType: 'running',
+                          distance: distanceInMeters, // Store in meters
+                          initialTitle: widget.initialTitle, // Pass the initial title for editing
+                          runId: widget.runId, // Pass the run ID for editing existing runs
+                        )),
                       );
                     },
                     child: const Text(

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'AddExercise.dart';
+import '../WorkoutSession/WeightLiftingActive.dart';
+import 'package:provider/provider.dart';
+import '../WorkoutSession/WorkoutSessionProvider.dart';
+import '../Screens/WeightLifting.dart';
 
 class StartWorkoutScreen extends StatelessWidget {
   const StartWorkoutScreen({Key? key}) : super(key: key);
@@ -29,32 +33,29 @@ class StartWorkoutScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 29)
-                        .copyWith(top: 16, bottom: 8.5),
-                    child: Stack(
+                    padding: const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 16, bottom: 8.5),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Center(
-                          child: Text(
-                            'Weight Lifting',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'SF Pro Display',
-                            ),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.black, size: 24),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: BoxConstraints(),
+                        ),
+                        Text(
+                          'Start Workout',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'SF Pro Display',
+                            color: Colors.black,
+                            decoration: TextDecoration.none,
                           ),
                         ),
-                        Positioned(
-                          left: 0,
-                          top: 0,
-                          child: IconButton(
-                            icon: Icon(Icons.arrow_back,
-                                color: Colors.black, size: 24),
-                            onPressed: () => Navigator.pop(context),
-                            padding: EdgeInsets.zero,
-                            constraints: BoxConstraints(),
-                          ),
-                        ),
+                        SizedBox(width: 24),
                       ],
                     ),
                   ),
@@ -128,13 +129,23 @@ class StartWorkoutScreen extends StatelessWidget {
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
+                          onPressed: () async {
+                            final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => CodiaPage(),
                               ),
                             );
+                            if (result != null && result is List<Exercise>) {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => WeightLiftingActive(
+                                    selectedExercises: result,
+                                  ),
+                                ),
+                              );
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.black,
@@ -186,14 +197,100 @@ class StartWorkoutScreen extends StatelessWidget {
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
-                                  onTap: () => Navigator.pop(context),
+                                  onTap: () async {
+                                    final shouldDiscard = await showDialog<bool>(
+                                      context: context,
+                                      barrierColor: Colors.black.withOpacity(0.5),
+                                      builder: (context) => Dialog(
+                                        backgroundColor: Colors.transparent,
+                                        elevation: 0,
+                                        insetPadding: EdgeInsets.symmetric(horizontal: 24),
+                                        child: Center(
+                                          child: Container(
+                                            width: 338,
+                                            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(20),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.08),
+                                                  blurRadius: 16,
+                                                  offset: Offset(0, 4),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  'Discard Workout?',
+                                                  style: TextStyle(
+                                                    fontSize: 21,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontFamily: 'SF Pro Display',
+                                                    color: Colors.black,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                                SizedBox(height: 24),
+                                                InkWell(
+                                                  onTap: () => Navigator.of(context).pop(true),
+                                                  child: Padding(
+                                                    padding: EdgeInsets.symmetric(horizontal: 24),
+                                                    child: Row(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Text(
+                                                          'Discard',
+                                                          style: TextStyle(
+                                                            color: Color(0xFFFF3B30),
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w500,
+                                                            fontFamily: 'SF Pro Display',
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                                SizedBox(height: 16),
+                                                InkWell(
+                                                  onTap: () => Navigator.of(context).pop(false),
+                                                  child: Padding(
+                                                    padding: EdgeInsets.symmetric(horizontal: 24),
+                                                    child: Row(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Text(
+                                                          'Cancel',
+                                                          style: TextStyle(
+                                                            color: Color(0xFF8E8E93),
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w500,
+                                                            fontFamily: 'SF Pro Display',
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                    if (shouldDiscard == true) {
+                                      Provider.of<WorkoutSessionProvider>(context, listen: false).endSession();
+                                      Navigator.pop(context);
+                                    }
+                                  },
                                   borderRadius: BorderRadius.circular(15),
                                   child: Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 20),
+                                    padding: EdgeInsets.symmetric(horizontal: 20),
                                     child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
+                                      mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         Image.asset(
                                           'assets/images/trashcan.png',
@@ -248,14 +345,8 @@ class StartWorkoutScreen extends StatelessWidget {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        Image.asset(
-                                          'assets/images/Finish.png',
-                                          width: 20,
-                                          height: 20,
-                                        ),
-                                        SizedBox(width: 8),
                                         Text(
-                                          'Finish',
+                                          'Settings',
                                           style: TextStyle(
                                             color: Colors.black,
                                             fontSize: 16,

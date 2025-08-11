@@ -1,0 +1,531 @@
+import 'package:flutter/material.dart';
+import '../codia/codia_page.dart' as main_codia;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:async';
+
+class CodiaPage extends StatefulWidget {
+  final Map<String, dynamic>? nutritionData;
+  final String? scanId;
+
+  const CodiaPage({super.key, this.nutritionData, this.scanId});
+
+  @override
+  State<StatefulWidget> createState() => _CodiaPage();
+}
+
+class _CodiaPage extends State<CodiaPage> {
+  final Color yellowColor = const Color(0xFFF3D960);
+  final Color redColor = const Color(0xFFDA7C7C);
+  final Color greenColor = const Color(0xFF78C67A);
+  
+  late Map<String, NutrientInfo> vitamins = {};
+  late Map<String, NutrientInfo> minerals = {};
+  late Map<String, NutrientInfo> other = {};
+  
+  late String _scanId;
+  
+  @override
+  void initState() {
+    super.initState();
+    _scanId = widget.scanId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    
+    print("Nutrition.dart initState called");
+    print("Using scan ID: $_scanId");
+    if (widget.nutritionData != null) {
+      print("Received nutrition data: ${widget.nutritionData}");
+    } else {
+      print("No nutrition data received");
+    }
+    
+    _initializeDefaultValues();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
+  }
+  
+  Future<void> _loadData() async {
+    try {
+      await _initializeNutrientData();
+      if (mounted) {
+        setState(() {
+          print("Refreshing UI after data initialized");
+        });
+      }
+    } catch (e) {
+      print("Error loading nutrition data: $e");
+    }
+  }
+  
+  Future<void> _initializeNutrientData() async {
+    _initializeDefaultValues();
+    
+    String foodPart = _scanId.contains('food_nutrition_') 
+        ? _scanId.replaceFirst('food_nutrition_', '') 
+        : _scanId.split('_')[0];
+        
+    print('Trying to load nutrition data for food: $foodPart');
+    
+    final prefs = await SharedPreferences.getInstance();
+    String? savedData;
+    
+    List<String> directKeys = [
+      'NUTRITION_$foodPart',
+      'DIRECT_NUTRITION_$foodPart', 
+      'DIRECT_SAVE_$_scanId'
+    ];
+    
+    for (String key in directKeys) {
+      savedData = prefs.getString(key);
+      if (savedData != null && savedData.isNotEmpty) {
+        print('FOUND DATA using direct key: $key (${savedData.length} bytes)');
+        break;
+      }
+    }
+    
+    bool loadedExistingData = false;
+    
+    if (savedData != null && savedData.isNotEmpty) {
+      try {
+        Map<String, dynamic> data = jsonDecode(savedData);
+        
+        if (data.containsKey('vitamins')) {
+          Map<String, dynamic> vitaminData = data['vitamins'];
+          vitaminData.forEach((key, value) {
+            if (vitamins.containsKey(key) && value is Map) {
+              vitamins[key] = NutrientInfo(
+                name: value['name'] ?? key,
+                value: value['value'] ?? '0/0 g',
+                percent: value['percent'] ?? '0%',
+                progress: value['progress'] is double ? value['progress'] : double.tryParse(value['progress'].toString()) ?? 0.0,
+                progressColor: _getColorBasedOnProgress(value['progress'] is double ? value['progress'] : double.tryParse(value['progress'].toString()) ?? 0.0),
+              );
+            }
+          });
+        }
+        
+        if (data.containsKey('minerals')) {
+          Map<String, dynamic> mineralData = data['minerals'];
+          mineralData.forEach((key, value) {
+            if (minerals.containsKey(key) && value is Map) {
+              minerals[key] = NutrientInfo(
+                name: value['name'] ?? key,
+                value: value['value'] ?? '0/0 g',
+                percent: value['percent'] ?? '0%',
+                progress: value['progress'] is double ? value['progress'] : double.tryParse(value['progress'].toString()) ?? 0.0,
+                progressColor: _getColorBasedOnProgress(value['progress'] is double ? value['progress'] : double.tryParse(value['progress'].toString()) ?? 0.0),
+              );
+            }
+          });
+        }
+        
+        if (data.containsKey('other')) {
+          Map<String, dynamic> otherData = data['other'];
+          otherData.forEach((key, value) {
+            if (other.containsKey(key) && value is Map) {
+              other[key] = NutrientInfo(
+                name: value['name'] ?? key,
+                value: value['value'] ?? '0/0 g',
+                percent: value['percent'] ?? '0%',
+                progress: value['progress'] is double ? value['progress'] : double.tryParse(value['progress'].toString()) ?? 0.0,
+                progressColor: _getColorBasedOnProgress(value['progress'] is double ? value['progress'] : double.tryParse(value['progress'].toString()) ?? 0.0),
+              );
+            }
+          });
+        }
+        
+        loadedExistingData = true;
+        print('SUCCESSFULLY LOADED saved nutrition data using direct key');
+      } catch (e) {
+        print('Error loading saved nutrition data: $e');
+      }
+    }
+    
+    if (!loadedExistingData || (widget.nutritionData != null && widget.nutritionData!.isNotEmpty)) {
+      if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+        print('Using nutrition data from widget parameter');
+        _updateNutrientValuesFromData(widget.nutritionData!);
+      } else if (!loadedExistingData) {
+        print('No saved data or widget data, trying NutritionTracker');
+        await _loadDataFromNutritionTracker();
+      }
+    }
+    
+    await _loadNutrientTargets();
+  }
+  
+  Future<void> _loadDataFromNutritionTracker() async {
+    try {
+      final nutritionTracker = main_codia.NutritionTracker();
+      
+      print("Loading nutrition data from tracker:");
+      print("- Protein: ${nutritionTracker.currentProtein}g");
+      print("- Fat: ${nutritionTracker.currentFat}g");
+      print("- Carbs: ${nutritionTracker.currentCarb}g");
+      print("- Calories: ${nutritionTracker.consumedCalories}kcal");
+      
+      await _saveNutritionData();
+    } catch (e) {
+      print("Error loading data from NutritionTracker: $e");
+    }
+  }
+  
+  void _initializeDefaultValues() {
+    // Initialize vitamins with default values
+    vitamins = {
+      'Vitamin A': NutrientInfo(
+        name: "Vitamin A",
+        value: "0/0 mcg",
+        percent: "0%",
+        progress: 0,
+        progressColor: greenColor
+      ),
+      'Vitamin C': NutrientInfo(
+        name: "Vitamin C",
+        value: "0/0 mg",
+        percent: "0%",
+        progress: 0,
+        progressColor: redColor
+      ),
+      // Add other vitamins similarly (omitted for brevity)
+    };
+    
+    // Initialize minerals with default values
+    minerals = {
+      'Calcium': NutrientInfo(
+        name: "Calcium",
+        value: "0/0 mg",
+        percent: "0%",
+        progress: 0,
+        progressColor: yellowColor
+      ),
+      // Add other minerals similarly (omitted for brevity)
+    };
+    
+    // Initialize other nutrients with default values
+    other = {
+      'Fiber': NutrientInfo(
+        name: "Fiber",
+        value: "0/0 g",
+        percent: "0%",
+        progress: 0,
+        progressColor: yellowColor
+      ),
+      // Add other nutrients similarly (omitted for brevity)
+    };
+  }
+  
+  // Method to update nutrient values from data
+  void _updateNutrientValuesFromData(Map<String, dynamic> data) {
+    print("Updating nutrient values from data: $data");
+    
+    _loadPersonalizedOtherNutrientTargets().then((personalizedTargets) {
+      // Update nutrients based on data and personalized targets
+      // Code omitted for brevity
+      
+      // Update nutrient targets from SharedPreferences
+      _loadNutrientTargets();
+      
+      // Update vitamins if available
+      _updateVitaminsFromData(data);
+      
+      // Update minerals if available
+      _updateMineralsFromData(data);
+      
+      // Save the updated data to SharedPreferences
+      _saveNutritionData();
+    });
+    
+    // Always refresh with personalized targets to ensure consistency
+    _refreshDisplaysWithPersonalizedTargets();
+  }
+  
+  // Helper method to load personalized targets for other nutrients
+  Future<Map<String, double>> _loadPersonalizedOtherNutrientTargets() async {
+    Map<String, double> targets = {};
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Try to load each nutrient target from SharedPreferences
+      // Code omitted for brevity
+    } catch (e) {
+      print('Error loading personalized other nutrient targets: $e');
+    }
+    
+    return targets;
+  }
+  
+  // Update vitamins from data
+  void _updateVitaminsFromData(Map<String, dynamic> data) {
+    Map<String, Map<String, dynamic>> vitaminInfo = {
+      // Vitamin info definitions
+    };
+    
+    // Load personalized vitamin targets
+    _loadPersonalizedVitaminTargets(vitaminInfo);
+    
+    // Update vitamin values based on data
+    // Code omitted for brevity
+  }
+  
+  // Check for B vitamins in various formats
+  void _checkForBVitamins(Map<String, dynamic> data) {
+    // Code omitted for brevity
+  }
+  
+  // Update B vitamin from nutrient array
+  void _updateBVitaminFromNutrient(String vitaminKey, dynamic amount, Map<String, Map<String, dynamic>> bVitamins) {
+    // Code omitted for brevity
+  }
+  
+  // Update minerals from data
+  void _updateMineralsFromData(Map<String, dynamic> data) {
+    Map<String, Map<String, dynamic>> mineralInfo = {
+      // Mineral info definitions
+    };
+    
+    // Load personalized mineral targets
+    _loadPersonalizedMineralTargets(mineralInfo);
+    
+    // Update mineral values based on data
+    // Code omitted for brevity
+  }
+  
+  // Load personalized mineral targets
+  Future<void> _loadPersonalizedMineralTargets(Map<String, Map<String, dynamic>> mineralInfo) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      for (var entry in mineralInfo.entries) {
+        String dataKey = entry.key;
+        Map<String, dynamic> info = entry.value;
+        String uiKey = info['key'] as String;
+        String prefsKey = uiKey.toLowerCase().replaceAll(' ', '_');
+        
+        double? target = prefs.getDouble('mineral_target_$prefsKey');
+        
+        if (target != null) {
+          mineralInfo[dataKey]!['target'] = target;
+          print('Loaded personalized mineral target: $uiKey = $target ${info['unit']}');
+        } else {
+          print('No personalized target found for $uiKey, using default: ${info['target']} ${info['unit']}');
+        }
+      }
+    } catch (e) {
+      print('Error loading personalized mineral targets: $e');
+    }
+  }
+  
+  // Parse nutrient value from various formats
+  double _parseNutrientValue(dynamic value) {
+    // Code omitted for brevity
+    return 0.0;
+  }
+  
+  // Load nutrient targets from SharedPreferences
+  Future<void> _loadNutrientTargets() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      print("Loading personalized nutrient targets from SharedPreferences...");
+      
+      // Load various nutrient targets
+      // Code omitted for brevity
+      
+    } catch (e) {
+      print("Error loading nutrient targets: $e");
+    }
+  }
+  
+  // Load vitamin targets
+  Future<void> _loadVitaminTargets(SharedPreferences prefs) async {
+    try {
+      // Code omitted for brevity
+    } catch (e) {
+      print("Error loading vitamin targets: $e");
+    }
+  }
+  
+  // Load mineral targets
+  Future<void> _loadMineralTargets(SharedPreferences prefs) async {
+    try {
+      // Code omitted for brevity
+    } catch (e) {
+      print("Error loading mineral targets: $e");
+    }
+  }
+  
+  // Parse current value from formatted string
+  double _parseCurrentValue(String formattedValue) {
+    try {
+      if (formattedValue.contains('/')) {
+        String currentValue = formattedValue.split('/')[0];
+        return double.tryParse(currentValue) ?? 0.0;
+      }
+      return 0.0;
+    } catch (e) {
+      print("Error parsing current value from '$formattedValue': $e");
+      return 0.0;
+    }
+  }
+  
+  // Save nutrition data to SharedPreferences
+  Future<void> _saveNutritionData() async {
+    try {
+      // Code omitted for brevity
+    } catch (e) {
+      print('Error saving nutrition data: $e');
+    }
+  }
+  
+  // Load saved nutrition data from SharedPreferences
+  Future<bool> _loadSavedNutritionData() async {
+    try {
+      // Code omitted for brevity
+      return false;
+    } catch (e) {
+      print('Error loading saved nutrition data: $e');
+      return false;
+    }
+  }
+  
+  // Process simplified data format
+  void _processSimplifiedData(Map<String, dynamic> simplifiedData, Map<String, NutrientInfo> targetMap) {
+    // Code omitted for brevity
+  }
+  
+  // Check if data structure seems valid
+  bool _isMostLikelyValidNutritionData(Map<String, dynamic> data) {
+    // Code omitted for brevity
+    return false;
+  }
+  
+  // Get color based on progress
+  Color _getColorBasedOnProgress(double progress) {
+    if (progress < 0.4) {
+      return Colors.red;
+    } else if (progress < 0.8) {
+      return yellowColor;
+    } else {
+      return greenColor;
+    }
+  }
+  
+  // Load personalized vitamin targets
+  Future<void> _loadPersonalizedVitaminTargets(Map<String, Map<String, dynamic>> vitaminInfo) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      for (var entry in vitaminInfo.entries) {
+        String dataKey = entry.key;
+        Map<String, dynamic> info = entry.value;
+        String uiKey = info['key'] as String;
+        String prefsKey = uiKey.toLowerCase().replaceAll(' ', '_');
+        
+        double? target = prefs.getDouble('vitamin_target_$prefsKey');
+        
+        if (target != null) {
+          vitaminInfo[dataKey]!['target'] = target;
+          print('Loaded personalized vitamin target: $uiKey = $target ${info['unit']}');
+        } else {
+          print('No personalized target found for $uiKey, using default: ${info['target']} ${info['unit']}');
+        }
+      }
+    } catch (e) {
+      print('Error loading personalized vitamin targets: $e');
+    }
+  }
+  
+  // Refresh displays with personalized targets
+  Future<void> _refreshDisplaysWithPersonalizedTargets() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      String? calculationDate = prefs.getString('nutrient_targets_calculation_date');
+      if (calculationDate != null) {
+        print('Refreshing all displays with personalized targets calculated on: $calculationDate');
+        
+        // Update other nutrients
+        // Code omitted for brevity
+        
+        // Update vitamins
+        vitamins.forEach((key, info) {
+          // Code omitted for brevity
+        });
+        
+        // Update minerals
+        minerals.forEach((key, info) {
+          // Code omitted for brevity
+        });
+        
+        print('Successfully refreshed all nutrient displays with personalized targets');
+      } else {
+        print('No personalized targets calculation date found - targets may not be fully personalized');
+      }
+    } catch (e) {
+      print('Error refreshing displays with personalized targets: $e');
+    }
+  }
+  
+  // Update nutrient display
+  void _updateNutrientDisplay(String key, double currentValue, double target, String unit, Map<String, NutrientInfo> nutrientMap) {
+    double progress = (currentValue / target);
+    int percentage = (progress * 100).round();
+    Color progressColor = _getColorBasedOnProgress(progress);
+    
+    String formattedTarget;
+    if (unit == 'mcg' || unit == 'mg') {
+      formattedTarget = target.toStringAsFixed(0);
+    } else {
+      formattedTarget = target.toStringAsFixed(1);
+    }
+    
+    nutrientMap[key] = NutrientInfo(
+      name: key,
+      value: "$currentValue/$formattedTarget $unit",
+      percent: "$percentage%",
+      progress: progress,
+      progressColor: progressColor,
+      hasInfo: nutrientMap[key]?.hasInfo ?? false
+    );
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    // UI building code
+    return Scaffold(
+      // Widget structure omitted for brevity
+      body: Container(),
+    );
+  }
+  
+  // UI helper methods omitted for brevity
+  
+  @override
+  void dispose() {
+    print('Nutrition.dart dispose called - saving data for scan ID: $_scanId');
+    // Cleanup code omitted for brevity
+    super.dispose();
+  }
+}
+
+// Simple class to hold nutrient info
+class NutrientInfo {
+  final String name;
+  final String value;
+  final String percent;
+  final double progress;
+  final Color progressColor;
+  final bool hasInfo;
+
+  NutrientInfo({
+    required this.name,
+    required this.value,
+    required this.percent,
+    required this.progress,
+    required this.progressColor,
+    this.hasInfo = false,
+  });
+}

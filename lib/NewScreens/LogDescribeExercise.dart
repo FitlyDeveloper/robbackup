@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'SaveWorkout.dart';
+import '../models/intensity_level.dart';
 
 class LogDescribeExercise extends StatefulWidget {
   const LogDescribeExercise({Key? key}) : super(key: key);
@@ -16,25 +17,32 @@ class _LogDescribeExerciseState extends State<LogDescribeExercise> {
   String? selectedDistance;
   String? selectedTime;
   bool showIntensity = false;
-  double intensityValue = 0.0;
+  IntensityLevel? _selectedIntensity; // Store the selected intensity level
 
   final List<String> distances = ['1 km', '5 km', '10 km', '15 km'];
   final List<String> times = ['15 min', '30 min', '60 min', '90 min'];
 
   String getIntensityLabel() {
-    if (intensityValue <= 0.2) return 'Extremely Light';
-    if (intensityValue <= 0.4) return 'Light';
-    if (intensityValue <= 0.6) return 'Moderate';
-    if (intensityValue <= 0.8) return 'Difficult';
-    return 'Maximum Effort';
+    if (_selectedIntensity == null) return 'Select intensity';
+    return _selectedIntensity!.label;
   }
 
   String getIntensityDescription() {
-    if (intensityValue <= 0.2) return 'Very gentle movement, barely felt like exercise.';
-    if (intensityValue <= 0.4) return 'Easy activity, could maintain for hours.';
-    if (intensityValue <= 0.6) return 'Breathing heavily but can hold a conversation.';
-    if (intensityValue <= 0.8) return 'Difficult to speak, sweating heavily.';
-    return 'All-out effort, cannot maintain for long.';
+    if (_selectedIntensity == null) return 'Choose how difficult this exercise was';
+    switch (_selectedIntensity!) {
+      case IntensityLevel.extremelyLight:
+        return 'Very gentle movement, barely felt like exercise.';
+      case IntensityLevel.light:
+        return 'Easy activity, could maintain for hours.';
+      case IntensityLevel.moderate:
+        return 'Breathing heavily but can hold a conversation.';
+      case IntensityLevel.difficult:
+        return 'Difficult to speak, sweating heavily.';
+      case IntensityLevel.veryDifficult:
+        return 'Very challenging, pushing your limits.';
+      case IntensityLevel.maximumEffort:
+        return 'All-out effort, cannot maintain for long.';
+    }
   }
 
   @override
@@ -71,30 +79,29 @@ class _LogDescribeExerciseState extends State<LogDescribeExercise> {
                       elevation: 0,
                       automaticallyImplyLeading: false,
                       flexibleSpace: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 29)
-                            .copyWith(top: 16, bottom: 8.5),
-                        child: Stack(
+                        padding: const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 16, bottom: 8.5),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Center(
-                              child: Text(
-                                'Describe Exercise',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'SF Pro Display',
-                                ),
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back, color: Colors.black, size: 24),
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              padding: EdgeInsets.zero,
+                              constraints: BoxConstraints(),
+                            ),
+                            Text(
+                              'Describe Exercise',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'SF Pro Display',
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
                               ),
                             ),
-                            Positioned(
-                              left: 0,
-                              child: IconButton(
-                                icon: Icon(Icons.arrow_back, color: Colors.black, size: 24),
-                                onPressed: () => Navigator.pop(context),
-                                padding: EdgeInsets.zero,
-                                constraints: BoxConstraints(),
-                              ),
-                            ),
+                            SizedBox(width: 24),
                           ],
                         ),
                       ),
@@ -292,14 +299,15 @@ class _LogDescribeExerciseState extends State<LogDescribeExercise> {
                                       overlayShape: RoundSliderOverlayShape(overlayRadius: 20),
                                     ),
                                     child: Slider(
-                                      value: intensityValue,
+                                      value: (_selectedIntensity?.rank ?? 1).toDouble(),
                                       onChanged: (value) {
                                         setState(() {
-                                          intensityValue = value;
+                                          _selectedIntensity = IntensityLevel.values[value.round() - 1];
                                         });
                                       },
-                                      min: 0.0,
-                                      max: 1.0,
+                                      min: 1.0,
+                                      max: 6.0,
+                                      divisions: 5,
                                     ),
                                   ),
                                 ],
@@ -545,9 +553,24 @@ class _LogDescribeExerciseState extends State<LogDescribeExercise> {
                   ),
                   child: TextButton(
                     onPressed: () {
+                      // Get the distance and time values from user input
+                      double distanceInKm = double.tryParse(_distanceController.text) ?? 0.0;
+                      int timeInMinutes = int.tryParse(_timeController.text) ?? 0;
+                      
+                      // Convert distance from kilometers to meters for storage
+                      double distanceInMeters = distanceInKm * 1000;
+                      
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => SaveWorkout()),
+                        MaterialPageRoute(builder: (context) => SaveWorkout(
+                          duration: timeInMinutes * 60, // Convert to seconds
+                          volume: 0, 
+                          prs: 0, 
+                          workoutType: 'custom',
+                          distance: showIntensity ? null : distanceInMeters, // Only pass distance if not using intensity
+                          exerciseName: _exerciseController.text.isNotEmpty ? _exerciseController.text : 'Custom Exercise',
+                          intensityLevel: showIntensity ? _selectedIntensity : null, // Pass intensity level if using intensity
+                        )),
                       );
                     },
                     child: Text(

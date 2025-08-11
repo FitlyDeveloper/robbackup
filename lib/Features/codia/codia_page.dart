@@ -5,6 +5,8 @@ import 'Memories.dart';
 import '../../NewScreens/ChooseWorkout.dart';
 import '../../NewScreens/Coach.dart';
 import '../../NewScreens/SnapFood.dart';
+import '../../NewScreens/GymCardOpen.dart';
+import '../../NewScreens/RunCardOpen.dart';
 import 'flip_card.dart';
 import 'home_card2.dart';
 import '../../NewScreens/FoodCardOpen.dart';
@@ -14,9 +16,9 @@ import 'dart:typed_data';
 import 'package:grouped_list/grouped_list.dart';
 import './Nutrition.dart' as Nutrition;
 import 'package:table_calendar/table_calendar.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
-
-// Image compression utilities removed to fix display issues
+import '../../Widgets/WorkoutSessionBanner.dart';
+import '../../WorkoutSession/WorkoutSessionProvider.dart';
+import 'package:provider/provider.dart';
 
 // Custom painter for drawing the calorie gauge
 class CalorieGaugePainter extends CustomPainter {
@@ -148,52 +150,11 @@ class NutritionTracker {
   int _currentCarb = 0;
   int _consumedCalories = 0;
 
-  // Cache variables to prevent excessive loading
-  DateTime? _lastLoadTime;
-  String? _lastDataHash;
-  bool _isLoading = false;
-  static const Duration _cacheValidDuration =
-      Duration(seconds: 30); // Cache for 30 seconds
-
   // Getters for nutrition values
   int get currentProtein => _currentProtein;
   int get currentFat => _currentFat;
   int get currentCarb => _currentCarb;
   int get consumedCalories => _consumedCalories;
-
-  // Helper method to generate a hash of the current food data
-  String _generateDataHash(SharedPreferences prefs) {
-    List<String> hashComponents = [];
-
-    // Add food cards data to hash
-    if (prefs.containsKey('food_cards')) {
-      List<String>? cardStrings = prefs.getStringList('food_cards');
-      if (cardStrings != null) {
-        hashComponents.addAll(cardStrings);
-      }
-    }
-
-    // Add today's food logs to hash
-    String today = DateTime.now().toString().split(' ')[0];
-    String foodLogsKey = 'food_logs_$today';
-    if (prefs.containsKey(foodLogsKey)) {
-      String? foodLogsJson = prefs.getString(foodLogsKey);
-      if (foodLogsJson != null) {
-        hashComponents.add(foodLogsJson);
-      }
-    }
-
-    // Add daily nutrition to hash
-    String dailyNutritionKey = 'daily_nutrition_$today';
-    if (prefs.containsKey(dailyNutritionKey)) {
-      String? nutritionJson = prefs.getString(dailyNutritionKey);
-      if (nutritionJson != null) {
-        hashComponents.add(nutritionJson);
-      }
-    }
-
-    return hashComponents.join('|').hashCode.toString();
-  }
 
   // Add a new food log entry
   Future<bool> logFood({
@@ -259,10 +220,6 @@ class NutritionTracker {
       _currentCarb += _parseNutritionValue(carbs);
       _consumedCalories += _parseNutritionValue(calories);
 
-      // Invalidate cache since data changed
-      _lastDataHash = null;
-      _lastLoadTime = null;
-
       return true;
     } catch (e) {
       print('Error logging food: $e');
@@ -270,31 +227,10 @@ class NutritionTracker {
     }
   }
 
-  // Load nutrition data from SharedPreferences with caching
+  // Load nutrition data from SharedPreferences
   Future<void> loadNutritionData() async {
-    // Prevent concurrent loading
-    if (_isLoading) {
-      print('Already loading nutrition data, skipping...');
-      return;
-    }
-
     try {
-      _isLoading = true;
       final prefs = await SharedPreferences.getInstance();
-
-      // Check if we can use cached data
-      final now = DateTime.now();
-      final currentDataHash = _generateDataHash(prefs);
-
-      if (_lastLoadTime != null &&
-          _lastDataHash == currentDataHash &&
-          now.difference(_lastLoadTime!) < _cacheValidDuration) {
-        print(
-            'Using cached nutrition data (loaded ${now.difference(_lastLoadTime!).inSeconds}s ago)');
-        return;
-      }
-
-      print('Loading fresh nutrition data...');
 
       // Reset values first
       _currentProtein = 0;
@@ -316,34 +252,9 @@ class NutritionTracker {
         // For testing ONLY - use hardcoded values, COMMENT THIS OUT IN PRODUCTION
         _setupTestData();
       }
-
-      // Update cache
-      _lastLoadTime = now;
-      _lastDataHash = currentDataHash;
     } catch (e) {
       print('Error loading nutrition data: $e');
-    } finally {
-      _isLoading = false;
     }
-  }
-
-  // Force reload (bypass cache) - useful when we know data has changed
-  Future<void> forceReload() async {
-    _lastDataHash = null;
-    _lastLoadTime = null;
-    await loadNutritionData();
-  }
-
-  // Invalidate cache without reloading - useful when data changes but we don't need immediate reload
-  void invalidateCache() {
-    _lastDataHash = null;
-    _lastLoadTime = null;
-    print('Nutrition cache invalidated');
-  }
-
-  // Static method to invalidate cache from other files
-  static void invalidateCacheStatic() {
-    _instance.invalidateCache();
   }
 
   // Try to load from food_logs_DATE format
@@ -557,6 +468,23 @@ class _CodiaPageState extends State<CodiaPage> {
   // List to store food cards loaded from SharedPreferences
   List<Map<String, dynamic>> _foodCards = [];
   bool _isLoadingFoodCards = true;
+
+  // Load nutrition data from food logs
+  Future<void> _loadNutritionData() async {
+    await _nutritionTracker.loadNutritionData();
+    setState(() {
+      // Update remaining calories based on consumed calories
+      if (targetCalories > 0) {
+        remainingCalories = targetCalories - _nutritionTracker.consumedCalories;
+        // Important: Print debug info to see what's happening with the values
+        print(
+            'LOAD DATA DEBUG: Target=$targetCalories, Consumed=${_nutritionTracker.consumedCalories}, Remaining=$remainingCalories');
+        // No clamping - we need negative values to show overage
+      }
+    });
+    print(
+        'Updated remaining calories: $remainingCalories (target=$targetCalories, consumed=${_nutritionTracker.consumedCalories})');
+  }
 
   // Simple diagnostic method to show just the key user data without all the noise
   Future<void> _showBasicUserData() async {
@@ -1312,64 +1240,75 @@ class _CodiaPageState extends State<CodiaPage> {
       List<Map<String, dynamic>> cards = [];
 
       if (storedCards != null && storedCards.isNotEmpty) {
+        final currentTime = DateTime.now().millisecondsSinceEpoch;
+        final twelveHoursInMillis =
+            12 * 60 * 60 * 1000; // 12 hours in milliseconds
+
         for (String cardJson in storedCards) {
           try {
             Map<String, dynamic> cardData = jsonDecode(cardJson);
 
-            // REMOVED: 12-hour expiration filter - cards now persist until manually deleted
-            // Ensure ingredients data structure is properly maintained
-            if (cardData.containsKey('ingredients')) {
-              List<dynamic> ingredients = cardData['ingredients'];
+            // Check if the card is less than 12 hours old
+            int timestamp = cardData['timestamp'] ?? 0;
+            if (currentTime - timestamp < twelveHoursInMillis) {
+              // Ensure ingredients data structure is properly maintained
+              if (cardData.containsKey('ingredients')) {
+                List<dynamic> ingredients = cardData['ingredients'];
 
-              // For each ingredient, ensure we have a properly structured map
-              List<dynamic> validIngredients = [];
-              Map<String, dynamic> ingredientAmounts = {};
-              Map<String, dynamic> ingredientCalories = {};
+                // For each ingredient, ensure we have a properly structured map
+                List<dynamic> validIngredients = [];
+                Map<String, dynamic> ingredientAmounts = {};
+                Map<String, dynamic> ingredientCalories = {};
 
-              for (var ingredient in ingredients) {
-                if (ingredient is Map<String, dynamic>) {
-                  // Normalize values to ensure proper data types
-                  Map<String, dynamic> normalizedIngredient = {
-                    'name': ingredient['name'] ?? 'Ingredient',
-                    'amount': ingredient['amount'] ?? '1 serving',
-                    'calories':
-                        normalizeIngredientValue(ingredient['calories']),
-                    // Preserve macros if present so flip-side values survive re-entry
-                    'protein': normalizeIngredientValue(ingredient['protein']),
-                    'fat': normalizeIngredientValue(ingredient['fat']),
-                    'carbs': normalizeIngredientValue(ingredient['carbs']),
-                  };
+                for (var ingredient in ingredients) {
+                  if (ingredient is Map<String, dynamic>) {
+                    // Normalize values to ensure proper data types
+                    Map<String, dynamic> normalizedIngredient = {
+                      'name': ingredient['name'] ?? 'Ingredient',
+                      'amount': ingredient['amount'] ?? '1 serving',
+                      'calories':
+                          normalizeIngredientValue(ingredient['calories']),
+                    };
 
-                  // Use the normalized ingredient
-                  validIngredients.add(normalizedIngredient);
+                    // Use the normalized ingredient
+                    validIngredients.add(normalizedIngredient);
 
-                  // Store the name, amount and calories in separate maps for lookup
-                  String name = normalizedIngredient['name'];
-                  ingredientAmounts[name] = normalizedIngredient['amount'];
-                  ingredientCalories[name] = normalizedIngredient['calories'];
-                } else if (ingredient is String) {
-                  // If it's a string, we need to create a map and add it
-                  validIngredients.add(ingredient);
+                    // Store the name, amount and calories in separate maps for lookup
+                    String name = normalizedIngredient['name'];
+                    ingredientAmounts[name] = normalizedIngredient['amount'];
+                    ingredientCalories[name] = normalizedIngredient['calories'];
+                  } else if (ingredient is String) {
+                    // If it's a string, we need to create a map and add it
+                    validIngredients.add(ingredient);
+                  }
                 }
+
+                // Replace the ingredients list with our validated list
+                cardData['ingredients'] = validIngredients;
+
+                // Add the lookup maps for amounts and calories
+                cardData['ingredient_amounts'] = ingredientAmounts;
+                cardData['ingredient_calories'] = ingredientCalories;
               }
 
-              // Replace the ingredients list with our validated list
-              cardData['ingredients'] = validIngredients;
+              // Preserve the original high-quality image if it exists
+              if (cardData.containsKey('image') &&
+                  cardData['image'] is String) {
+                cardData['image'] = preserveImageQuality(cardData['image']);
+              }
 
-              // Add the lookup maps for amounts and calories
-              cardData['ingredient_amounts'] = ingredientAmounts;
-              cardData['ingredient_calories'] = ingredientCalories;
+              cards.add(cardData);
             }
-
-            // Preserve the original high-quality image if it exists
-            if (cardData.containsKey('image') && cardData['image'] is String) {
-              cardData['image'] = preserveImageQuality(cardData['image']);
-            }
-
-            cards.add(cardData);
           } catch (e) {
             print("Error parsing food card JSON: $e");
           }
+        }
+
+        // Save filtered cards back if any were removed due to expiration
+        if (cards.length < storedCards.length) {
+          final List<String> updatedCards =
+              cards.map((card) => jsonEncode(card)).toList();
+          await prefs.setStringList('food_cards', updatedCards);
         }
 
         // Sort by timestamp (most recent first)
@@ -1387,7 +1326,7 @@ class _CodiaPageState extends State<CodiaPage> {
           }
         });
 
-        print("Loaded ${cards.length} food cards (no expiration filter)");
+        print("Loaded ${cards.length} food cards");
       }
     } catch (e) {
       print("Error loading food cards: $e");
@@ -1414,6 +1353,22 @@ class _CodiaPageState extends State<CodiaPage> {
       }
     }
     return 0;
+  }
+
+  // Helper method to extract numeric value from a string and convert to double
+  double? _extractNumericValueAsDouble(dynamic input) {
+    if (input is int) {
+      return input.toDouble();
+    } else if (input is double) {
+      return input;
+    } else if (input is String) {
+      // Try to extract digits from the string, including possible decimal values
+      final match = RegExp(r'(\d+\.?\d*)').firstMatch(input);
+      if (match != null && match.group(1) != null) {
+        return double.tryParse(match.group(1)!);
+      }
+    }
+    return null;
   }
 
   // Helper method to extract numeric value as string without decimal precision
@@ -1458,75 +1413,35 @@ class _CodiaPageState extends State<CodiaPage> {
     );
   }
 
-  // Helper method to create a food card image with rounded left corners only
+  // Helper method to create a square food card image
   Widget _buildFoodCardImage(String? base64Image) {
-    const BorderRadius leftRoundedOnly = BorderRadius.only(
-      topLeft: Radius.circular(16),
-      bottomLeft: Radius.circular(16),
-    );
     if (base64Image == null || base64Image.isEmpty) {
       return ClipRRect(
-        borderRadius: leftRoundedOnly,
+        borderRadius: BorderRadius.circular(12),
         child: _buildDefaultImageContainer(),
       );
     }
 
     try {
       Uint8List bytes = base64Decode(base64Image);
-
-      if (bytes.length > 700 * 1024) {
-        // 0.7MB target size
-        print(
-            'Image too large for display: ${(bytes.length / 1024 / 1024).toStringAsFixed(2)}MB, using original');
-        // Just return original image for now to avoid display issues
-        final dpr = MediaQuery.of(context).devicePixelRatio;
-        return ClipRRect(
-          borderRadius: leftRoundedOnly,
-          child: Image.memory(
-            bytes,
-            width: 92,
-            height: 92,
-            fit: BoxFit.cover,
-            cacheWidth: (92 * dpr).ceil(),
-            filterQuality: FilterQuality.medium,
-            gaplessPlayback: true,
-            errorBuilder: (context, error, stackTrace) {
-              print('Error loading food card image: $error');
-              return _buildDefaultImageContainer();
-            },
-          ),
-        );
-      }
-
       return ClipRRect(
-        borderRadius: leftRoundedOnly,
+        borderRadius: BorderRadius.circular(12),
         child: Image.memory(
           bytes,
           width: 92,
           height: 92,
           fit: BoxFit.cover,
-          cacheWidth: (92 * MediaQuery.of(context).devicePixelRatio).ceil(),
-          filterQuality: FilterQuality.medium,
-          gaplessPlayback: true,
-          errorBuilder: (context, error, stackTrace) {
-            print('Error loading food card image: $error');
-            return _buildDefaultImageContainer();
-          },
+          filterQuality: FilterQuality.high,
+          alignment: Alignment.center,
         ),
       );
     } catch (e) {
-      print('Error decoding food card image: $e');
+      print("Error decoding image: $e");
       return ClipRRect(
-        borderRadius: leftRoundedOnly,
+        borderRadius: BorderRadius.circular(12),
         child: _buildDefaultImageContainer(),
       );
     }
-  }
-
-  // Helper method to compress image if needed
-  Future<Uint8List> _compressImageIfNeeded(Uint8List imageBytes) async {
-    // Image compression removed to fix display issues - just return original
-    return imageBytes;
   }
 
   // Build a food card widget from food card data
@@ -1659,8 +1574,6 @@ class _CodiaPageState extends State<CodiaPage> {
                 imageBase64: base64Image,
                 ingredients: processedIngredients,
                 healthScore: foodCard['health_score'] ?? '8/10',
-                scanId: foodCard['scan_id'] ??
-                    'codia_${name.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}',
               ),
             ),
           ).then((_) {
@@ -1820,65 +1733,645 @@ class _CodiaPageState extends State<CodiaPage> {
     );
   }
 
-  // Always-available default test card to quickly test flows like "Fix with AI"
-  Map<String, dynamic> _defaultTestFoodCard() {
-    final int nowMs = DateTime.now().millisecondsSinceEpoch;
-    return <String, dynamic>{
-      'id': 'default_test_card',
-      'timestamp': nowMs + 1, // ensure it appears first
-      'name': 'Test Meal (Sample)',
-      'calories': 420,
-      'protein': 25,
-      'fat': 12,
-      'carbs': 55,
-      'health_score': '8/10',
-      'image': '', // placeholder image
-      'ingredients': <Map<String, dynamic>>[
-        {
-          'name': 'Grilled Chicken',
-          'amount': '120 g',
-          'calories': 198,
-          'protein': 36,
-          'fat': 4,
-          'carbs': 0,
+  // Format duration for display
+  String _formatDuration(int durationInMinutes) {
+    if (durationInMinutes < 1) {
+      // For durations under 1 minute, display as "0min"
+      return '0min';
+    } else if (durationInMinutes < 60) {
+      // For 1 minute to 59 minutes, display as "Xmin"
+      return '${durationInMinutes}min';
+    } else {
+      // For 1 hour or more, display as "Xh" (simplified for running workouts)
+      int hours = durationInMinutes ~/ 60;
+      return '${hours}h';
+    }
+  }
+
+  // Format distance for cleaner display
+  String _formatDistance(double distanceInKm) {
+    if (distanceInKm % 1 == 0) {
+      return distanceInKm.toInt().toString();
+    } else if ((distanceInKm * 10) % 1 == 0) {
+      return distanceInKm.toStringAsFixed(1);
+    } else {
+      return distanceInKm.toStringAsFixed(2);
+    }
+  }
+
+  // Build a workout card widget from workout data
+  Widget _buildWorkoutCard(Map<String, dynamic> workoutCard) {
+    // Convert timestamp to time string (e.g., "12:07")
+    String timeString = "Now";
+    try {
+      if (workoutCard.containsKey('timestamp')) {
+        DateTime timestamp =
+            DateTime.fromMillisecondsSinceEpoch(workoutCard['timestamp']);
+        timeString =
+            "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}";
+      }
+    } catch (e) {
+      print("Error formatting time: $e");
+    }
+
+    // Get workout data with fallbacks
+    String name = workoutCard['name'] ?? 'Workout';
+    String workoutType = workoutCard['workoutType'] ?? 'weightlifting';
+    int calories = _extractNumericValueAsInt(workoutCard['calories']);
+    
+    // Calculate duration properly - duration is stored in seconds, convert to minutes
+    int durationInMinutes;
+    if (workoutCard['duration'] is int) {
+      // Duration is stored in seconds, convert to minutes
+      durationInMinutes = (workoutCard['duration'] / 60).floor();
+    } else if (workoutCard['duration'] is double) {
+      // Duration is stored in seconds, convert to minutes
+      durationInMinutes = (workoutCard['duration'] / 60).floor();
+    } else if (workoutCard['duration'] is String) {
+      // Try to parse as double first, then convert seconds to minutes
+      double? parsedDuration = double.tryParse(workoutCard['duration']);
+      durationInMinutes = parsedDuration != null ? (parsedDuration / 60).floor() : 0;
+    } else {
+      durationInMinutes = 0;
+    }
+    
+    int volume = _extractNumericValueAsInt(workoutCard['volume']);
+    int prs = _extractNumericValueAsInt(workoutCard['prs']);
+
+    // Apply special layout for running workouts
+    if (workoutType == 'running') {
+      // Extract running-specific data with fallbacks
+      double distance = _extractNumericValueAsDouble(workoutCard['distance']) ?? 0.0;
+      double pace = _extractNumericValueAsDouble(workoutCard['pace']) ?? 0.0;
+      
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => RunCardOpen(workoutData: workoutCard),
+            ),
+          );
         },
-        {
-          'name': 'Brown Rice',
-          'amount': '150 g',
-          'calories': 165,
-          'protein': 4,
-          'fat': 1,
-          'carbs': 34,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 29, vertical: 8),
+          child: Container(
+            padding: EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Running icon - shoe in grey box
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  color: Color(0xFFF2F2F2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/Shoe.png',
+                    width: 40,
+                    height: 40,
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+
+              // Running workout details
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6.6, vertical: 2.2),
+                            decoration: BoxDecoration(
+                              color: Color(0xFFF2F2F2),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Text(
+                              timeString,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 7),
+
+                      // Calories with energy icon (same as weightlifting)
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/energy.png',
+                            width: 18.83,
+                            height: 18.83,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            '$calories calories',
+                            style: TextStyle(
+                              fontSize: 15.4,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 7),
+
+                      // Running metrics row - using fixed spacing like food card macros
+                      Row(
+                        children: [
+                          // Duration with stopwatch icon
+                          Image.asset(
+                            'assets/images/Stopwatch.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Flexible(
+                            child: Text(
+                              _formatDuration(durationInMinutes),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(width: 24.2),
+                          
+                          // Distance with distance icon
+                          Image.asset(
+                            'assets/images/Distance.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            '${_formatDistance(distance / 1000)}km',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          SizedBox(width: 24.2),
+                          
+                          // Pace with speed icon
+                          Image.asset(
+                            'assets/images/speedicon.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Flexible(
+                            child: Text(
+                              '${pace.toStringAsFixed(1)}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    }
+    // Apply special layout for custom exercise workouts
+    else if (workoutType == 'custom') {
+      // Extract custom exercise data with fallbacks
+      double distance = _extractNumericValueAsDouble(workoutCard['distance']) ?? 0.0;
+      double pace = _extractNumericValueAsDouble(workoutCard['pace']) ?? 0.0;
+      double intensityLevel = _extractNumericValueAsDouble(workoutCard['intensityLevel']) ?? 0.0;
+      
+      // Determine if user entered distance or used intensity
+      bool hasDistance = distance > 0;
+      
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GymCardOpen(workoutData: workoutCard),
+            ),
+          );
         },
-        {
-          'name': 'Broccoli',
-          'amount': '80 g',
-          'calories': 27,
-          'protein': 2,
-          'fat': 0,
-          'carbs': 5,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 29, vertical: 8),
+          child: Container(
+            padding: EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Custom exercise icon - plus in grey box
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  color: Color(0xFFF2F2F2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/add.png',
+                    width: 40,
+                    height: 40,
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+
+              // Custom exercise details
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6.6, vertical: 2.2),
+                            decoration: BoxDecoration(
+                              color: Color(0xFFF2F2F2),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Text(
+                              timeString,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 7),
+
+                      // Calories with energy icon (same as other cards)
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/energy.png',
+                            width: 18.83,
+                            height: 18.83,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            '$calories calories',
+                            style: TextStyle(
+                              fontSize: 15.4,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 7),
+
+                      // Custom exercise metrics row
+                      Row(
+                        children: [
+                          // Duration with stopwatch icon
+                          Image.asset(
+                            'assets/images/Stopwatch.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            _formatDuration(durationInMinutes),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          SizedBox(width: 24.2),
+                          
+                          // Distance or Intensity based on user input
+                          Image.asset(
+                            hasDistance ? 'assets/images/Distance.png' : 'assets/images/intensity.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            hasDistance 
+                              ? '${_formatDistance(distance / 1000)}km'
+                              : '${intensityLevel.toInt()}/6',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          
+                          // Pace with speed icon (only show if distance is available)
+                          if (hasDistance) ...[
+                            SizedBox(width: 24.2),
+                            Image.asset(
+                              'assets/images/speedicon.png',
+                              width: 14,
+                              height: 14,
+                            ),
+                            SizedBox(width: 7.7),
+                            Text(
+                              '${pace.toStringAsFixed(1)}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    }
+    // Apply special layout for weightlifting workouts
+    else if (workoutType == 'weightlifting') {
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GymCardOpen(workoutData: workoutCard),
+            ),
+          );
         },
-      ],
-      // minimal micronutrient placeholders (FoodCardOpen can edit/AI-fix)
-      'additional_nutrients': <String, dynamic>{
-        'fiber_g': 5,
-        'sugar_g': 3,
-        'saturated_fat_g': 2,
-        'cholesterol_mg': 60,
-        'omega_3_mg': 100,
-        'omega_6_mg': 500,
-      },
-    };
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 29, vertical: 8),
+          child: Container(
+            padding: EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Workout icon - dumbbell for weightlifting
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  color: Color(0xFFF2F2F2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/dumbbell.png',
+                    width: 40,
+                    height: 40,
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+
+              // Workout details
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6.6, vertical: 2.2),
+                            decoration: BoxDecoration(
+                              color: Color(0xFFF2F2F2),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Text(
+                              timeString,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 7),
+
+                      // Calories
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/energy.png',
+                            width: 18.83,
+                            height: 18.83,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            '$calories calories',
+                            style: TextStyle(
+                              fontSize: 15.4,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 7),
+
+                      // Workout metrics row
+                      Row(
+                        children: [
+                          // Time with stopwatch icon
+                          Image.asset(
+                            'assets/images/Stopwatch.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            _formatDuration(durationInMinutes),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          SizedBox(width: 24.2),
+                          
+                          // Total Volume with kettlebell icon
+                          Image.asset(
+                            'assets/images/kettlebell.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            '${volume.toStringAsFixed(0)}kg',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          SizedBox(width: 24.2),
+                          
+                          // PRs Hit with weekstreak icon
+                          Image.asset(
+                            'assets/images/weekstreak.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                          SizedBox(width: 7.7),
+                          Text(
+                            '0',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    } else {
+      // For non-weightlifting workouts, use the regular food card layout
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GymCardOpen(workoutData: workoutCard),
+            ),
+          );
+        },
+        child: _buildFoodCard(workoutCard),
+      );
+    }
   }
 
   // Build a list of widgets for the Recent Activity section
   List<Widget> _buildDynamicFoodCards() {
     final List<Widget> widgets = [];
-
-    // Always show a default test card at the top for quick testing
-    try {
-      widgets.add(_buildFoodCard(_defaultTestFoodCard()));
-    } catch (_) {}
 
     // Only show loading indicator if we're still loading AND there are food cards to show
     if (_isLoadingFoodCards && _foodCards.isNotEmpty) {
@@ -1894,7 +2387,12 @@ class _CodiaPageState extends State<CodiaPage> {
     // Display food cards loaded from SharedPreferences
     else if (_foodCards.isNotEmpty) {
       for (var foodCard in _foodCards) {
-        widgets.add(_buildFoodCard(foodCard));
+        // Check if this is a workout card
+        if (foodCard['type'] == 'workout') {
+          widgets.add(_buildWorkoutCard(foodCard));
+        } else {
+          widgets.add(_buildFoodCard(foodCard));
+        }
       }
     }
     // No loading animation when there are no food cards to show
@@ -1912,16 +2410,14 @@ class _CodiaPageState extends State<CodiaPage> {
     }
 
     final statusBarHeight = MediaQuery.of(context).padding.top;
+    final isBannerVisible = Provider.of<WorkoutSessionProvider>(context).isActive;
 
     return Scaffold(
-      // Ensure the entire screen is filled with the background color
-      backgroundColor:
-          Color(0xFFF5F5F5), // Light background color to match the app's theme
+      backgroundColor: Color(0xFFF5F5F5),
       body: Stack(
         children: [
           // Background and scrollable content
           Container(
-            // Ensure the container fills the entire screen
             width: MediaQuery.of(context).size.width,
             height: MediaQuery.of(context).size.height,
             decoration: BoxDecoration(
@@ -1931,13 +2427,10 @@ class _CodiaPageState extends State<CodiaPage> {
               ),
             ),
             child: SingleChildScrollView(
-              // Ensure the scrollable content fills the available space
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Add padding for status bar
                   SizedBox(height: statusBarHeight),
-
                   // Header with Fitly title and icons
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -2220,22 +2713,31 @@ class _CodiaPageState extends State<CodiaPage> {
                   ..._buildDynamicFoodCards(),
 
                   // Add padding at the bottom to ensure content doesn't get cut off by the nav bar
-                  SizedBox(height: 90),
+                  SizedBox(height: isBannerVisible ? 162 : 90), // Increased padding when banner is visible
                 ],
               ),
             ),
           ),
+
+          // Workout Session Banner
+          if (isBannerVisible)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 90.0 - 0.5, // align exactly with nav bar, account for divider
+              child: WorkoutSessionBanner(),
+            ),
 
           // Fixed bottom navigation bar
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            height: 90, // Increased from 60px to 90px
+            height: 90,
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
-                boxShadow: [
+                boxShadow: isBannerVisible ? [] : [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
                     blurRadius: 10,
@@ -2864,38 +3366,6 @@ class _CodiaPageState extends State<CodiaPage> {
     );
   }
 
-  // Load nutrition data from food logs
-  Future<void> _loadNutritionData() async {
-    await _nutritionTracker.loadNutritionData();
-    setState(() {
-      // Update remaining calories based on consumed calories
-      if (targetCalories > 0) {
-        remainingCalories = targetCalories - _nutritionTracker.consumedCalories;
-        // Important: Print debug info to see what's happening with the values
-        print(
-            'LOAD DATA DEBUG: Target=$targetCalories, Consumed=${_nutritionTracker.consumedCalories}, Remaining=$remainingCalories');
-        // No clamping - we need negative values to show overage
-      }
-    });
-    print(
-        'Updated remaining calories: $remainingCalories (target=$targetCalories, consumed=${_nutritionTracker.consumedCalories})');
-  }
-
-  // Force reload nutrition data (bypass cache) - use when we know data changed
-  Future<void> _forceReloadNutritionData() async {
-    await _nutritionTracker.forceReload();
-    setState(() {
-      // Update remaining calories based on consumed calories
-      if (targetCalories > 0) {
-        remainingCalories = targetCalories - _nutritionTracker.consumedCalories;
-        print(
-            'FORCE RELOAD DEBUG: Target=$targetCalories, Consumed=${_nutritionTracker.consumedCalories}, Remaining=$remainingCalories');
-      }
-    });
-    print(
-        'Force reloaded nutrition data: $remainingCalories (target=$targetCalories, consumed=${_nutritionTracker.consumedCalories})');
-  }
-
   // Navigation methods for Snap Meal and Coach buttons
   void _navigateToSnapFood() async {
     Navigator.push(
@@ -2907,7 +3377,7 @@ class _CodiaPageState extends State<CodiaPage> {
       // Refresh both food cards and nutrition data when returning from SnapFood
       print('Returned from SnapFood - refreshing data');
       _loadFoodCards();
-      _forceReloadNutritionData(); // Use force reload since new food was likely added
+      _loadNutritionData();
     });
   }
 
@@ -2931,106 +3401,30 @@ class _CodiaPageState extends State<CodiaPage> {
           try {
             Map<String, dynamic> foodCard = jsonDecode(cardJson);
 
-            // Generate the proper scan ID using the same format as SnapFood.dart
-            if (foodCard.containsKey('name')) {
+            // Generate the proper scan ID using the same format as FoodCardOpen.dart
+            if (foodCard.containsKey('name') &&
+                foodCard.containsKey('calories')) {
               String foodName = foodCard['name']
                   .toString()
                   .toLowerCase()
                   .trim()
                   .replaceAll(' ', '_');
-              // FIXED: Use simple format matching SnapFood.dart (no calories)
-              String foodSpecificScanId = "food_nutrition_$foodName";
+              String caloriesId =
+                  foodCard['calories'].toString().replaceAll('.', '_');
+              String foodSpecificScanId =
+                  "food_nutrition_${foodName}_${caloriesId}";
 
-              // Try to load nutrition data with this ID - check multiple possible keys
-              List<String> possibleKeys = [
-                'food_nutrition_data_$foodSpecificScanId',
-                'nutrition_data_$foodSpecificScanId',
-                // Also check for any "fresh data" flags that indicate recent deletion/updates
-                'fresh_nutrition_data_$foodSpecificScanId',
-              ];
-
-              String? nutritionJson;
-              String matchedKey = '';
-              String actualScanId =
-                  foodSpecificScanId; // Track the actual scan ID we end up using
-
-              for (String key in possibleKeys) {
-                String? testData = prefs.getString(key);
-                if (testData != null && testData.isNotEmpty) {
-                  // For fresh data keys, it contains a timestamp, not JSON data
-                  if (key.startsWith('fresh_nutrition_data_')) {
-                    // This indicates fresh data is available - now get the actual nutrition data
-                    nutritionJson = prefs.getString(
-                            'food_nutrition_data_$foodSpecificScanId') ??
-                        prefs.getString('nutrition_data_$foodSpecificScanId');
-                    matchedKey = key;
-                    print('🔥 Found FRESH nutrition data flag: $key');
-                    break;
-                  } else {
-                    nutritionJson = testData;
-                    matchedKey = key;
-                    break;
-                  }
-                }
-              }
-
-              // If no data found, check for scan ID mappings (fallback for when food card update fails)
-              if (nutritionJson == null || nutritionJson.isEmpty) {
-                print(
-                    '⚠️ No data found for $foodSpecificScanId, checking scan ID mappings...');
-
-                // Check for latest scan ID mapping
-                String latestScanIdKey = 'latest_scan_id_$foodName';
-                String? latestScanId = prefs.getString(latestScanIdKey);
-
-                if (latestScanId != null && latestScanId.isNotEmpty) {
-                  print(
-                      '🔗 Found latest scan ID mapping: $foodSpecificScanId → $latestScanId');
-
-                  // Try to load data with the updated scan ID
-                  nutritionJson =
-                      prefs.getString('food_nutrition_data_$latestScanId') ??
-                          prefs.getString('nutrition_data_$latestScanId');
-
-                  if (nutritionJson != null && nutritionJson.isNotEmpty) {
-                    actualScanId = latestScanId;
-                    matchedKey = 'mapped_scan_id';
-                    print(
-                        '✅ Successfully loaded data using mapped scan ID: $latestScanId');
-                  }
-                }
-
-                // Also check direct mapping
-                if (nutritionJson == null || nutritionJson.isEmpty) {
-                  String mappingKey =
-                      'scan_id_mapping_food_nutrition_$foodName';
-                  String? mappedScanId = prefs.getString(mappingKey);
-
-                  if (mappedScanId != null && mappedScanId.isNotEmpty) {
-                    print(
-                        '🔗 Found scan ID mapping: $mappingKey → $mappedScanId');
-
-                    nutritionJson =
-                        prefs.getString('food_nutrition_data_$mappedScanId') ??
-                            prefs.getString('nutrition_data_$mappedScanId');
-
-                    if (nutritionJson != null && nutritionJson.isNotEmpty) {
-                      actualScanId = mappedScanId;
-                      matchedKey = 'direct_mapping';
-                      print(
-                          '✅ Successfully loaded data using direct mapped scan ID: $mappedScanId');
-                    }
-                  }
-                }
-              }
+              // Try to load nutrition data with this ID
+              String? nutritionJson =
+                  prefs.getString('food_nutrition_data_$foodSpecificScanId') ??
+                      prefs.getString('nutrition_data_$foodSpecificScanId');
 
               if (nutritionJson != null && nutritionJson.isNotEmpty) {
                 try {
                   existingNutritionData = jsonDecode(nutritionJson);
-                  finalScanId =
-                      actualScanId; // Use the actual scan ID we found data for
+                  finalScanId = foodSpecificScanId;
                   print(
-                      '🎯 Found nutrition data using food card ID: $actualScanId (key: $matchedKey)');
+                      'Found nutrition data using food card ID: $foodSpecificScanId');
                   foundFoodCardData = true;
                   break;
                 } catch (e) {
@@ -3067,19 +3461,17 @@ class _CodiaPageState extends State<CodiaPage> {
         }
       }
 
-      print('🚀 Navigating to Nutrition with scan ID: $finalScanId');
+      print('Navigating to Nutrition with scan ID: $finalScanId');
     } catch (e) {
       print('Error preparing navigation to Nutrition: $e');
       // Keep using the default ID set above
     }
 
-    // Navigate only when explicitly requested (from bottom nav tap)
-    if (!mounted) return;
-    // Open ONLY the Nutrition screen defined in lib/Features/codia/Nutrition.dart
+    // Always navigate, using either the found ID or the default
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => Nutrition.NutritionPage(
+        builder: (context) => Nutrition.CodiaPage(
           nutritionData: existingNutritionData != null
               ? (existingNutritionData['nutritionData'] ??
                   existingNutritionData)
@@ -3100,16 +3492,16 @@ class _CodiaPageState extends State<CodiaPage> {
   }
 
   void _navigateToFoodCardOpen() {
-    // Use pushReplacement to prevent memory buildup and screen rebuilding
-    Navigator.pushReplacement(
+    Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FoodCardOpen(
-          scanId: 'codia_general_${DateTime.now().millisecondsSinceEpoch}',
-        ),
+        builder: (context) => const FoodCardOpen(),
       ),
-    );
-    // Note: No .then() callback needed since we're replacing the current screen
-    // The nutrition data will be handled by the persistent cache system
+    ).then((_) {
+      // Refresh both food cards and nutrition data when returning
+      print('Returned from FoodCardOpen - refreshing data');
+      _loadFoodCards();
+      _loadNutritionData();
+    });
   }
 }
