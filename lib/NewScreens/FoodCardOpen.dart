@@ -2901,20 +2901,23 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                           _imageBytes != null
                               ? ClipRRect(
                                   borderRadius: BorderRadius.zero,
-                                  child: Image.memory(
-                                    _imageBytes!,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    fit: BoxFit.cover,
-                                    alignment: Alignment.center,
-                                    filterQuality: FilterQuality.high,
-                                    cacheWidth: MediaQuery.of(context)
-                                            .size
-                                            .width
-                                            .toInt() *
-                                        2, // 2x display size for quality
-                                    isAntiAlias: true,
-                                  ),
+                                  child: Builder(builder: (context) {
+                                    final screenW = MediaQuery.of(context).size.width;
+                                    final dpr = MediaQuery.of(context).devicePixelRatio;
+                                    // Decode near 1.5x device pixels to balance quality/perf
+                                    final targetW = (screenW * 1.5 * dpr).clamp(640, 1920).toInt();
+                                    return Image.memory(
+                                      _imageBytes!,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      fit: BoxFit.cover,
+                                      alignment: Alignment.center,
+                                      cacheWidth: targetW,
+                                      filterQuality: FilterQuality.medium,
+                                      gaplessPlayback: true,
+                                      isAntiAlias: true,
+                                    );
+                                  }),
                                 )
                               : Center(
                                   child: Image.asset(

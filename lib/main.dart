@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/painting.dart';
 import 'package:device_preview/device_preview.dart';
 import 'Features/onboarding_screen.dart';
 import 'firebase_options.dart';
@@ -63,6 +64,15 @@ void main() async {
   // Initialize the Flutter binding first
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize NutritionDataManager EARLY to preload cached data
+  print('🚀 Initializing NutritionDataManager early in main()...');
+  try {
+    await nutrition.NutritionDataManager.initialize();
+    print('✅ NutritionDataManager initialized successfully in main()');
+  } catch (e) {
+    print('❌ Failed to initialize NutritionDataManager in main(): $e');
+  }
+
   // Disable ALL debug rendering features
   debugPaintSizeEnabled = false;
   debugPaintBaselinesEnabled = false;
@@ -78,6 +88,9 @@ void main() async {
     print('Failed to initialize Firebase: $e');
     // Continue without Firebase - the app will use mock services
   }
+
+  // Slightly increase image cache budget to reduce jank when showing multiple photos
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 120 << 20; // 120 MB
 
   runApp(
     DevicePreview(

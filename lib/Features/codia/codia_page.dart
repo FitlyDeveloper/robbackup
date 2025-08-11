@@ -1471,11 +1471,15 @@ class _CodiaPageState extends State<CodiaPage> {
         print(
             'Image too large for display: ${(bytes.length / 1024 / 1024).toStringAsFixed(2)}MB, using original');
         // Just return original image for now to avoid display issues
+        final dpr = MediaQuery.of(context).devicePixelRatio;
         return Image.memory(
           bytes,
           width: 92,
           height: 92,
           fit: BoxFit.cover,
+          cacheWidth: (92 * dpr).ceil(),
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) {
             print('Error loading food card image: $error');
             return _buildDefaultImageContainer();
@@ -1490,6 +1494,9 @@ class _CodiaPageState extends State<CodiaPage> {
           width: 92,
           height: 92,
           fit: BoxFit.cover,
+          cacheWidth: (92 * MediaQuery.of(context).devicePixelRatio).ceil(),
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) {
             print('Error loading food card image: $error');
             return _buildDefaultImageContainer();
