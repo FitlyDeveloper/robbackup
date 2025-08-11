@@ -116,9 +116,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       double grams = 0;
       for (final ing in _ingredients) {
         final amt = (ing['amount'] ?? '').toString();
-        final match = RegExp(r"([0-9]+\.?[0-9]*)\s*(g|gram|grams)",
-                caseSensitive: false)
-            .firstMatch(amt);
+        final match =
+            RegExp(r"([0-9]+\.?[0-9]*)\s*(g|gram|grams)", caseSensitive: false)
+                .firstMatch(amt);
         if (match != null) {
           grams += double.tryParse(match.group(1)!) ?? 0.0;
         }
@@ -2419,16 +2419,23 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
 
         // Extract micronutrients from the response
+        // DeepSeek server may wrap macros under a nested "nutrition" object
+        Map<String, dynamic> nutritionMap = nutritionData;
+        if (nutritionData.containsKey('nutrition') &&
+            nutritionData['nutrition'] is Map<String, dynamic>) {
+          nutritionMap = Map<String, dynamic>.from(nutritionData['nutrition']);
+        }
+
         // Start with an empty result with basic macros
         Map<String, dynamic> result = {
-          'calories': _extractNumericValue(
-              nutritionData, ['calories', 'kcal', 'energy']),
+          'calories':
+              _extractNumericValue(nutritionMap, ['calories', 'kcal', 'energy']),
           'protein':
-              _extractNumericValue(nutritionData, ['protein', 'proteins']),
-          'carbs':
-              _extractNumericValue(nutritionData, ['carbs', 'carbohydrates']),
+              _extractNumericValue(nutritionMap, ['protein', 'proteins']),
+          'carbs': _extractNumericValue(
+              nutritionMap, ['carbs', 'carbohydrates']),
           'fat':
-              _extractNumericValue(nutritionData, ['fat', 'fats', 'total_fat']),
+              _extractNumericValue(nutritionMap, ['fat', 'fats', 'total_fat']),
         };
 
         // Add vitamins
@@ -5204,14 +5211,26 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
     }
 
-    // Update state with calculated totals using standard rounding (0-0.4 down, 0.5-0.9 up)
-    setState(() {
-      _calories = totalCalories.round().toString(); // Round to whole number
-      _protein = totalProtein.round().toString(); // Round to whole number
-      _fat = totalFat.round().toString(); // Round to whole number
-      _carbs = totalCarbs.round().toString(); // Round to whole number
+    // Preserve previous macros if all ingredient macros are zero/missing to avoid resetting to 0
+    final bool preservePreviousMacros =
+        (totalProtein == 0 && totalFat == 0 && totalCarbs == 0) &&
+            ((double.tryParse(oldProtein) ?? 0) > 0 ||
+                (double.tryParse(oldFat) ?? 0) > 0 ||
+                (double.tryParse(oldCarbs) ?? 0) > 0);
 
-      // Only mark as unsaved if values actually changed
+    setState(() {
+      _calories = totalCalories.round().toString();
+      if (preservePreviousMacros) {
+        _protein = oldProtein;
+        _fat = oldFat;
+        _carbs = oldCarbs;
+        print('Preserving previous macros due to missing ingredient macros');
+      } else {
+        _protein = totalProtein.round().toString();
+        _fat = totalFat.round().toString();
+        _carbs = totalCarbs.round().toString();
+      }
+
       if (_calories != oldCalories ||
           _protein != oldProtein ||
           _fat != oldFat ||
