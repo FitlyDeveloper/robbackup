@@ -1145,6 +1145,23 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       print(
           '🔧 Successfully saved nutrition data to $successfulSaves/${saveKeys.length} storage locations');
+
+      // Also persist the structured micronutrient maps to the same env-scoped keys
+      // that Nutrition.dart loads (nutrition_data_<scanId> and food_nutrition_data_<scanId>).
+      // Build a flat micronutrient map to convert into structured NutrientInfo maps.
+      final Map<String, dynamic> flatMicros = {};
+      // Prefer widget.additionalNutrients (authoritative from backend)
+      if (widget.additionalNutrients != null && widget.additionalNutrients!.isNotEmpty) {
+        flatMicros.addAll(widget.additionalNutrients!);
+      }
+      // Merge any extracted from ingredients
+      if (_ingredients.isNotEmpty) {
+        final extracted = _extractAllNutrientsFromIngredients();
+        if (extracted.isNotEmpty) flatMicros.addAll(extracted);
+      }
+      if (flatMicros.isNotEmpty) {
+        await _convertAndStoreMicronutrients(flatMicros, scanId);
+      }
     } catch (e) {
       print('❌ CRITICAL ERROR saving nutrition data on exit: $e');
     }
@@ -8327,7 +8344,14 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print(
           '✅ Other: $displayName = ${flatMicronutrients[target['api_key']] ?? 0} ${target['unit']}');
     });
-    // ... existing code ...
+    // Persist using the same path as Nutrition.dart
+    try {
+      await nutrition.NutritionDataManager.storeNutritionData(
+          scanId, vitamins, minerals, other);
+      print('💾 FOODCARDOPEN: Stored structured micronutrients via NutritionDataManager for $scanId');
+    } catch (e) {
+      print('❌ FOODCARDOPEN: Failed to store structured micronutrients via manager: $e');
+    }
   }
 
   // 🔥 LOAD CURRENT MICRONUTRIENTS FROM STORAGE BEFORE DELETION
