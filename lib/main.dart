@@ -8,6 +8,7 @@ import 'firebase_options.dart';
 import 'core/utils/device_size_adapter.dart';
 import 'dart:ui' as ui;
 import 'widgets/health_tracking_card.dart';
+import 'dart:async';
 import 'Features/codia/Nutrition.dart' as nutrition; // Import for RouteObserver
 
 // Custom binding to disable overflow errors
@@ -92,10 +93,64 @@ void main() async {
   // Slightly increase image cache budget to reduce jank when showing multiple photos
   PaintingBinding.instance.imageCache.maximumSizeBytes = 120 << 20; // 120 MB
 
-  runApp(
-    DevicePreview(
-      enabled: !kReleaseMode,
-      builder: (context) => const MyApp(),
+  // Suppress noisy debug prints that flood the console during FoodCardOpen/Nutrition transitions
+  final List<String> _suppressPatterns = <String>[
+    '💾',
+    '🔧',
+    '✅ FOODCARDOPEN',
+    'SAVING NUTRITION DATA ON EXIT',
+    'Backed up',
+    'Processing ingredient',
+    'NUTRITION TOTALS',
+    'Loaded consolidated JSON',
+    'Initialized food data',
+    'SAVED nutrition data before navigation',
+    'CONVERTING FLAT MICRONUTRIENTS',
+    'Vitamin:',
+    'Mineral:',
+    'Other:',
+    'Passing nutrition data to Nutrition.dart',
+    'App resumed - refreshing nutrition data',
+    'Using cached nutrition data',
+    'Auto-saved',
+    'Image too large for display',
+  ];
+
+  bool _shouldSuppress(String line) {
+    if (!kDebugMode) return false; // Do not alter release logs
+    for (final p in _suppressPatterns) {
+      if (line.contains(p)) return true;
+    }
+    return false;
+  }
+
+  runZonedGuarded(
+    () {
+      // Route debugPrint through filter
+      debugPrint = (String? message, {int? wrapWidth}) {
+        final m = message ?? '';
+        if (_shouldSuppress(m)) return;
+        // ignore: avoid_print
+        print(m);
+      };
+
+      runApp(
+        DevicePreview(
+          enabled: !kReleaseMode,
+          builder: (context) => const MyApp(),
+        ),
+      );
+    },
+    (error, stack) {
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: error, stack: stack),
+      );
+    },
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) {
+        if (_shouldSuppress(line)) return;
+        parent.print(zone, line);
+      },
     ),
   );
 }
