@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "Root package for DeepSeek API Bridge",
   "scripts": {
-    "start": "node api-server/100_percent_reliable.js",
+    "start": "node server/index.js",
     "build": "npm install"
   },
   "engines": {
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "axios": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
