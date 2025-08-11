@@ -25,6 +25,25 @@ class SlowScrollPhysics extends ScrollPhysics {
     return SlowScrollPhysics(parent: buildParent(ancestor));
   }
 
+  // Compute serving size from total ingredient amounts (best-effort for API requirement)
+  String _computeServingSize() {
+    try {
+      double grams = 0;
+      for (final ing in _ingredients) {
+        final amt = (ing['amount'] ?? '').toString();
+        final match = RegExp(r"([0-9]+\.?[0-9]*)\s*(g|gram|grams)", caseSensitive: false)
+            .firstMatch(amt);
+        if (match != null) {
+          grams += double.tryParse(match.group(1)!) ?? 0.0;
+        }
+      }
+      if (grams <= 0) return '1 serving';
+      return '${grams.round()} g';
+    } catch (_) {
+      return '1 serving';
+    }
+  }
+
   @override
   double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
     return offset * 0.4; // Slow down by 60%
@@ -2902,10 +2921,14 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                               ? ClipRRect(
                                   borderRadius: BorderRadius.zero,
                                   child: Builder(builder: (context) {
-                                    final screenW = MediaQuery.of(context).size.width;
-                                    final dpr = MediaQuery.of(context).devicePixelRatio;
+                                    final screenW =
+                                        MediaQuery.of(context).size.width;
+                                    final dpr =
+                                        MediaQuery.of(context).devicePixelRatio;
                                     // Decode near 1.5x device pixels to balance quality/perf
-                                    final targetW = (screenW * 1.5 * dpr).clamp(640, 1920).toInt();
+                                    final targetW = (screenW * 1.5 * dpr)
+                                        .clamp(640, 1920)
+                                        .toInt();
                                     return Image.memory(
                                       _imageBytes!,
                                       width: double.infinity,
@@ -7383,6 +7406,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // Print request data for debugging
       final requestData = {
         'food_name': _foodName,
+        'serving_size': _computeServingSize(),
         'current_data': {
           'calories': _calories,
           'protein': _protein,
@@ -7594,21 +7618,63 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           // Safely show error dialog without navigating away
           if (mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
+              // Single styled error dialog (consistent with our design)
               showDialog(
                 context: localContext,
+                barrierDismissible: false,
+                barrierColor: Colors.black.withOpacity(0.75),
                 builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: const Text('Service Error'),
-                    content: Text(
-                        'HTTP error ${response.statusCode}. Please try again later.'),
-                    actions: [
-                      TextButton(
-                        child: const Text('OK'),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
+                  return Dialog(
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24.0),
+                    ),
+                    child: Container(
+                      width: 311,
+                      padding: EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Service Error',
+                            style: TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'SF Pro Display',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'HTTP error ${response.statusCode}. Please try again later.',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontFamily: 'SF Pro Display',
+                              color: Colors.black87,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 32),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              child: Text(
+                                'OK',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.red.shade400,
+                                  fontFamily: 'SF Pro Display',
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   );
                 },
               );
