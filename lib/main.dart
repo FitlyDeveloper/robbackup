@@ -93,32 +93,21 @@ void main() async {
   // Slightly increase image cache budget to reduce jank when showing multiple photos
   PaintingBinding.instance.imageCache.maximumSizeBytes = 120 << 20; // 120 MB
 
-  // Suppress noisy debug prints that flood the console during FoodCardOpen/Nutrition transitions
-  final List<String> _suppressPatterns = <String>[
-    '💾',
-    '🔧',
-    '✅ FOODCARDOPEN',
-    'SAVING NUTRITION DATA ON EXIT',
-    'Backed up',
-    'Processing ingredient',
-    'NUTRITION TOTALS',
-    'Loaded consolidated JSON',
-    'Initialized food data',
-    'SAVED nutrition data before navigation',
-    'CONVERTING FLAT MICRONUTRIENTS',
-    'Vitamin:',
-    'Mineral:',
-    'Other:',
-    'Passing nutrition data to Nutrition.dart',
-    'App resumed - refreshing nutrition data',
-    'Using cached nutrition data',
-    'Auto-saved',
-    'Image too large for display',
+  // Strict debug filter: allow only errors/warnings; drop everything else to stop spam
+  final List<String> _allowOnly = <String>[
+    '❌',
+    'ERROR',
+    'Exception',
+    'Unhandled',
+    'FlutterError',
+    'TypeError',
+    'SocketException',
+    'TimeoutException',
   ];
 
-  bool _shouldSuppress(String line) {
-    if (!kDebugMode) return false; // Do not alter release logs
-    for (final p in _suppressPatterns) {
+  bool _allow(String line) {
+    if (!kDebugMode) return true; // release unaffected
+    for (final p in _allowOnly) {
       if (line.contains(p)) return true;
     }
     return false;
@@ -129,9 +118,10 @@ void main() async {
       // Route debugPrint through filter
       debugPrint = (String? message, {int? wrapWidth}) {
         final m = message ?? '';
-        if (_shouldSuppress(m)) return;
-        // ignore: avoid_print
-        print(m);
+        if (_allow(m)) {
+          // ignore: avoid_print
+          print(m);
+        }
       };
 
       runApp(
@@ -148,8 +138,7 @@ void main() async {
     },
     zoneSpecification: ZoneSpecification(
       print: (self, parent, zone, line) {
-        if (_shouldSuppress(line)) return;
-        parent.print(zone, line);
+        if (_allow(line)) parent.print(zone, line);
       },
     ),
   );
