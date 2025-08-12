@@ -944,6 +944,8 @@ class _CustomExerciseCardOpenState extends State<CustomExerciseCardOpen>
                 ),
               ),
             ),
+            // Trailing spacer to keep text visually centered like RunCardOpen
+            SizedBox(width: 88),
           ],
         ),
       ),
@@ -1022,6 +1024,8 @@ class _CustomExerciseCardOpenState extends State<CustomExerciseCardOpen>
               ),
             ),
             Icon(Icons.keyboard_arrow_down, color: Colors.black),
+            // Trailing spacer to keep visual centering with arrow
+            SizedBox(width: 68),
           ],
         ),
       ),
