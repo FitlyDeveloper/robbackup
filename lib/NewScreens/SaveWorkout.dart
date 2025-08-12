@@ -11,20 +11,21 @@ class SaveWorkout extends StatefulWidget {
   final int duration;
   final int volume;
   final int prs;
-  final String? workoutType; // 'weightlifting', 'running', 'custom', or custom name
+  final String?
+      workoutType; // 'weightlifting', 'running', 'custom', or custom name
   final double? distance; // Distance for running/custom workouts
   final String? exerciseName; // Exercise name for custom workouts
   final IntensityLevel? intensityLevel; // Intensity level for custom workouts
   final String? initialTitle; // Initial title for editing existing workouts
   final String? runId; // ID of the run being edited (null for new runs)
   const SaveWorkout({
-    Key? key, 
-    required this.duration, 
-    required this.volume, 
-    required this.prs, 
-    this.workoutType, 
-    this.distance, 
-    this.exerciseName, 
+    Key? key,
+    required this.duration,
+    required this.volume,
+    required this.prs,
+    this.workoutType,
+    this.distance,
+    this.exerciseName,
     this.intensityLevel,
     this.initialTitle,
     this.runId,
@@ -42,7 +43,7 @@ class _SaveWorkoutState extends State<SaveWorkout> {
   @override
   void initState() {
     super.initState();
-    
+
     // Use initial title if provided (for editing), otherwise generate a new title
     if (widget.initialTitle != null && widget.initialTitle!.isNotEmpty) {
       _titleController.text = widget.initialTitle!;
@@ -59,11 +60,12 @@ class _SaveWorkoutState extends State<SaveWorkout> {
   }
 
   void _generateTitle() {
-    if (_titleController.text.isNotEmpty || widget.initialTitle != null) return; // Don't override if user already entered a title or if initial title is provided
-    
+    if (_titleController.text.isNotEmpty || widget.initialTitle != null)
+      return; // Don't override if user already entered a title or if initial title is provided
+
     final now = DateTime.now();
     final hour = now.hour;
-    
+
     String timeOfDay;
     if (hour >= 5 && hour < 12) {
       timeOfDay = 'Morning';
@@ -74,7 +76,7 @@ class _SaveWorkoutState extends State<SaveWorkout> {
     } else {
       timeOfDay = 'Night';
     }
-    
+
     String workoutName;
     if (widget.workoutType == null) {
       // Default to weightlifting if no type specified
@@ -90,7 +92,7 @@ class _SaveWorkoutState extends State<SaveWorkout> {
       // Custom workout name from "More" field
       workoutName = widget.workoutType!;
     }
-    
+
     _titleController.text = '$timeOfDay $workoutName';
   }
 
@@ -150,8 +152,7 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                 ),
               ],
             ),
-            if (isSelected)
-              Icon(Icons.check, color: Colors.black),
+            if (isSelected) Icon(Icons.check, color: Colors.black),
           ],
         ),
       ),
@@ -191,12 +192,12 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Row(
                   children: [
-                                         Image.asset(
-                       'assets/images/camera.png',
-                       width: 24,
-                       height: 24,
-                       color: Colors.black,
-                     ),
+                    Image.asset(
+                      'assets/images/camera.png',
+                      width: 24,
+                      height: 24,
+                      color: Colors.black,
+                    ),
                     SizedBox(width: 12),
                     Text(
                       'Take Photo',
@@ -226,12 +227,12 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Row(
                   children: [
-                                         Image.asset(
-                       'assets/images/addphoto.png',
-                       width: 24,
-                       height: 24,
-                       color: Colors.black,
-                     ),
+                    Image.asset(
+                      'assets/images/addphoto.png',
+                      width: 24,
+                      height: 24,
+                      color: Colors.black,
+                    ),
                     SizedBox(width: 12),
                     Text(
                       'Upload From Library',
@@ -278,8 +279,6 @@ class _SaveWorkoutState extends State<SaveWorkout> {
       print('Error selecting image: $e');
     }
   }
-
-
 
   Future<void> _showDiscardDialog() async {
     final shouldDiscard = await showDialog<bool>(
@@ -418,7 +417,8 @@ class _SaveWorkoutState extends State<SaveWorkout> {
       ),
     );
     if (shouldDiscard == true && mounted) {
-      final provider = Provider.of<WorkoutSessionProvider>(context, listen: false);
+      final provider =
+          Provider.of<WorkoutSessionProvider>(context, listen: false);
       provider.endSession();
       _titleController.clear();
       _descriptionController.clear();
@@ -427,8 +427,10 @@ class _SaveWorkoutState extends State<SaveWorkout> {
         Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder(
             opaque: false,
-            pageBuilder: (context, animation, secondaryAnimation) => WeightLifting(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                WeightLifting(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
               return Stack(
                 children: [
                   child,
@@ -486,12 +488,14 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 29).copyWith(top: 16, bottom: 8.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 29)
+                                .copyWith(top: 16, bottom: 8.5),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.arrow_back, color: Colors.black, size: 24),
+                                  icon: const Icon(Icons.arrow_back,
+                                      color: Colors.black, size: 24),
                                   onPressed: () {
                                     Navigator.pop(context);
                                   },
@@ -550,7 +554,8 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                 child: Theme(
                                   data: Theme.of(context).copyWith(
                                     textSelectionTheme: TextSelectionThemeData(
-                                      selectionColor: Colors.grey[300]!.withOpacity(0.5),
+                                      selectionColor:
+                                          Colors.grey[300]!.withOpacity(0.5),
                                       selectionHandleColor: Colors.grey[300]!,
                                       cursorColor: Colors.black,
                                     ),
@@ -567,21 +572,23 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                     decoration: InputDecoration(
                                       hintText: 'Workout title',
                                       hintStyle: TextStyle(
-                                        color: Colors.grey[600]!.withOpacity(0.7),
+                                        color:
+                                            Colors.grey[600]!.withOpacity(0.7),
                                         fontSize: 13.6,
                                         fontFamily: '.SF Pro Display',
                                       ),
                                       border: InputBorder.none,
                                       enabledBorder: InputBorder.none,
                                       focusedBorder: InputBorder.none,
-                                      contentPadding: EdgeInsets.symmetric(vertical: 15),
+                                      contentPadding:
+                                          EdgeInsets.symmetric(vertical: 15),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                             SizedBox(height: 12),
-                            
+
                             // Describe workout field
                             Container(
                               width: double.infinity,
@@ -603,7 +610,8 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                 child: Theme(
                                   data: Theme.of(context).copyWith(
                                     textSelectionTheme: TextSelectionThemeData(
-                                      selectionColor: Colors.grey[300]!.withOpacity(0.5),
+                                      selectionColor:
+                                          Colors.grey[300]!.withOpacity(0.5),
                                       selectionHandleColor: Colors.grey[300]!,
                                       cursorColor: Colors.black,
                                     ),
@@ -620,21 +628,23 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                     decoration: InputDecoration(
                                       hintText: 'Describe your workout',
                                       hintStyle: TextStyle(
-                                        color: Colors.grey[600]!.withOpacity(0.7),
+                                        color:
+                                            Colors.grey[600]!.withOpacity(0.7),
                                         fontSize: 13.6,
                                         fontFamily: '.SF Pro Display',
                                       ),
                                       border: InputBorder.none,
                                       enabledBorder: InputBorder.none,
                                       focusedBorder: InputBorder.none,
-                                      contentPadding: EdgeInsets.symmetric(vertical: 15),
+                                      contentPadding:
+                                          EdgeInsets.symmetric(vertical: 15),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                             SizedBox(height: 12),
-                            
+
                             // Privacy selector
                             GestureDetector(
                               onTap: _showPrivacyOptions,
@@ -656,16 +666,20 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                 child: Padding(
                                   padding: EdgeInsets.symmetric(horizontal: 16),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Row(
                                         children: [
                                           Image.asset(
-                                            _selectedPrivacy.toLowerCase() == 'public' 
-                                              ? 'assets/images/globe.png'
-                                              : _selectedPrivacy.toLowerCase() == 'private' 
-                                                ? 'assets/images/Lock.png'
-                                                : 'assets/images/socialicon.png',
+                                            _selectedPrivacy.toLowerCase() ==
+                                                    'public'
+                                                ? 'assets/images/globe.png'
+                                                : _selectedPrivacy
+                                                            .toLowerCase() ==
+                                                        'private'
+                                                    ? 'assets/images/Lock.png'
+                                                    : 'assets/images/socialicon.png',
                                             width: 20,
                                             height: 20,
                                             color: Colors.black,
@@ -682,19 +696,20 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                           ),
                                         ],
                                       ),
-                                      Icon(Icons.keyboard_arrow_down, color: Colors.black, size: 20),
+                                      Icon(Icons.keyboard_arrow_down,
+                                          color: Colors.black, size: 20),
                                     ],
                                   ),
                                 ),
                               ),
                             ),
                             SizedBox(height: 25),
-                            
+
                             // Bottom row with Add Photos and buttons
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Add Photos/Videos button
+                                // Add Media button
                                 GestureDetector(
                                   onTap: _showImageSelectionModal,
                                   child: Container(
@@ -709,34 +724,36 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                       ),
                                       child: Container(
                                         color: Colors.transparent,
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        crossAxisAlignment: CrossAxisAlignment.center,
-                                        children: [
-                                          Image.asset(
-                                            'assets/images/AddPhoto.png',
-                                            width: 50,
-                                            height: 50,
-                                            color: Color(0xFF333333),
-                                          ),
-                                          SizedBox(height: 4),
-                                          Container(
-                                            width: double.infinity,
-                                            child: Text(
-                                              'Add Photos/Videos',
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                color: Color(0xFF333333),
-                                                fontSize: 12,
-                                                fontFamily: 'SF Pro Display',
-                                                fontWeight: FontWeight.w400,
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Image.asset(
+                                              'assets/images/AddPhoto.png',
+                                              width: 50,
+                                              height: 50,
+                                              color: Color(0xFF333333),
+                                            ),
+                                            SizedBox(height: 4),
+                                            Container(
+                                              width: double.infinity,
+                                              child: Text(
+                                                'Add Media',
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  color: Color(0xFF333333),
+                                                fontSize: 13.5,
+                                                  fontFamily: 'SF Pro Display',
+                                                  fontWeight: FontWeight.w400,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
                                   ),
                                 ),
                                 SizedBox(width: 16),
@@ -757,10 +774,12 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                             height: 40,
                                             decoration: BoxDecoration(
                                               color: Colors.white,
-                                              borderRadius: BorderRadius.circular(15),
+                                              borderRadius:
+                                                  BorderRadius.circular(15),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.black.withOpacity(0.05),
+                                                  color: Colors.black
+                                                      .withOpacity(0.05),
                                                   offset: Offset(0, 2),
                                                   blurRadius: 4,
                                                 ),
@@ -769,12 +788,15 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                             child: Material(
                                               color: Colors.transparent,
                                               child: InkWell(
-                                                borderRadius: BorderRadius.circular(15),
+                                                borderRadius:
+                                                    BorderRadius.circular(15),
                                                 splashColor: Colors.grey[200],
-                                                highlightColor: Colors.grey[100],
+                                                highlightColor:
+                                                    Colors.grey[100],
                                                 onTap: _showDiscardDialog,
                                                 child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
                                                   children: [
                                                     Image.asset(
                                                       'assets/images/trashcan.png',
@@ -786,10 +808,13 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                                     Text(
                                                       'Discard',
                                                       style: TextStyle(
-                                                        color: Color(0xFFFF4D4F),
+                                                        color:
+                                                            Color(0xFFFF4D4F),
                                                         fontSize: 17,
-                                                        fontFamily: 'SF Pro Display',
-                                                        fontWeight: FontWeight.w500,
+                                                        fontFamily:
+                                                            'SF Pro Display',
+                                                        fontWeight:
+                                                            FontWeight.w500,
                                                       ),
                                                     ),
                                                   ],
@@ -808,10 +833,12 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                             height: 40,
                                             decoration: BoxDecoration(
                                               color: Colors.black,
-                                              borderRadius: BorderRadius.circular(15),
+                                              borderRadius:
+                                                  BorderRadius.circular(15),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.black.withOpacity(0.05),
+                                                  color: Colors.black
+                                                      .withOpacity(0.05),
                                                   offset: Offset(0, 2),
                                                   blurRadius: 4,
                                                 ),
@@ -820,47 +847,87 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                             child: Material(
                                               color: Colors.transparent,
                                               child: InkWell(
-                                                borderRadius: BorderRadius.circular(15),
+                                                borderRadius:
+                                                    BorderRadius.circular(15),
                                                 splashColor: Colors.grey[800],
-                                                highlightColor: Colors.grey[900],
+                                                highlightColor:
+                                                    Colors.grey[900],
                                                 onTap: () async {
                                                   // End the workout session before saving
-                                                  final provider = Provider.of<WorkoutSessionProvider>(context, listen: false);
+                                                  final provider = Provider.of<
+                                                          WorkoutSessionProvider>(
+                                                      context,
+                                                      listen: false);
                                                   provider.endSession();
-                                                  
+
                                                   // Navigate to GoodJob.dart with standard forward animation
                                                   if (mounted) {
                                                     Navigator.of(context).push(
                                                       PageRouteBuilder(
-                                                        pageBuilder: (context, animation, secondaryAnimation) => GoodJob(
-                                                          workoutTitle: _titleController.text.isNotEmpty ? _titleController.text : null,
-                                                          workoutType: widget.workoutType,
-                                                          duration: widget.duration,
+                                                        pageBuilder: (context,
+                                                                animation,
+                                                                secondaryAnimation) =>
+                                                            GoodJob(
+                                                          workoutTitle:
+                                                              _titleController
+                                                                      .text
+                                                                      .isNotEmpty
+                                                                  ? _titleController
+                                                                      .text
+                                                                  : null,
+                                                          workoutType: widget
+                                                              .workoutType,
+                                                          duration:
+                                                              widget.duration,
                                                           volume: widget.volume,
                                                           prs: widget.prs,
-                                                          distance: widget.distance,
-                                                          exerciseName: widget.exerciseName,
-                                                          intensityLevel: widget.intensityLevel,
-                                                          runId: widget.runId, // Pass the run ID for editing existing runs
+                                                          distance:
+                                                              widget.distance,
+                                                          exerciseName: widget
+                                                              .exerciseName,
+                                                          intensityLevel: widget
+                                                              .intensityLevel,
+                                                          runId: widget
+                                                              .runId, // Pass the run ID for editing existing runs
                                                         ),
-                                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                                          const begin = Offset(1.0, 0.0);
-                                                          const end = Offset.zero;
-                                                          final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+                                                        transitionsBuilder:
+                                                            (context,
+                                                                animation,
+                                                                secondaryAnimation,
+                                                                child) {
+                                                          const begin =
+                                                              Offset(1.0, 0.0);
+                                                          const end =
+                                                              Offset.zero;
+                                                          final tween = Tween(
+                                                                  begin: begin,
+                                                                  end: end)
+                                                              .chain(CurveTween(
+                                                                  curve: Curves
+                                                                      .easeInOut));
                                                           return SlideTransition(
-                                                            position: animation.drive(tween),
+                                                            position: animation
+                                                                .drive(tween),
                                                             child: child,
                                                           );
                                                         },
-                                                        transitionDuration: const Duration(milliseconds: 400),
-                                                        reverseTransitionDuration: const Duration(milliseconds: 400),
+                                                        transitionDuration:
+                                                            const Duration(
+                                                                milliseconds:
+                                                                    400),
+                                                        reverseTransitionDuration:
+                                                            const Duration(
+                                                                milliseconds:
+                                                                    400),
                                                       ),
                                                     );
                                                   }
                                                 },
                                                 child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  mainAxisSize: MainAxisSize.min,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
                                                   children: [
                                                     Image.asset(
                                                       'assets/images/finish.png',
@@ -874,8 +941,10 @@ class _SaveWorkoutState extends State<SaveWorkout> {
                                                       style: TextStyle(
                                                         color: Colors.white,
                                                         fontSize: 17,
-                                                        fontWeight: FontWeight.w500,
-                                                        fontFamily: 'SF Pro Display',
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        fontFamily:
+                                                            'SF Pro Display',
                                                       ),
                                                     ),
                                                   ],
