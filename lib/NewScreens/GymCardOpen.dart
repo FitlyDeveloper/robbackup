@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import '../Features/codia/codia_page.dart';
-import 'dart:math';
 
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
@@ -24,7 +22,7 @@ class SlowScrollPhysics extends ScrollPhysics {
 
 class GymCardOpen extends StatefulWidget {
   final Map<String, dynamic> workoutData;
-  
+
   const GymCardOpen({Key? key, required this.workoutData}) : super(key: key);
 
   @override
@@ -33,14 +31,14 @@ class GymCardOpen extends StatefulWidget {
 
 class _GymCardOpenState extends State<GymCardOpen>
     with TickerProviderStateMixin {
-  bool _isLoading = false;
+  // bool _isLoading = false; // Unused
   bool _isLiked = false;
   bool _isBookmarked = false;
   bool _isEditMode = false;
   int _counter = 1;
   String _privacyStatus = 'Private';
   bool _hasUnsavedChanges = false;
-  
+
   // Original values to compare for changes
   String _originalWorkoutName = '';
   String _originalWorkoutType = '';
@@ -75,7 +73,8 @@ class _GymCardOpenState extends State<GymCardOpen>
     _initAnimationControllers();
 
     // Set initial values from parameters if available
-    if (widget.workoutData['name'] != null && widget.workoutData['name'].isNotEmpty) {
+    if (widget.workoutData['name'] != null &&
+        widget.workoutData['name'].isNotEmpty) {
       _workoutName = widget.workoutData['name'];
     }
 
@@ -104,7 +103,8 @@ class _GymCardOpenState extends State<GymCardOpen>
 
     // Read exercises data
     if (widget.workoutData['exercises'] != null) {
-      _exercises = List<Map<String, dynamic>>.from(widget.workoutData['exercises']);
+      _exercises =
+          List<Map<String, dynamic>>.from(widget.workoutData['exercises']);
       // Calculate total completed sets only
       int totalCompletedSets = 0;
       for (final exercise in _exercises) {
@@ -208,11 +208,13 @@ class _GymCardOpenState extends State<GymCardOpen>
         _isBookmarked = prefs.getBool('workout_bookmarked_$workoutId') ?? false;
         _counter = prefs.getInt('workout_counter_$workoutId') ?? 1;
         // Load privacy status for this workout item
-        _privacyStatus = prefs.getString('workout_privacy_$workoutId') ?? 'Private';
+        _privacyStatus =
+            prefs.getString('workout_privacy_$workoutId') ?? 'Private';
 
         // Only load nutrition values if they weren't passed as parameters
         if (widget.workoutData['calories'] == null) {
-          _calories = prefs.getString('workout_calories_$workoutId') ?? _calories;
+          _calories =
+              prefs.getString('workout_calories_$workoutId') ?? _calories;
         }
       });
 
@@ -476,8 +478,6 @@ class _GymCardOpenState extends State<GymCardOpen>
     }
   }
 
-
-
   // Method to toggle bookmark state with animation
   void _toggleBookmark() {
     setState(() {
@@ -602,71 +602,7 @@ class _GymCardOpenState extends State<GymCardOpen>
   }
 
   // Show standard dialog
-  void _showStandardDialog({
-    required String title,
-    required String message,
-    required String positiveButtonText,
-  }) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.75),
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24.0),
-          ),
-          child: Container(
-            width: 311,
-            padding: EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'SF Pro Display',
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 16),
-                Text(
-                  message,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontFamily: 'SF Pro Display',
-                    color: Colors.black87,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 32),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    child: Text(
-                      positiveButtonText,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.red.shade400,
-                        fontFamily: 'SF Pro Display',
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // _showStandardDialog(...) unused
 
   @override
   Widget build(BuildContext context) {
@@ -806,535 +742,648 @@ class _GymCardOpenState extends State<GymCardOpen>
                       ),
                     ),
 
-                     // White rounded container with gradient - exactly like FoodCardOpen
-                     Transform.translate(
-                       offset: Offset(0, -40), // Move up to create overlap
-                       child: Container(
-                         decoration: BoxDecoration(
-                           borderRadius: BorderRadius.vertical(
-                             top: Radius.circular(40),
-                           ),
-                           gradient: LinearGradient(
-                             begin: Alignment.topCenter,
-                             end: Alignment.bottomCenter,
-                             stops: [0, 0.4, 1],
-                             colors: [
-                               Color(0xFFFFFFFF),
-                               Color(0xFFFFFFFF),
-                               Color(0xFFEBEBEB),
-                             ],
-                           ),
-                         ),
-                         child: Column(
-                           children: [
-                             // Add 20px gap at top of white container
-                             SizedBox(height: 20),
+                    // White rounded container with gradient - exactly like FoodCardOpen
+                    Transform.translate(
+                      offset: Offset(0, -40), // Move up to create overlap
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(40),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: [0, 0.4, 1],
+                            colors: [
+                              Color(0xFFFFFFFF),
+                              Color(0xFFFFFFFF),
+                              Color(0xFFEBEBEB),
+                            ],
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            // Add 20px gap at top of white container
+                            SizedBox(height: 20),
 
-                             // Time and interaction buttons - exactly like FoodCardOpen
-                             Padding(
-                               padding: const EdgeInsets.fromLTRB(29, 0, 29, 0),
-                               child: Row(
-                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                 children: [
-                                   // Left side: Bookmark and time
-                                   Row(
-                                     children: [
-                                       // Bookmark button with enhanced animation
-                                       GestureDetector(
-                                         onTap: _toggleBookmark,
-                                         child: AnimatedBuilder(
-                                           animation: _bookmarkController,
-                                           builder: (context, child) {
-                                             return Transform.scale(
-                                               scale: _bookmarkScaleAnimation.value,
-                                               child: Image.asset(
-                                                 _isBookmarked
-                                                     ? 'assets/images/bookmarkfilled.png'
-                                                     : 'assets/images/bookmark.png',
-                                                 width: 24,
-                                                 height: 24,
-                                                 color: _isBookmarked
-                                                     ? Color(0xFFFFC300)
-                                                     : Colors.black,
-                                               ),
-                                             );
-                                           },
-                                         ),
-                                       ),
-                                       SizedBox(width: 16),
-                                       // Time
-                                       Container(
-                                         padding: EdgeInsets.symmetric(
-                                             horizontal: 8, vertical: 4),
-                                         decoration: BoxDecoration(
-                                           color: Color(0xFFF2F2F2),
-                                           borderRadius: BorderRadius.circular(12),
-                                         ),
-                                         child: Text(
-                                           'Apr 4, 12:32',
-                                           style: TextStyle(fontSize: 12),
-                                         ),
-                                       ),
-                                     ],
-                                   ),
+                            // Time and interaction buttons - exactly like FoodCardOpen
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(29, 0, 29, 0),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  // Left side: Bookmark and time
+                                  Row(
+                                    children: [
+                                      // Bookmark button with enhanced animation
+                                      GestureDetector(
+                                        onTap: _toggleBookmark,
+                                        child: AnimatedBuilder(
+                                          animation: _bookmarkController,
+                                          builder: (context, child) {
+                                            return Transform.scale(
+                                              scale:
+                                                  _bookmarkScaleAnimation.value,
+                                              child: Image.asset(
+                                                _isBookmarked
+                                                    ? 'assets/images/bookmarkfilled.png'
+                                                    : 'assets/images/bookmark.png',
+                                                width: 24,
+                                                height: 24,
+                                                color: _isBookmarked
+                                                    ? Color(0xFFFFC300)
+                                                    : Colors.black,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      SizedBox(width: 16),
+                                      // Time
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Color(0xFFF2F2F2),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          'Apr 4, 12:32',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
 
+                            // Title and description with adjusted padding - exactly like FoodCardOpen
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Title and subtitle area with 14px top spacing
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                      left: 29, right: 29, top: 14, bottom: 0),
+                                  child: Container(
+                                    width: double.infinity,
+                                    // Remove fixed height and use dynamic sizing
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _workoutName,
+                                          style: TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'SF Pro Display',
+                                          ),
+                                          // Allow wrapping to multiple lines
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          _workoutType,
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
 
-                                 ],
-                               ),
-                             ),
+                                // Add 20px gap between subtitle and divider
+                                SizedBox(height: 20),
 
-                             // Title and description with adjusted padding - exactly like FoodCardOpen
-                             Column(
-                               crossAxisAlignment: CrossAxisAlignment.start,
-                               children: [
-                                 // Title and subtitle area with 14px top spacing
-                                 Padding(
-                                   padding: const EdgeInsets.only(
-                                       left: 29, right: 29, top: 14, bottom: 0),
-                                   child: Container(
-                                     width: double.infinity,
-                                     // Remove fixed height and use dynamic sizing
-                                     child: Column(
-                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                       mainAxisSize: MainAxisSize.min,
-                                       children: [
-                                         Text(
-                                           _workoutName,
-                                           style: TextStyle(
-                                             fontSize: 24,
-                                             fontWeight: FontWeight.bold,
-                                             fontFamily: 'SF Pro Display',
-                                           ),
-                                           // Allow wrapping to multiple lines
-                                           maxLines: 2,
-                                           overflow: TextOverflow.ellipsis,
-                                         ),
-                                         SizedBox(height: 4),
-                                         Text(
-                                           _workoutType,
-                                           style: TextStyle(
-                                             fontSize: 18,
-                                             color: Colors.grey[600],
-                                           ),
-                                         ),
-                                       ],
-                                     ),
-                                   ),
-                                 ),
+                                // Calories and macros card - exactly like FoodCardOpen
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 29),
+                                  child: Container(
+                                    padding: EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      // Remove border on this card even in edit mode
+                                      border: null,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 10,
+                                          offset: Offset(0, 5),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Calories circle
+                                        Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            // Circle image instead of custom painted progress
+                                            Transform.translate(
+                                              offset: Offset(0, -3.9),
+                                              child: ColorFiltered(
+                                                colorFilter: ColorFilter.mode(
+                                                  Colors.black,
+                                                  BlendMode.srcIn,
+                                                ),
+                                                child: Image.asset(
+                                                  'assets/images/circle.png',
+                                                  width: 130,
+                                                  height: 130,
+                                                  fit: BoxFit.contain,
+                                                ),
+                                              ),
+                                            ),
+                                            // Calories text
+                                            Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _calories,
+                                                  style: TextStyle(
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.black,
+                                                    decoration:
+                                                        TextDecoration.none,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Calories',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight:
+                                                        FontWeight.normal,
+                                                    color: Colors.black,
+                                                    decoration:
+                                                        TextDecoration.none,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        SizedBox(height: 5),
 
-                                 // Add 20px gap between subtitle and divider
-                                 SizedBox(height: 20),
+                                        // Workout Stats (responsive, no overflow)
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.center,
+                                          child: Row(
+                                            children: [
+                                              _buildMacroWithIcon(
+                                                  'Time',
+                                                  _duration,
+                                                  Color(0xFFD7C1FF),
+                                                  'Stopwatch.png'),
+                                              SizedBox(width: 12),
+                                              _buildMacroWithIcon(
+                                                  'Volume',
+                                                  _volume,
+                                                  Color(0xFFFFD8B1),
+                                                  'kettlebell.png'),
+                                              SizedBox(width: 12),
+                                              _buildMacroWithIcon(
+                                                  'Sets',
+                                                  _sets,
+                                                  Color(0xFFB1EFD8),
+                                                  'CircleMenu.png'),
+                                              SizedBox(width: 12),
+                                              _buildMacroWithIcon(
+                                                  'PRs',
+                                                  _prs,
+                                                  Color(0xFFFFB1B1),
+                                                  'weekstreak.png'),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
 
-                                 // Calories and macros card - exactly like FoodCardOpen
-                                 Padding(
-                                   padding: const EdgeInsets.symmetric(horizontal: 29),
-                                   child: Container(
-                                     padding: EdgeInsets.all(20),
-                                     decoration: BoxDecoration(
-                                       color: Colors.white,
-                                       borderRadius: BorderRadius.circular(20),
-                                       // Remove border on this card even in edit mode
-                                       border: null,
-                                       boxShadow: [
-                                         BoxShadow(
-                                           color: Colors.black.withOpacity(0.05),
-                                           blurRadius: 10,
-                                           offset: Offset(0, 5),
-                                         ),
-                                       ],
-                                     ),
-                                     child: Column(
-                                       mainAxisSize: MainAxisSize.min,
-                                       children: [
-                                         // Calories circle
-                                         Stack(
-                                           alignment: Alignment.center,
-                                           children: [
-                                             // Circle image instead of custom painted progress
-                                             Transform.translate(
-                                               offset: Offset(0, -3.9),
-                                               child: ColorFiltered(
-                                                 colorFilter: ColorFilter.mode(
-                                                   Colors.black,
-                                                   BlendMode.srcIn,
-                                                 ),
-                                                 child: Image.asset(
-                                                   'assets/images/circle.png',
-                                                   width: 130,
-                                                   height: 130,
-                                                   fit: BoxFit.contain,
-                                                 ),
-                                               ),
-                                             ),
-                                             // Calories text
-                                             Column(
-                                               mainAxisSize: MainAxisSize.min,
-                                               children: [
-                                                 Text(
-                                                   _calories,
-                                                   style: TextStyle(
-                                                     fontSize: 20,
-                                                     fontWeight: FontWeight.bold,
-                                                     color: Colors.black,
-                                                     decoration: TextDecoration.none,
-                                                   ),
-                                                 ),
-                                                 Text(
-                                                   'Calories',
-                                                   style: TextStyle(
-                                                     fontSize: 12,
-                                                     fontWeight: FontWeight.normal,
-                                                     color: Colors.black,
-                                                     decoration: TextDecoration.none,
-                                                   ),
-                                                 ),
-                                               ],
-                                             ),
-                                           ],
-                                         ),
-                                         SizedBox(height: 5),
+                                SizedBox(height: 32),
 
-                                         // Workout Stats
-                                         Row(
-                                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                           children: [
-                                             _buildMacro('Time', _duration, Color(0xFFD7C1FF)),
-                                             _buildMacro('Volume', _volume, Color(0xFFFFD8B1)),
-                                             _buildMacro('Sets', _sets, Color(0xFFB1EFD8)),
-                                             _buildMacro('PRs', _prs, Color(0xFFFFB1B1)),
-                                           ],
-                                         ),
-                                       ],
-                                     ),
-                                   ),
-                                 ),
+                                // Only show social interaction area if not Private
+                                if (_privacyStatus != 'Private') ...[
+                                  // Social Section - exactly like FoodCardOpen
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 29),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Social',
+                                          style: TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'SF Pro Display',
+                                          ),
+                                        ),
+                                        SizedBox(height: 16),
+                                        // Social sharing buttons - matching Figma design exactly
+                                        Row(
+                                          children: [
+                                            // Like button area (left section)
+                                            Expanded(
+                                              child: Container(
+                                                height: 48,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(24),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withOpacity(0.05),
+                                                      blurRadius: 4,
+                                                      offset: Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Center(
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      GestureDetector(
+                                                        onTap: _toggleLike,
+                                                        child: AnimatedBuilder(
+                                                          animation:
+                                                              _likeController,
+                                                          builder:
+                                                              (context, child) {
+                                                            return Transform
+                                                                .scale(
+                                                              scale:
+                                                                  _likeScaleAnimation
+                                                                      .value,
+                                                              child:
+                                                                  Image.asset(
+                                                                _isLiked
+                                                                    ? 'assets/images/likefilled.png'
+                                                                    : 'assets/images/like.png',
+                                                                width: 24,
+                                                                height: 24,
+                                                                color: Colors
+                                                                    .black,
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        '0 Likes',
+                                                        style: TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
 
-                                 SizedBox(height: 32),
+                                            SizedBox(width: 16),
 
-                                 // Only show social interaction area if not Private
-                                 if (_privacyStatus != 'Private') ...[
-                                   // Social Section - exactly like FoodCardOpen
-                                   Padding(
-                                     padding: const EdgeInsets.symmetric(horizontal: 29),
-                                     child: Column(
-                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                       children: [
-                                         Text(
-                                           'Social',
-                                           style: TextStyle(
-                                             color: Colors.black,
-                                             fontSize: 20,
-                                             fontWeight: FontWeight.bold,
-                                             fontFamily: 'SF Pro Display',
-                                           ),
-                                         ),
-                                         SizedBox(height: 16),
-                                         // Social sharing buttons - matching Figma design exactly
-                                         Row(
-                                           children: [
-                                             // Like button area (left section)
-                                             Expanded(
-                                               child: Container(
-                                                 height: 48,
-                                                 decoration: BoxDecoration(
-                                                   color: Colors.white,
-                                                   borderRadius: BorderRadius.circular(24),
-                                                   boxShadow: [
-                                                     BoxShadow(
-                                                       color: Colors.black.withOpacity(0.05),
-                                                       blurRadius: 4,
-                                                       offset: Offset(0, 2),
-                                                     ),
-                                                   ],
-                                                 ),
-                                                 child: Center(
-                                                   child: Row(
-                                                     mainAxisAlignment: MainAxisAlignment.center,
-                                                     children: [
-                                                       GestureDetector(
-                                                         onTap: _toggleLike,
-                                                         child: AnimatedBuilder(
-                                                           animation: _likeController,
-                                                           builder: (context, child) {
-                                                             return Transform.scale(
-                                                               scale: _likeScaleAnimation.value,
-                                                               child: Image.asset(
-                                                                 _isLiked
-                                                                     ? 'assets/images/likefilled.png'
-                                                                     : 'assets/images/like.png',
-                                                                 width: 24,
-                                                                 height: 24,
-                                                                 color: Colors.black,
-                                                               ),
-                                                             );
-                                                           },
-                                                         ),
-                                                       ),
-                                                       SizedBox(width: 8),
-                                                       Text(
-                                                         '0 Likes',
-                                                         style: TextStyle(
-                                                           fontSize: 16,
-                                                           fontWeight: FontWeight.w500,
-                                                         ),
-                                                       ),
-                                                     ],
-                                                   ),
-                                                 ),
-                                               ),
-                                             ),
-                                             
-                                             SizedBox(width: 16),
-                                             
-                                             // Comment button (right section)
-                                             Expanded(
-                                               child: Container(
-                                                 height: 48,
-                                                 decoration: BoxDecoration(
-                                                   color: Colors.white,
-                                                   borderRadius: BorderRadius.circular(24),
-                                                   boxShadow: [
-                                                     BoxShadow(
-                                                       color: Colors.black.withOpacity(0.05),
-                                                       blurRadius: 4,
-                                                       offset: Offset(0, 2),
-                                                     ),
-                                                   ],
-                                                 ),
-                                                 child: Center(
-                                                   child: Row(
-                                                     mainAxisAlignment: MainAxisAlignment.center,
-                                                     children: [
-                                                       Image.asset(
-                                                         'assets/images/comment.png',
-                                                         width: 24,
-                                                         height: 24,
-                                                         color: Colors.black,
-                                                       ),
-                                                       SizedBox(width: 8),
-                                                       Text(
-                                                         '0 Comments',
-                                                         style: TextStyle(
-                                                           fontSize: 16,
-                                                           fontWeight: FontWeight.w500,
-                                                         ),
-                                                       ),
-                                                     ],
-                                                   ),
-                                                 ),
-                                               ),
-                                             ),
-                                           ],
-                                         ),
-                                       ],
-                                     ),
-                                   ),
-                                 ],
+                                            // Comment button (right section)
+                                            Expanded(
+                                              child: Container(
+                                                height: 48,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(24),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withOpacity(0.05),
+                                                      blurRadius: 4,
+                                                      offset: Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Center(
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Image.asset(
+                                                        'assets/images/comment.png',
+                                                        width: 24,
+                                                        height: 24,
+                                                        color: Colors.black,
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        '0 Comments',
+                                                        style: TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
 
-                                 SizedBox(height: 32),
+                                SizedBox(height: 32),
 
-                                 // Exercises Section - exactly like FoodCardOpen
-                                 Padding(
-                                   padding: const EdgeInsets.symmetric(horizontal: 29),
-                                   child: Column(
-                                     crossAxisAlignment: CrossAxisAlignment.start,
-                                     children: [
-                                       Text(
-                                         'Exercises',
-                                         style: TextStyle(
-                                           color: Colors.black,
-                                           fontSize: 20,
-                                           fontWeight: FontWeight.bold,
-                                           fontFamily: 'SF Pro Display',
-                                         ),
-                                       ),
-                                       SizedBox(height: 16),
-                                       Container(
-                                         padding: EdgeInsets.all(20),
-                                         decoration: BoxDecoration(
-                                           color: Colors.white,
-                                           borderRadius: BorderRadius.circular(20),
-                                           boxShadow: [
-                                             BoxShadow(
-                                               color: Colors.black.withOpacity(0.05),
-                                               blurRadius: 10,
-                                               offset: Offset(0, 5),
-                                             ),
-                                           ],
-                                         ),
-                                         child: Column(
-                                           crossAxisAlignment: CrossAxisAlignment.start,
-                                           children: [
-                                             // Display all exercises from session
-                                             ..._exercises.asMap().entries.map((entry) {
-                                               final exerciseIndex = entry.key;
-                                               final exercise = entry.value;
-                                               final exerciseName = exercise['name'] ?? 'Unknown Exercise';
-                                               final sets = exercise['sets'] as List<dynamic>? ?? [];
-                                               
-                                               return Column(
-                                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                                 children: [
-                                                   // Exercise header
-                                                   Row(
-                                                     children: [
-                                                       Container(
-                                                         width: 40,
-                                                         height: 40,
-                                                         decoration: BoxDecoration(
-                                                           color: Color(0xFFF2F2F2),
-                                                           borderRadius: BorderRadius.circular(8),
-                                                         ),
-                                                         child: Center(
-                                                           child: Image.asset(
-                                                             'assets/images/dumbbell.png',
-                                                             width: 24,
-                                                             height: 24,
-                                                             color: Colors.black,
-                                                           ),
-                                                         ),
-                                                       ),
-                                                       SizedBox(width: 12),
-                                                       Expanded(
-                                                         child: Text(
-                                                           exerciseName,
-                                                           style: TextStyle(
-                                                             fontWeight: FontWeight.bold,
-                                                             fontSize: 16,
-                                                             fontFamily: 'SF Pro Display',
-                                                           ),
-                                                         ),
-                                                       ),
-                                                     ],
-                                                   ),
-                                                   SizedBox(height: 16),
-                                                   // Table header
-                                                   Container(
-                                                     padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                                     decoration: BoxDecoration(
-                                                       color: Color(0xFFF8F8F8),
-                                                       borderRadius: BorderRadius.circular(8),
-                                                     ),
-                                                     child: Row(
-                                                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                                       children: [
-                                                         Text(
-                                                           "SET",
-                                                           style: TextStyle(
-                                                             fontWeight: FontWeight.w600,
-                                                             fontSize: 12,
-                                                             fontFamily: 'SF Pro Display',
-                                                             color: Colors.black54,
-                                                           ),
-                                                         ),
-                                                         Text(
-                                                           "KG",
-                                                           style: TextStyle(
-                                                             fontWeight: FontWeight.w600,
-                                                             fontSize: 12,
-                                                             fontFamily: 'SF Pro Display',
-                                                             color: Colors.black54,
-                                                           ),
-                                                         ),
-                                                         Text(
-                                                           "REPS",
-                                                           style: TextStyle(
-                                                             fontWeight: FontWeight.w600,
-                                                             fontSize: 12,
-                                                             fontFamily: 'SF Pro Display',
-                                                             color: Colors.black54,
-                                                           ),
-                                                         ),
-                                                       ],
-                                                     ),
-                                                   ),
-                                                   SizedBox(height: 8),
-                                                   // Table rows for this exercise
-                                                   ...sets.asMap().entries.map((setEntry) {
-                                                     final setIndex = setEntry.key;
-                                                     final set = setEntry.value as Map<String, dynamic>;
-                                                     final kg = set['kg']?.toString() ?? '0';
-                                                     final reps = set['reps']?.toString() ?? '0';
-                                                     
-                                                     return Container(
-                                                       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                                       child: Row(
-                                                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                                         children: [
-                                                           Text(
-                                                             "${setIndex + 1}",
-                                                             style: TextStyle(
-                                                               fontSize: 14,
-                                                               fontFamily: 'SF Pro Display',
-                                                               fontWeight: FontWeight.w500,
-                                                             ),
-                                                           ),
-                                                           Text(
-                                                             kg,
-                                                             style: TextStyle(
-                                                               fontSize: 14,
-                                                               fontFamily: 'SF Pro Display',
-                                                               fontWeight: FontWeight.w500,
-                                                             ),
-                                                           ),
-                                                           Text(
-                                                             reps,
-                                                             style: TextStyle(
-                                                               fontSize: 14,
-                                                               fontFamily: 'SF Pro Display',
-                                                               fontWeight: FontWeight.w500,
-                                                             ),
-                                                           ),
-                                                         ],
-                                                       ),
-                                                     );
-                                                   }).toList(),
-                                                   // Add spacing between exercises (except for the last one)
-                                                   if (exerciseIndex < _exercises.length - 1) SizedBox(height: 24),
-                                                 ],
-                                               );
-                                             }).toList(),
-                                           ],
-                                         ),
-                                       ),
-                                     ],
-                                   ),
-                                 ),
+                                // Exercises Section - exactly like FoodCardOpen
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 29),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Exercises',
+                                        style: TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'SF Pro Display',
+                                        ),
+                                      ),
+                                      SizedBox(height: 16),
+                                      Container(
+                                        padding: EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withOpacity(0.05),
+                                              blurRadius: 10,
+                                              offset: Offset(0, 5),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            // Display all exercises from session
+                                            ..._exercises
+                                                .asMap()
+                                                .entries
+                                                .map((entry) {
+                                              final exerciseIndex = entry.key;
+                                              final exercise = entry.value;
+                                              final exerciseName =
+                                                  exercise['name'] ??
+                                                      'Unknown Exercise';
+                                              final sets = exercise['sets']
+                                                      as List<dynamic>? ??
+                                                  [];
 
-                                 SizedBox(height: 32),
+                                              return Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  // Exercise header
+                                                  Row(
+                                                    children: [
+                                                      Container(
+                                                        width: 40,
+                                                        height: 40,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color:
+                                                              Color(0xFFF2F2F2),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                        ),
+                                                        child: Center(
+                                                          child: Image.asset(
+                                                            'assets/images/dumbbell.png',
+                                                            width: 24,
+                                                            height: 24,
+                                                            color: Colors.black,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      SizedBox(width: 12),
+                                                      Expanded(
+                                                        child: Text(
+                                                          exerciseName,
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 16,
+                                                            fontFamily:
+                                                                'SF Pro Display',
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  SizedBox(height: 16),
+                                                  // Table header
+                                                  Container(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            vertical: 8,
+                                                            horizontal: 12),
+                                                    decoration: BoxDecoration(
+                                                      color: Color(0xFFF8F8F8),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceEvenly,
+                                                      children: [
+                                                        Text(
+                                                          "SET",
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            fontSize: 12,
+                                                            fontFamily:
+                                                                'SF Pro Display',
+                                                            color:
+                                                                Colors.black54,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          "KG",
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            fontSize: 12,
+                                                            fontFamily:
+                                                                'SF Pro Display',
+                                                            color:
+                                                                Colors.black54,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          "REPS",
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            fontSize: 12,
+                                                            fontFamily:
+                                                                'SF Pro Display',
+                                                            color:
+                                                                Colors.black54,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  SizedBox(height: 8),
+                                                  // Table rows for this exercise
+                                                  ...sets
+                                                      .asMap()
+                                                      .entries
+                                                      .map((setEntry) {
+                                                    final setIndex =
+                                                        setEntry.key;
+                                                    final set = setEntry.value
+                                                        as Map<String, dynamic>;
+                                                    final kg =
+                                                        set['kg']?.toString() ??
+                                                            '0';
+                                                    final reps = set['reps']
+                                                            ?.toString() ??
+                                                        '0';
 
-                                 // More Section - exactly like FoodCardOpen
-                                 Padding(
-                                   padding: const EdgeInsets.symmetric(horizontal: 29),
-                                   child: Column(
-                                     crossAxisAlignment: CrossAxisAlignment.start,
-                                     children: [
-                                       Text(
-                                         'More',
-                                         style: TextStyle(
-                                           color: Colors.black,
-                                           fontSize: 20,
-                                           fontWeight: FontWeight.bold,
-                                           fontFamily: 'SF Pro Display',
-                                         ),
-                                       ),
-                                       SizedBox(height: 20),
-                                       _buildMoreOption('Add Intensity', 'intensity.png'),
-                                       _buildMoreOption('Edit Workout', 'pencilicon.png'),
-                                       _buildMoreOption('Fix with AI', 'bulb.png'),
-                                       _buildMoreOptionWithDropdown(_privacyStatus, 'globe.png'),
-                                     ],
-                                   ),
-                                 ),
+                                                    return Container(
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              vertical: 8,
+                                                              horizontal: 12),
+                                                      child: Row(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .spaceEvenly,
+                                                        children: [
+                                                          Text(
+                                                            "${setIndex + 1}",
+                                                            style: TextStyle(
+                                                              fontSize: 14,
+                                                              fontFamily:
+                                                                  'SF Pro Display',
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            kg,
+                                                            style: TextStyle(
+                                                              fontSize: 14,
+                                                              fontFamily:
+                                                                  'SF Pro Display',
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            reps,
+                                                            style: TextStyle(
+                                                              fontSize: 14,
+                                                              fontFamily:
+                                                                  'SF Pro Display',
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  }).toList(),
+                                                  // Add spacing between exercises (except for the last one)
+                                                  if (exerciseIndex <
+                                                      _exercises.length - 1)
+                                                    SizedBox(height: 24),
+                                                ],
+                                              );
+                                            }).toList(),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
 
-                                 // Extra space at the bottom to account for the Save button
-                                 SizedBox(height: 120),
-                               ],
-                             ),
-                           ],
-                         ),
-                       ),
-                     ),
+                                SizedBox(height: 32),
+
+                                // More Section - exactly like FoodCardOpen
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 29),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'More',
+                                        style: TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'SF Pro Display',
+                                        ),
+                                      ),
+                                      SizedBox(height: 20),
+                                      _buildMoreOption(
+                                          'Add Intensity', 'intensity.png'),
+                                      _buildMoreOption(
+                                          'Edit Workout', 'pencilicon.png'),
+                                      _buildMoreOption(
+                                          'Fix with AI', 'bulb.png'),
+                                      _buildMoreOptionWithDropdown(
+                                          _privacyStatus, 'globe.png'),
+                                    ],
+                                  ),
+                                ),
+
+                                // Extra space at the bottom to account for the Save button
+                                SizedBox(height: 120),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1414,39 +1463,7 @@ class _GymCardOpenState extends State<GymCardOpen>
     );
   }
 
-  Widget _buildMetricItem(String label, String value, Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        SizedBox(height: 8),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 12,
-            fontFamily: 'SF Pro Display',
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            fontFamily: 'SF Pro Display',
-          ),
-        ),
-      ],
-    );
-  }
+  // Widget _buildMetricItem(...) unused
 
   Widget _buildMoreOption(String title, String iconAsset) {
     // Base icon size for pencilicon.png
@@ -1528,7 +1545,8 @@ class _GymCardOpenState extends State<GymCardOpen>
                     color: Colors.black,
                   ),
                   textAlign: TextAlign.center,
-                  softWrap: false, // Prevent text from wrapping to the next line
+                  softWrap:
+                      false, // Prevent text from wrapping to the next line
                 ),
               ),
             ),
@@ -1605,7 +1623,8 @@ class _GymCardOpenState extends State<GymCardOpen>
                     color: Colors.black,
                   ),
                   textAlign: TextAlign.center,
-                  softWrap: false, // Prevent text from wrapping to the next line
+                  softWrap:
+                      false, // Prevent text from wrapping to the next line
                 ),
               ),
             ),
@@ -1617,22 +1636,35 @@ class _GymCardOpenState extends State<GymCardOpen>
     );
   }
 
-  Widget _buildMacro(String name, String amount, Color color) {
+  // _buildMacro(...) unused
+
+  Widget _buildMacroWithIcon(
+      String name, String amount, Color color, String iconAsset) {
     return Container(
-      width: 50, // Reduced width to prevent overflow
+      padding: EdgeInsets.symmetric(horizontal: 4),
+      constraints: BoxConstraints(minWidth: 56, maxWidth: 84),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            name, 
-            style: TextStyle(fontSize: 12),
-            textAlign: TextAlign.center,
+          // Label with small icon above
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('images/${iconAsset}', width: 14, height: 14),
+              const SizedBox(width: 4),
+              Text(
+                name,
+                style: const TextStyle(fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          SizedBox(height: 4),
+          const SizedBox(height: 4),
           Container(
-            width: 45, // Slightly reduced pill width
-            height: 10, // Fixed pill height
+            width: 60,
+            height: 10,
             decoration: BoxDecoration(
               color: Colors.grey[200],
               borderRadius: BorderRadius.circular(5),
@@ -1647,10 +1679,10 @@ class _GymCardOpenState extends State<GymCardOpen>
               ),
             ),
           ),
-          SizedBox(height: 4),
+          const SizedBox(height: 4),
           Text(
             amount,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1660,7 +1692,7 @@ class _GymCardOpenState extends State<GymCardOpen>
 
   void _showIntensityModal() {
     double currentIntensity = _intensity;
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -1697,7 +1729,7 @@ class _GymCardOpenState extends State<GymCardOpen>
                   ),
                 ),
                 SizedBox(height: 16),
-                
+
                 // Title
                 Text(
                   'Add Intensity',
@@ -1710,7 +1742,7 @@ class _GymCardOpenState extends State<GymCardOpen>
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 24),
-                
+
                 // Intensity icon
                 Image.asset(
                   'assets/images/intensity.png',
@@ -1719,7 +1751,7 @@ class _GymCardOpenState extends State<GymCardOpen>
                   color: Colors.black,
                 ),
                 SizedBox(height: 16),
-                
+
                 // Instruction label
                 Text(
                   'Set Workout Intensity from 1-10',
@@ -1731,7 +1763,7 @@ class _GymCardOpenState extends State<GymCardOpen>
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 24),
-                
+
                 // Slider
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
@@ -1755,7 +1787,7 @@ class _GymCardOpenState extends State<GymCardOpen>
                   ),
                 ),
                 SizedBox(height: 8),
-                
+
                 // Selected value display
                 Text(
                   currentIntensity.round().toString(),
@@ -1767,7 +1799,7 @@ class _GymCardOpenState extends State<GymCardOpen>
                   ),
                 ),
                 SizedBox(height: 32),
-                
+
                 // Add button
                 Container(
                   width: double.infinity,
@@ -1778,7 +1810,7 @@ class _GymCardOpenState extends State<GymCardOpen>
                       setState(() {
                         _intensity = currentIntensity;
                       });
-                      
+
                       // Close the modal
                       Navigator.pop(context);
                     },
@@ -1808,4 +1840,4 @@ class _GymCardOpenState extends State<GymCardOpen>
       ),
     );
   }
-} 
+}

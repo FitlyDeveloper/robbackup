@@ -8,6 +8,9 @@ import '../../NewScreens/SnapFood.dart';
 import 'flip_card.dart';
 import 'home_card2.dart';
 import '../../NewScreens/FoodCardOpen.dart';
+import '../../NewScreens/RunCardOpen.dart';
+import '../../NewScreens/GymCardOpen.dart';
+import '../../NewScreens/CustomExerciseCardOpen.dart';
 import 'package:flutter/gestures.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -147,6 +150,7 @@ class NutritionTracker {
   int _currentFat = 0;
   int _currentCarb = 0;
   int _consumedCalories = 0;
+  int _burnedCalories = 0;
 
   // Cache variables to prevent excessive loading
   DateTime? _lastLoadTime;
@@ -160,6 +164,7 @@ class NutritionTracker {
   int get currentFat => _currentFat;
   int get currentCarb => _currentCarb;
   int get consumedCalories => _consumedCalories;
+  int get burnedCalories => _burnedCalories;
 
   // Helper method to generate a hash of the current food data
   String _generateDataHash(SharedPreferences prefs) {
@@ -170,6 +175,14 @@ class NutritionTracker {
       List<String>? cardStrings = prefs.getStringList('food_cards');
       if (cardStrings != null) {
         hashComponents.addAll(cardStrings);
+      }
+    }
+
+    // Add workout cards data to hash so burned updates bust the cache
+    if (prefs.containsKey('workout_cards')) {
+      List<String>? workoutStrings = prefs.getStringList('workout_cards');
+      if (workoutStrings != null) {
+        hashComponents.addAll(workoutStrings);
       }
     }
 
@@ -286,6 +299,10 @@ class NutritionTracker {
       final now = DateTime.now();
       final currentDataHash = _generateDataHash(prefs);
 
+      // Always refresh burned calories even if we return early from cache
+      final String todayForBurn = DateTime.now().toString().split(' ')[0];
+      await _loadBurnedFromWorkoutCards(prefs, todayForBurn);
+
       if (_lastLoadTime != null &&
           _lastDataHash == currentDataHash &&
           now.difference(_lastLoadTime!) < _cacheValidDuration) {
@@ -301,6 +318,7 @@ class NutritionTracker {
       _currentFat = 0;
       _currentCarb = 0;
       _consumedCalories = 0;
+      _burnedCalories = 0;
 
       // Try to load today's food logs
       String today = DateTime.now().toString().split(' ')[0]; // YYYY-MM-DD
@@ -309,6 +327,9 @@ class NutritionTracker {
       bool dataFound = await _tryLoadFromFoodLogs(prefs, today) ||
           await _tryLoadFromFoodCards(prefs) ||
           await _tryLoadFromDailyNutrition(prefs, today);
+
+      // Always refresh burned calories from workout cards for today
+      await _loadBurnedFromWorkoutCards(prefs, today);
 
       if (!dataFound) {
         print('No food log data found in any known format');
@@ -478,6 +499,32 @@ class NutritionTracker {
       }
     }
     return false;
+  }
+
+  // Sum burned calories from today's workout cards (running/weightlifting/custom)
+  Future<void> _loadBurnedFromWorkoutCards(
+      SharedPreferences prefs, String today) async {
+    try {
+      _burnedCalories = 0;
+      final List<String>? storedWorkoutCards =
+          prefs.getStringList('workout_cards');
+      if (storedWorkoutCards == null) return;
+
+      for (final wkJson in storedWorkoutCards) {
+        try {
+          final Map<String, dynamic> wk = jsonDecode(wkJson);
+          final int ts = wk['timestamp'] ?? 0;
+          final String d =
+              DateTime.fromMillisecondsSinceEpoch(ts).toString().split(' ')[0];
+          if (d == today) {
+            _burnedCalories += _parseNutritionValue(wk['calories']);
+          }
+        } catch (_) {}
+      }
+      print('Loaded burned calories from workout_cards: $_burnedCalories');
+    } catch (e) {
+      print('Error loading burned calories: $e');
+    }
   }
 
   // Helper method to parse nutrition values safely
@@ -1308,6 +1355,8 @@ class _CodiaPageState extends State<CodiaPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final List<String>? storedCards = prefs.getStringList('food_cards');
+      final List<String>? storedWorkoutCards =
+          prefs.getStringList('workout_cards');
 
       List<Map<String, dynamic>> cards = [];
 
@@ -1372,23 +1421,39 @@ class _CodiaPageState extends State<CodiaPage> {
           }
         }
 
-        // Sort by timestamp (most recent first)
-        cards.sort(
-            (a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
-
-        // Update streak count if we have food cards
-        setState(() {
-          _foodCards = cards;
-          _isLoadingFoodCards = false;
-
-          // Update streak count if we have food cards
-          if (cards.isNotEmpty) {
-            streakCount = 1; // Set streak to 1 if any food images are uploaded
-          }
-        });
-
         print("Loaded ${cards.length} food cards (no expiration filter)");
       }
+
+      // Merge workout cards and sort together
+      if (storedWorkoutCards != null && storedWorkoutCards.isNotEmpty) {
+        for (String wkJson in storedWorkoutCards) {
+          try {
+            final Map<String, dynamic> wk = jsonDecode(wkJson);
+            wk['type'] = wk['type'] ?? 'workout';
+            wk['timestamp'] =
+                wk['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
+            wk['name'] = wk['name'] ?? 'Workout';
+            wk['calories'] = wk['calories'] ?? 0;
+            cards.add(wk);
+          } catch (e) {
+            print('Error parsing workout card JSON: $e');
+          }
+        }
+      }
+
+      // Sort combined list by timestamp
+      if (cards.isNotEmpty) {
+        cards.sort(
+            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+      }
+
+      setState(() {
+        _foodCards = cards;
+        _isLoadingFoodCards = false;
+        if (cards.isNotEmpty) {
+          streakCount = 1;
+        }
+      });
     } catch (e) {
       print("Error loading food cards: $e");
       setState(() {
@@ -1531,6 +1596,11 @@ class _CodiaPageState extends State<CodiaPage> {
 
   // Build a food card widget from food card data
   Widget _buildFoodCard(Map<String, dynamic> foodCard) {
+    // If this is a workout card, render with dedicated layout
+    if ((foodCard['type'] as String?) == 'workout') {
+      return _buildWorkoutCard(foodCard);
+    }
+
     // Convert timestamp to time string (e.g., "12:07")
     String timeString = "Now";
     try {
@@ -1640,8 +1710,27 @@ class _CodiaPageState extends State<CodiaPage> {
       padding: const EdgeInsets.symmetric(horizontal: 29, vertical: 8),
       child: GestureDetector(
         onTap: () {
-          // Pass the original base values to FoodCardOpen, not the multiplied ones
-          // This ensures FoodCardOpen works with the base values and can multiply them as needed
+          final String? type = foodCard['type'] as String?;
+          if (type == 'workout') {
+            final String subtype =
+                (foodCard['workoutType'] ?? foodCard['subtype'] ?? '')
+                    .toString()
+                    .toLowerCase();
+            final widgetToOpen = subtype == 'running'
+                ? RunCardOpen(workoutData: foodCard)
+                : (subtype == 'custom'
+                    ? CustomExerciseCardOpen(workoutData: foodCard)
+                    : GymCardOpen(workoutData: foodCard));
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => widgetToOpen),
+            ).then((_) {
+              _loadFoodCards();
+            });
+            return;
+          }
+
+          // Food card flow (unchanged)
           int baseCalories = _extractNumericValueAsInt(foodCard['calories']);
           int baseProtein = _extractNumericValueAsInt(foodCard['protein']);
           int baseFat = _extractNumericValueAsInt(foodCard['fat']);
@@ -1664,7 +1753,6 @@ class _CodiaPageState extends State<CodiaPage> {
               ),
             ),
           ).then((_) {
-            // Refresh data when returning from FoodCardOpen
             _loadFoodCards();
             _loadNutritionData();
           });
@@ -1808,6 +1896,268 @@ class _CodiaPageState extends State<CodiaPage> {
                             ),
                           ),
                         ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Helpers to format workout metrics
+  String _formatDuration(dynamic secondsLike) {
+    final int secs = _extractNumericValueAsInt(secondsLike);
+    if (secs <= 0) return '0m';
+    final int minutes = (secs / 60).floor();
+    return '${minutes}m';
+  }
+
+  String _formatDistance(dynamic metersLike) {
+    // Accept meters (num) or string; display as km with 1 decimal
+    if (metersLike == null) return '0 km';
+    double meters;
+    if (metersLike is num) {
+      meters = metersLike.toDouble();
+    } else {
+      meters = double.tryParse(RegExp(r'(\d+\.?\d*)')
+                  .firstMatch(metersLike.toString())
+                  ?.group(1) ??
+              '0') ??
+          0.0;
+    }
+    final double km = meters / 1000.0;
+    return '${km.toStringAsFixed(1)} km';
+  }
+
+  String _formatPace(dynamic paceLike) {
+    // pace stored as minutes per km (double)
+    if (paceLike == null) return '--';
+    final double pace = paceLike is num
+        ? paceLike.toDouble()
+        : double.tryParse(RegExp(r'(\d+\.?\d*)')
+                    .firstMatch(paceLike.toString())
+                    ?.group(1) ??
+                '0') ??
+            0.0;
+    if (pace <= 0) return '--';
+    return pace.toStringAsFixed(1);
+  }
+
+  // Workout card renderer (icon + calories + metrics row)
+  Widget _buildWorkoutCard(Map<String, dynamic> wk) {
+    final String name = (wk['name'] ?? 'Workout').toString();
+    final String timeString = (() {
+      try {
+        final int ts = wk['timestamp'] ?? 0;
+        if (ts == 0) return 'Now';
+        final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+        final hh = dt.hour.toString().padLeft(2, '0');
+        final mm = dt.minute.toString().padLeft(2, '0');
+        return '$hh:$mm';
+      } catch (_) {
+        return 'Now';
+      }
+    })();
+
+    final String calories = _extractNumericValue(wk['calories']);
+    final String durationStr = _formatDuration(wk['duration']);
+    final String distanceStr = _formatDistance(wk['distance']);
+    final String paceStr = _formatPace(wk['pace']);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 29, vertical: 8),
+      child: GestureDetector(
+        onTap: () {
+          final String subtype = (wk['workoutType'] ?? wk['subtype'] ?? '')
+              .toString()
+              .toLowerCase();
+          final widgetToOpen = subtype == 'running'
+              ? RunCardOpen(workoutData: wk)
+              : (subtype == 'custom'
+                  ? CustomExerciseCardOpen(workoutData: wk)
+                  : GymCardOpen(workoutData: wk));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => widgetToOpen),
+          ).then((_) {
+            _loadFoodCards();
+          });
+        },
+        child: Container(
+          padding: EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Left icon container (gray) like food image slot
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDADADA),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  ),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    ((wk['workoutType'] ?? wk['type'] ?? '')
+                                .toString()
+                                .toLowerCase() ==
+                            'running')
+                        ? 'images/Shoe.png'
+                        : 'images/dumbbell.png',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Details
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6.6, vertical: 2.2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF2F2F2),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Text(
+                              timeString,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+
+                      // Calories
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/energy.png',
+                            width: 18.83,
+                            height: 18.83,
+                          ),
+                          const SizedBox(width: 7.7),
+                          Text(
+                            '$calories calories',
+                            style: const TextStyle(
+                              fontSize: 15.4,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+
+                      // Metrics row: duration, distance, pace (scale to avoid overflow, like branch)
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Image.asset('images/timeicon.png',
+                                    width: 14, height: 14),
+                                const SizedBox(width: 7.7),
+                                Text(
+                                  durationStr,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black,
+                                    decoration: TextDecoration.none,
+                                  ),
+                                  softWrap: false,
+                                  overflow: TextOverflow.fade,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 24.2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Image.asset('images/Distance.png',
+                                    width: 14, height: 14),
+                                const SizedBox(width: 7.7),
+                                Text(
+                                  distanceStr,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black,
+                                    decoration: TextDecoration.none,
+                                  ),
+                                  softWrap: false,
+                                  overflow: TextOverflow.fade,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 24.2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Image.asset('images/speedicon.png',
+                                    width: 14, height: 14),
+                                const SizedBox(width: 7.7),
+                                Text(
+                                  paceStr,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black,
+                                    decoration: TextDecoration.none,
+                                  ),
+                                  softWrap: false,
+                                  overflow: TextOverflow.fade,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -2522,7 +2872,7 @@ class _CodiaPageState extends State<CodiaPage> {
               Column(
                 children: [
                   Text(
-                    '0', // NOTE: Burned calculation is separate
+                    '${_nutritionTracker.burnedCalories}',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
