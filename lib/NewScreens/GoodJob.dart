@@ -6,15 +6,60 @@ import '../models/intensity_level.dart';
 
 final List<Map<String, dynamic>> weightComparisons = [
   {"min": 0, "max": 200, "label": "a bear", "image": "assets/images/bear.png"},
-  {"min": 200, "max": 500, "label": "a lion", "image": "assets/images/lion.png"},
-  {"min": 500, "max": 800, "label": "a horse", "image": "assets/images/horse.png"},
-  {"min": 800, "max": 1000, "label": "a school bus", "image": "assets/images/school-bus.png"},
-  {"min": 1000, "max": 1500, "label": "a rhino", "image": "assets/images/rhino.png"},
-  {"min": 1500, "max": 2000, "label": "a whale", "image": "assets/images/whale.png"},
-  {"min": 2000, "max": 5000, "label": "an elephant", "image": "assets/images/elephant.png"},
-  {"min": 5000, "max": 8000, "label": "a Porsche 911", "image": "assets/images/porsche-911.png"},
-  {"min": 8000, "max": 20000, "label": "a grand piano", "image": "assets/images/grand-piano.png"},
-  {"min": 20000, "max": 999999, "label": "a tank", "image": "assets/images/tank.png"},
+  {
+    "min": 200,
+    "max": 500,
+    "label": "a lion",
+    "image": "assets/images/lion.png"
+  },
+  {
+    "min": 500,
+    "max": 800,
+    "label": "a horse",
+    "image": "assets/images/horse.png"
+  },
+  {
+    "min": 800,
+    "max": 1000,
+    "label": "a school bus",
+    "image": "assets/images/school-bus.png"
+  },
+  {
+    "min": 1000,
+    "max": 1500,
+    "label": "a rhino",
+    "image": "assets/images/rhino.png"
+  },
+  {
+    "min": 1500,
+    "max": 2000,
+    "label": "a whale",
+    "image": "assets/images/whale.png"
+  },
+  {
+    "min": 2000,
+    "max": 5000,
+    "label": "an elephant",
+    "image": "assets/images/elephant.png"
+  },
+  {
+    "min": 5000,
+    "max": 8000,
+    "label": "a Porsche 911",
+    "image": "assets/images/porsche-911.png"
+  },
+  {
+    "min": 8000,
+    "max": 20000,
+    "label": "a grand piano",
+    "image": "assets/images/grand-piano.png"
+  },
+  {
+    "min": 20000,
+    "max": 999999,
+    "label": "a tank",
+    "image": "assets/images/tank.png"
+  },
 ];
 
 class GoodJob extends StatefulWidget {
@@ -29,7 +74,7 @@ class GoodJob extends StatefulWidget {
   final List<Map<String, dynamic>>? exercises;
   final String? runId;
   final double? totalKg;
-  
+
   const GoodJob({
     Key? key,
     this.duration,
@@ -50,6 +95,45 @@ class GoodJob extends StatefulWidget {
 }
 
 class _GoodJobState extends State<GoodJob> {
+  int _parseInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    final s = v.toString();
+    final m = RegExp(r"(\d+\.?\d*)").firstMatch(s);
+    if (m != null) {
+      return double.tryParse(m.group(1)!)?.round() ?? 0;
+    }
+    return 0;
+  }
+
+  int _computeTotalKg() {
+    // 1) Prefer explicit totalKg (from SaveWeightliftingWorkout)
+    if (widget.totalKg != null) return widget.totalKg!.round();
+    // 2) Fallback to provided volume
+    if (widget.volume != null) return widget.volume!;
+    // 3) Derive from exercises if available: sum(kg * reps) across sets
+    if (widget.exercises != null) {
+      int total = 0;
+      for (final ex in widget.exercises!) {
+        final sets = ex['sets'] as List?;
+        if (sets == null) continue;
+        for (final s in sets) {
+          if (s is Map) {
+            final kg = _parseInt(s['kg']);
+            final reps = _parseInt(s['reps']);
+            if (kg > 0 && reps > 0) {
+              total += kg * reps;
+            } else if (kg > 0 && reps == 0) {
+              total += kg;
+            }
+          }
+        }
+      }
+      return total;
+    }
+    return 0;
+  }
   Map<String, String> getWeightComparison(int kg) {
     for (final comp in weightComparisons) {
       if (kg >= comp["min"] && kg < comp["max"]) {
@@ -61,7 +145,8 @@ class _GoodJobState extends State<GoodJob> {
 
   @override
   Widget build(BuildContext context) {
-    final comparison = getWeightComparison(widget.volume ?? 0);
+    final int liftedKg = _computeTotalKg();
+    final comparison = getWeightComparison(liftedKg);
     final double screenHeight = MediaQuery.of(context).size.height;
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
@@ -123,7 +208,8 @@ class _GoodJobState extends State<GoodJob> {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 26, right: 26, top: 13, bottom: 28),
+                    padding: const EdgeInsets.only(
+                        left: 26, right: 26, top: 13, bottom: 28),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -133,7 +219,8 @@ class _GoodJobState extends State<GoodJob> {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Padding(
-                              padding: const EdgeInsets.only(left: 0), // Already 26px from left
+                              padding: const EdgeInsets.only(
+                                  left: 0), // Already 26px from left
                               child: Text(
                                 'Fitly',
                                 style: const TextStyle(
@@ -146,7 +233,8 @@ class _GoodJobState extends State<GoodJob> {
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.only(right: 0), // Already 26px from right
+                              padding: const EdgeInsets.only(
+                                  right: 0), // Already 26px from right
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
@@ -181,7 +269,8 @@ class _GoodJobState extends State<GoodJob> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24), // Figma: more space below row
+                        const SizedBox(
+                            height: 24), // Figma: more space below row
                         // Centered image
                         Expanded(
                           child: Center(
@@ -197,7 +286,7 @@ class _GoodJobState extends State<GoodJob> {
                         Column(
                           children: [
                             Text(
-                              'You lifted a total of ${widget.volume ?? 0} kg',
+                              'You lifted a total of $liftedKg kg',
                               style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
@@ -262,59 +351,120 @@ class _GoodJobState extends State<GoodJob> {
                 onPressed: () async {
                   // Save workout log to workout_cards (separate from food)
                   final prefs = await SharedPreferences.getInstance();
-                  List<String> workoutCards = prefs.getStringList('workout_cards') ?? [];
+                  List<String> workoutCards =
+                      prefs.getStringList('workout_cards') ?? [];
                   final now = DateTime.now();
                   final double? rawDistance = widget.distance;
-                  
 
-                  
+                  // Compute calories using available metrics
+                  int computedCalories = 200; // default fallback
+                  try {
+                    final double weightKg =
+                        (prefs.getDouble('user_weight_kg') ?? 70.0).toDouble();
+                    final int durationSec = (widget.duration ?? 0);
+                    final double minutes = durationSec / 60.0;
+                    if ((widget.workoutType ?? '').toLowerCase() == 'running' &&
+                        rawDistance != null &&
+                        rawDistance > 0) {
+                      // Use run calories util if present
+                      try {
+                        // import is at top of file in project; guard with dynamic call if not
+                      } catch (_) {}
+                    }
+                    if ((widget.workoutType ?? '').toLowerCase() == 'running' &&
+                        rawDistance != null &&
+                        rawDistance > 0) {
+                      final double distanceKm = rawDistance / 1000.0;
+                      // Standard run calories ~ 1 kcal per kg per km
+                      final double kcal = distanceKm * weightKg;
+                      computedCalories = kcal.round();
+                    } else {
+                      // Weight training MET-based estimate (approx)
+                      double met = 6.0; // moderate lifting
+                      if (widget.intensityLevel != null) {
+                        final int idx = widget.intensityLevel!.index;
+                        if (idx <= 0)
+                          met = 3.5; // light
+                        else if (idx == 1)
+                          met = 5.0; // easy-moderate
+                        else if (idx == 2)
+                          met = 6.0; // moderate
+                        else
+                          met = 8.0; // vigorous
+                      }
+                      final double kcal =
+                          (met * 3.5 * weightKg / 200.0) * minutes;
+                      computedCalories = kcal.round();
+                    }
+                  } catch (_) {}
+
                   final workoutLog = {
                     'type': 'workout',
-                    'workoutType': widget.workoutType ?? 'weightlifting', // Default to weightlifting if not specified
-                    'name': widget.workoutTitle ?? 'Evening Workout 1', // Use passed title or fallback
-                    'calories': 200, // Replace with actual calories
-                    'duration': widget.duration ?? 51, // Use actual duration or fallback
-                    'volume': widget.volume ?? 0, // Use volume from widget
+                    'workoutType': widget.workoutType ??
+                        'weightlifting', // Default to weightlifting if not specified
+                    'name': widget.workoutTitle ??
+                        'Evening Workout 1', // Use passed title or fallback
+                    'calories': computedCalories,
+                    'duration': widget.duration ??
+                        51, // Use actual duration or fallback
+                    'volume': liftedKg, // Persist the computed total kg
                     'prs': widget.prs ?? 0, // Use prs from widget
                     'timestamp': now.millisecondsSinceEpoch,
-                    'id': 'workout_${now.millisecondsSinceEpoch}', // Generate unique ID
+                    'id':
+                        'workout_${now.millisecondsSinceEpoch}', // Generate unique ID
                     'exercises': widget.exercises, // Add exercises data
                   };
-                  
+
                   // Add running-specific fields if this is a running workout
-                  if (widget.workoutType == 'running' && rawDistance != null && rawDistance > 0) {
-                    workoutLog['distance'] = rawDistance; // Store distance in meters
-                    
+                  if (widget.workoutType == 'running' &&
+                      rawDistance != null &&
+                      rawDistance > 0) {
+                    workoutLog['distance'] =
+                        rawDistance; // Store distance in meters
+
                     // Calculate pace: minutes per kilometer
-                    int durationInMinutes = (widget.duration ?? 0) ~/ 60; // Convert seconds to minutes
-                    double distanceInKm = rawDistance / 1000; // Convert meters to kilometers
-                    double paceMinutesPerKm = distanceInKm > 0 ? durationInMinutes / distanceInKm : 0.0; // Avoid division by zero
-                    workoutLog['pace'] = double.parse(paceMinutesPerKm.toStringAsFixed(1)); // Round to 1 decimal place
+                    int durationInMinutes = (widget.duration ?? 0) ~/
+                        60; // Convert seconds to minutes
+                    double distanceInKm =
+                        rawDistance / 1000; // Convert meters to kilometers
+                    double paceMinutesPerKm = distanceInKm > 0
+                        ? durationInMinutes / distanceInKm
+                        : 0.0; // Avoid division by zero
+                    workoutLog['pace'] = double.parse(paceMinutesPerKm
+                        .toStringAsFixed(1)); // Round to 1 decimal place
                   }
-                  
+
                   // Add custom exercise-specific fields if this is a custom workout
                   if (widget.workoutType == 'custom') {
                     // Use custom exercise name if provided
-                    if (widget.exerciseName != null && widget.exerciseName!.isNotEmpty) {
+                    if (widget.exerciseName != null &&
+                        widget.exerciseName!.isNotEmpty) {
                       workoutLog['name'] = widget.exerciseName!;
                     }
-                    
+
                     // Handle distance vs intensity toggle
                     if (rawDistance != null && rawDistance > 0) {
                       // User entered distance
-                      workoutLog['distance'] = rawDistance; // Store distance in meters
-                      
+                      workoutLog['distance'] =
+                          rawDistance; // Store distance in meters
+
                       // Calculate pace: minutes per kilometer
-                      int durationInMinutes = (widget.duration ?? 0) ~/ 60; // Convert seconds to minutes
-                      double distanceInKm = rawDistance / 1000; // Convert meters to kilometers
-                      double paceMinutesPerKm = distanceInKm > 0 ? durationInMinutes / distanceInKm : 0.0; // Avoid division by zero
-                      workoutLog['pace'] = double.parse(paceMinutesPerKm.toStringAsFixed(1)); // Round to 1 decimal place
+                      int durationInMinutes = (widget.duration ?? 0) ~/
+                          60; // Convert seconds to minutes
+                      double distanceInKm =
+                          rawDistance / 1000; // Convert meters to kilometers
+                      double paceMinutesPerKm = distanceInKm > 0
+                          ? durationInMinutes / distanceInKm
+                          : 0.0; // Avoid division by zero
+                      workoutLog['pace'] = double.parse(paceMinutesPerKm
+                          .toStringAsFixed(1)); // Round to 1 decimal place
                     } else if (widget.intensityLevel != null) {
                       // User used intensity slider
-                      workoutLog['intensityLevel'] = widget.intensityLevel!.index; // Store intensity level index
+                      workoutLog['intensityLevel'] = widget
+                          .intensityLevel!.index; // Store intensity level index
                     }
                   }
-                  
+
                   // If editing an existing run, update it instead of creating new
                   if (widget.runId != null) {
                     // Find and update the existing run
@@ -322,29 +472,35 @@ class _GoodJobState extends State<GoodJob> {
                     for (int i = 0; i < workoutCards.length; i++) {
                       try {
                         final cardData = jsonDecode(workoutCards[i]);
-                        
+
                         // Check if this is the run we want to update
                         bool isTargetRun = false;
-                        
+
                         // First, try to match by ID
                         if (cardData['id'] == widget.runId) {
                           isTargetRun = true;
                         }
                         // If no ID match, try to match by timestamp (for older workouts without IDs)
-                        else if (cardData['timestamp'] != null && widget.runId!.startsWith('workout_')) {
-                          String timestampFromId = widget.runId!.replaceFirst('workout_', '');
-                          if (cardData['timestamp'].toString() == timestampFromId) {
+                        else if (cardData['timestamp'] != null &&
+                            widget.runId!.startsWith('workout_')) {
+                          String timestampFromId =
+                              widget.runId!.replaceFirst('workout_', '');
+                          if (cardData['timestamp'].toString() ==
+                              timestampFromId) {
                             isTargetRun = true;
                           }
                         }
-                        
+
                         if (isTargetRun) {
                           // Update the existing run with new data
-                          workoutLog['id'] = widget.runId; // Preserve the original ID
-                          workoutLog['timestamp'] = cardData['timestamp']; // Preserve original timestamp
+                          workoutLog['id'] =
+                              widget.runId; // Preserve the original ID
+                          workoutLog['timestamp'] = cardData[
+                              'timestamp']; // Preserve original timestamp
                           workoutCards[i] = jsonEncode(workoutLog);
                           foundAndUpdated = true;
-                          print('Updated existing run with ID: ${widget.runId}');
+                          print(
+                              'Updated existing run with ID: ${widget.runId}');
                           break;
                         }
                       } catch (e) {
@@ -352,12 +508,13 @@ class _GoodJobState extends State<GoodJob> {
                         continue;
                       }
                     }
-                    
+
                     // If we didn't find the run to update, create a new one with the provided ID
                     if (!foundAndUpdated) {
                       workoutLog['id'] = widget.runId;
                       workoutCards.insert(0, jsonEncode(workoutLog));
-                      print('Created new run with provided ID: ${widget.runId}');
+                      print(
+                          'Created new run with provided ID: ${widget.runId}');
                     }
                   } else {
                     // Create new run - generate a unique ID using timestamp
@@ -366,9 +523,7 @@ class _GoodJobState extends State<GoodJob> {
                     workoutCards.insert(0, jsonEncode(workoutLog));
                     print('Created new run with generated ID: $newId');
                   }
-                  
 
-                  
                   await prefs.setStringList('workout_cards', workoutCards);
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(builder: (context) => CodiaPage()),
@@ -391,4 +546,4 @@ class _GoodJobState extends State<GoodJob> {
       ),
     );
   }
-} 
+}
