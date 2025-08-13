@@ -15,6 +15,8 @@ import 'package:fitness_app/NewScreens/food_helper_methods.dart';
 import 'package:provider/provider.dart';
 import 'dialog_helper.dart';
 import '../Features/codia/Nutrition.dart' as nutrition;
+import 'SaveWorkout.dart';
+import 'SaveWorkout1.dart';
 
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
@@ -3517,6 +3519,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                           'Fix Manually', 'pencilicon.png'),
                                       _buildMoreOption(
                                           'Fix with AI', 'bulb.png'),
+                                      _buildMoreOption('Publish', 'globe.png'),
                                     ],
                                   ),
                                 ),
@@ -3997,6 +4000,30 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         } else if (title == 'In-Depth Nutrition') {
           // Navigate to the Nutrition screen
           _openNutritionScreen();
+        } else if (title == 'Publish') {
+          // Open SaveWorkout1 (dedicated for meals publishing)
+          Navigator.of(context).push(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  SaveWorkout1(
+                duration: 0,
+                volume: 0,
+                prs: 0,
+                workoutType: 'weightlifting',
+              ),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                const begin = Offset(1.0, 0.0);
+                const end = Offset.zero;
+                final tween = Tween(begin: begin, end: end)
+                    .chain(CurveTween(curve: Curves.easeInOut));
+                return SlideTransition(
+                    position: animation.drive(tween), child: child);
+              },
+              transitionDuration: const Duration(milliseconds: 400),
+              reverseTransitionDuration: const Duration(milliseconds: 400),
+            ),
+          );
         }
         // Add other handlers for different options if needed
       },
