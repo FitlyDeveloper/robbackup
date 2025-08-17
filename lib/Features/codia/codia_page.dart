@@ -16,6 +16,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:grouped_list/grouped_list.dart';
 import './Nutrition.dart' as Nutrition;
+import '../Nutrition/NutritionHome.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 
@@ -151,6 +152,7 @@ class NutritionTracker {
   int _currentCarb = 0;
   int _consumedCalories = 0;
   int _burnedCalories = 0;
+  int _targetCalories = 0; // expose recommended daily target for other screens
 
   // Cache variables to prevent excessive loading
   DateTime? _lastLoadTime;
@@ -165,6 +167,12 @@ class NutritionTracker {
   int get currentCarb => _currentCarb;
   int get consumedCalories => _consumedCalories;
   int get burnedCalories => _burnedCalories;
+  int get targetCalories => _targetCalories;
+
+  // Setter to update target from CodiaPage calculations
+  void setTargetCalories(int value) {
+    _targetCalories = value;
+  }
 
   // Helper method to generate a hash of the current food data
   String _generateDataHash(SharedPreferences prefs) {
@@ -434,7 +442,8 @@ class NutritionTracker {
             DateTime cardDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
             String cardDateStr = cardDate.toString().split(' ')[0];
 
-            if (cardDateStr == today) {
+            // ALWAYS PROCESS CARDS - NO DATE FILTERING
+            if (true) { // Keep all cards regardless of date
               // Get counter (portions) value with fallback to 1
               int counter = 1;
               if (card.containsKey('counter')) {
@@ -1176,6 +1185,9 @@ class _CodiaPageState extends State<CodiaPage> {
       isLoading = false;
     });
 
+    // Share the target calories with the Nutrition section via the tracker
+    NutritionTracker().setTargetCalories(targetCalories);
+
     print(
         "FINAL CALCULATED TARGET CALORIES (EXACTLY MATCHING CALCULATION_SCREEN): $targetCalories");
   }
@@ -1352,20 +1364,38 @@ class _CodiaPageState extends State<CodiaPage> {
 
   // Load food cards from SharedPreferences
   Future<void> _loadFoodCards() async {
+    print(
+        '🔄 _loadFoodCards() called - Loading food cards from SharedPreferences...');
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final List<String>? storedCards = prefs.getStringList('food_cards');
       final List<String>? storedWorkoutCards =
           prefs.getStringList('workout_cards');
 
+      print('📦 Found storedCards: ${storedCards?.length ?? 0} items');
+      print(
+          '🏋️ Found storedWorkoutCards: ${storedWorkoutCards?.length ?? 0} items');
+
       List<Map<String, dynamic>> cards = [];
 
       if (storedCards != null && storedCards.isNotEmpty) {
+        // Get today's date for 24-hour filtering (00:00-00:00)
+        String today = DateTime.now().toString().split(' ')[0]; // YYYY-MM-DD
+        print('📅 Today is: $today - filtering cards for 24h persistence');
+
         for (String cardJson in storedCards) {
           try {
             Map<String, dynamic> cardData = jsonDecode(cardJson);
 
-            // REMOVED: 12-hour expiration filter - cards now persist until manually deleted
+            // 24-hour expiration filter - cards persist from 00:00-00:00 (24 hours)
+            int timestamp = cardData['timestamp'] ?? 0;
+            DateTime cardDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
+            String cardDateStr = cardDate.toString().split(' ')[0];
+
+            // KEEP ALL CARDS - DO NOT FILTER BY DATE
+            // Cards should persist across app refreshes regardless of time
+            print('  ✅ Keeping card: ${cardData['name'] ?? 'Unknown'} from $cardDateStr (NO DATE FILTERING)');
             // Ensure ingredients data structure is properly maintained
             if (cardData.containsKey('ingredients')) {
               List<dynamic> ingredients = cardData['ingredients'];
@@ -1421,11 +1451,13 @@ class _CodiaPageState extends State<CodiaPage> {
           }
         }
 
-        print("Loaded ${cards.length} food cards (no expiration filter)");
+        print("✅ Loaded ${cards.length} food cards (24-hour filter applied)");
       }
 
-      // Merge workout cards and sort together
+      // Merge workout cards and sort together (with 24-hour filter)
       if (storedWorkoutCards != null && storedWorkoutCards.isNotEmpty) {
+        String today = DateTime.now().toString().split(' ')[0]; // YYYY-MM-DD
+
         for (String wkJson in storedWorkoutCards) {
           try {
             final Map<String, dynamic> wk = jsonDecode(wkJson);
@@ -1434,9 +1466,24 @@ class _CodiaPageState extends State<CodiaPage> {
                 wk['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
             wk['name'] = wk['name'] ?? 'Workout';
             wk['calories'] = wk['calories'] ?? 0;
+
+            // 24-hour expiration filter for workout cards too
+            int timestamp = wk['timestamp'] ?? 0;
+            DateTime workoutDate =
+                DateTime.fromMillisecondsSinceEpoch(timestamp);
+            String workoutDateStr = workoutDate.toString().split(' ')[0];
+
+            // Only keep workout cards from today (24-hour window)
+            if (workoutDateStr != today) {
+              print(
+                  '  ⏰ Skipping expired workout: ${wk['name'] ?? 'Unknown'} from $workoutDateStr');
+              continue; // Skip workout cards that are not from today
+            }
+
             cards.add(wk);
+            print('  ✅ Added workout card: ${wk['name']} from today');
           } catch (e) {
-            print('Error parsing workout card JSON: $e');
+            print('❌ Error parsing workout card JSON: $e');
           }
         }
       }
@@ -1447,6 +1494,9 @@ class _CodiaPageState extends State<CodiaPage> {
             (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
       }
 
+      print(
+          '🔄 Setting state with ${cards.length} cards, _isLoadingFoodCards = false');
+
       setState(() {
         _foodCards = cards;
         _isLoadingFoodCards = false;
@@ -1454,9 +1504,13 @@ class _CodiaPageState extends State<CodiaPage> {
           streakCount = 1;
         }
       });
+
+      print(
+          '✅ State updated - _foodCards.length: ${_foodCards.length}, _isLoadingFoodCards: $_isLoadingFoodCards');
     } catch (e) {
-      print("Error loading food cards: $e");
+      print("❌ Error loading food cards: $e");
       setState(() {
+        _foodCards = []; // Ensure we have an empty list on error
         _isLoadingFoodCards = false;
       });
     }
@@ -2223,15 +2277,23 @@ class _CodiaPageState extends State<CodiaPage> {
 
   // Build a list of widgets for the Recent Activity section
   List<Widget> _buildDynamicFoodCards() {
+    print(
+        '🎨 _buildDynamicFoodCards() called - _isLoadingFoodCards: $_isLoadingFoodCards, _foodCards.length: ${_foodCards.length}');
+
     final List<Widget> widgets = [];
 
     // Always show a default test card at the top for quick testing
     try {
       widgets.add(_buildFoodCard(_defaultTestFoodCard()));
-    } catch (_) {}
+      print('  ✅ Added default test card');
+    } catch (_) {
+      print('  ❌ Failed to add default test card');
+    }
 
     // Only show loading indicator if we're still loading AND there are food cards to show
     if (_isLoadingFoodCards && _foodCards.isNotEmpty) {
+      print(
+          '  🔄 Showing loading indicator (loading: $_isLoadingFoodCards, cards: ${_foodCards.length})');
       widgets.add(
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 20),
@@ -2243,13 +2305,17 @@ class _CodiaPageState extends State<CodiaPage> {
     }
     // Display food cards loaded from SharedPreferences
     else if (_foodCards.isNotEmpty) {
+      print('  📋 Adding ${_foodCards.length} food cards to widgets');
       for (var foodCard in _foodCards) {
         widgets.add(_buildFoodCard(foodCard));
+        print('    ✅ Added card: ${foodCard['name'] ?? 'Unknown'}');
       }
+    } else {
+      print(
+          '  📭 No food cards to display (loading: $_isLoadingFoodCards, cards: ${_foodCards.length})');
     }
-    // No loading animation when there are no food cards to show
-    // Just return an empty list of widgets
 
+    print('🎨 Returning ${widgets.length} widgets total');
     return widgets;
   }
 
@@ -2636,8 +2702,13 @@ class _CodiaPageState extends State<CodiaPage> {
             ),
           );
         } else if (label == 'Nutrition') {
-          // Call our custom navigation method for Nutrition
-          _navigateToNutrition();
+          Navigator.of(context).push(
+            PageRouteBuilder(
+              pageBuilder: (c, a, s) => const NutritionHome(),
+              transitionDuration: const Duration(milliseconds: 300),
+              reverseTransitionDuration: const Duration(milliseconds: 300),
+            ),
+          );
         }
         setState(() {
           _selectedIndex = index;

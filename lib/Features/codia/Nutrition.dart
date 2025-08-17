@@ -73,7 +73,7 @@ class NutritionDataManager {
     return _lastUsedScanId;
   }
 
-  // Store nutrition data with multiple redundancy layers
+  // Store nutrition data with BULLETPROOF redundancy - NEVER LOSE DATA
   static Future<void> storeNutritionData(
       String scanId,
       Map<String, NutrientInfo> vitamins,
@@ -99,10 +99,19 @@ class NutritionDataManager {
     // Store in memory (highest priority)
     _persistentData[scanId] = serializedData;
 
-    // Immediately save to SharedPreferences with multiple keys for redundancy
+    // BULLETPROOF STORAGE - Save to MANY keys for maximum redundancy
     await _saveToMultipleKeys(scanId, serializedData);
+    
+    // ADDITIONAL PERMANENT STORAGE - Save to backup keys that NEVER get deleted
+    final prefs = await SharedPreferences.getInstance();
+    String dataJson = jsonEncode(serializedData);
+    
+    // Save to bulletproof permanent keys
+    await prefs.setString('BULLETPROOF_NUTRITION_$scanId', dataJson);
+    await prefs.setString('PERMANENT_BACKUP_$scanId', dataJson);
+    await prefs.setString('NEVER_DELETE_NUTRITION_$scanId', dataJson);
 
-    print('✅ Nutrition data saved for: $scanId');
+    print('✅ Nutrition data saved for: $scanId (BULLETPROOF STORAGE)');
   }
 
   // Retrieve nutrition data with fallback mechanisms
@@ -122,8 +131,11 @@ class NutritionDataManager {
     // Priority 2: Load from SharedPreferences with multiple key attempts
     final prefs = await SharedPreferences.getInstance();
 
-    // Prefer structured keys first; only consider global as a last resort
+    // BULLETPROOF KEY PRIORITY - Check bulletproof keys first
     List<String> possibleKeys = [
+      'BULLETPROOF_NUTRITION_$scanId',  // NEW: Bulletproof keys first
+      'PERMANENT_BACKUP_$scanId',       // NEW: Permanent backup
+      'NEVER_DELETE_NUTRITION_$scanId', // NEW: Never delete keys
       AppEnv.key('nutrition_data_$scanId'),
       AppEnv.key('food_nutrition_data_$scanId'),
       AppEnv.key('nutrition_bulletproof_$scanId'),
@@ -1329,6 +1341,9 @@ class _NutritionPage extends State<NutritionPage>
         'nutrition_bulletproof_$_scanId',
         'nutrition_backup_$_scanId',
         'food_nutrition_data_$_scanId',
+        'BULLETPROOF_NUTRITION_$_scanId',    // NEW: Check bulletproof first
+        'PERMANENT_BACKUP_$_scanId',         // NEW: Permanent backup  
+        'NEVER_DELETE_NUTRITION_$_scanId',   // NEW: Never delete keys
         'nutrition_data_$_scanId',
         'PERMANENT_GLOBAL_NUTRITION_DATA',
         'BULLETPROOF_NUTRITION_BACKUP',
