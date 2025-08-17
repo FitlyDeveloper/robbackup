@@ -2178,11 +2178,13 @@ class _NutritionPage extends State<NutritionPage>
       String flatJson = jsonEncode(flatData);
 
       // Save everything in ONE operation (EXACTLY like FoodCardOpen.dart)
-      await prefs.setString('nutrition_data_$_scanId', structuredJson);
-      print('✅ Successfully saved consolidated nutrition data for $_scanId (${structuredJson.length} bytes)');
+      // CRITICAL: Use AppEnv.key() to match the loading method
+      String saveKey = AppEnv.key('nutrition_data_$_scanId');
+      await prefs.setString(saveKey, structuredJson);
+      print('✅ Successfully saved consolidated nutrition data to key: $saveKey (${structuredJson.length} bytes)');
 
       // Keep it simple - don't overcomplicate with multiple saves
-      print('🛡️ SIMPLE SAVE COMPLETED: Data saved to nutrition_data_$_scanId');
+      print('🛡️ SIMPLE SAVE COMPLETED: Data saved to key: $saveKey');
     } catch (e) {
       print('❌ Critical error in bulletproof save: $e');
     }
@@ -3354,15 +3356,17 @@ class _NutritionPage extends State<NutritionPage>
 
       // Load the consolidated nutrition data object (EXACTLY like FoodCardOpen.dart)
       print('🔄 Attempting to load saved data for scanId: $_scanId');
-      
-      final consolidatedJson = prefs.getString('nutrition_data_$_scanId');
+
+      // CRITICAL: Use AppEnv.key() to match the saving method
+      String loadKey = AppEnv.key('nutrition_data_$_scanId');
+      final consolidatedJson = prefs.getString(loadKey);
       savedData = consolidatedJson;
-      dataSource = 'nutrition_data_$_scanId';
-      
+      dataSource = loadKey;
+
       if (consolidatedJson != null) {
-        print('✅ Loaded consolidated JSON (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
+        print('✅ Loaded consolidated JSON from key: $loadKey (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
       } else {
-        print('❌ "nutrition_data_$_scanId" is NULL');
+        print('❌ Key "$loadKey" is NULL');
       }
 
       // If still not found, consider global but only if embedded scanId matches
@@ -3567,9 +3571,11 @@ class _NutritionPage extends State<NutritionPage>
 
       // Save everything in ONE operation (EXACTLY like FoodCardOpen.dart)
       String consolidatedJson = jsonEncode(nutritionData);
-      await prefs.setString('nutrition_data_$_scanId', consolidatedJson);
-      
-      print('✅ Successfully saved consolidated nutrition data for $_scanId (${consolidatedJson.length} bytes)');
+      // CRITICAL: Use AppEnv.key() to match the loading method
+      String saveKey = AppEnv.key('nutrition_data_$_scanId');
+      await prefs.setString(saveKey, consolidatedJson);
+
+      print('✅ Successfully saved consolidated nutrition data to key: $saveKey (${consolidatedJson.length} bytes)');
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
