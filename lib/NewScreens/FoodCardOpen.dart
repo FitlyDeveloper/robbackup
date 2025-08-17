@@ -1016,7 +1016,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // CRITICAL FIX: Always update food_cards to ensure cards appear in codia_page.dart
       // This is necessary for food cards to persist across app refreshes
+      print('🔄 About to call _updateFoodCardsOptimized for $_foodName');
       await _updateFoodCardsOptimized(prefs, consolidatedData);
+      print('✅ Completed _updateFoodCardsOptimized for $_foodName');
     } catch (e) {
       print('Error saving food data: $e');
       // If storage fails, at least keep the in-memory data
@@ -1048,15 +1050,18 @@ class _FoodCardOpenState extends State<FoodCardOpen>
   Future<void> _updateFoodCardsOptimized(
       SharedPreferences prefs, Map<String, dynamic> data) async {
     try {
+      print('🔍 _updateFoodCardsOptimized called for food: $_foodName');
       final List<String>? storedCards = prefs.getStringList('food_cards');
+      print('📦 Current food_cards count: ${storedCards?.length ?? 0}');
+      
       // CRITICAL FIX: Always create/update food_cards list, don't skip if null
-
       List<String> updatedCards = [];
       bool foundCard = false;
 
       // Handle null storedCards by treating as empty list
       List<String> cardsToProcess = storedCards ?? [];
-      
+      print('🔄 Processing ${cardsToProcess.length} existing cards');
+
       for (String cardJson in cardsToProcess) {
         try {
           Map<String, dynamic> cardData = jsonDecode(cardJson);
@@ -1084,6 +1089,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // If no existing card found, create a new one
       if (!foundCard) {
+        print('🆕 No existing card found, creating new card for: $_foodName');
         // Create a new food card
         Map<String, dynamic> newCard = {
           'name': _foodName,
@@ -1095,18 +1101,21 @@ class _FoodCardOpenState extends State<FoodCardOpen>
           'ingredients': data['ingredients'],
           'timestamp': DateTime.now().millisecondsSinceEpoch,
         };
-        
+
         if (data.containsKey('imageBase64')) {
           newCard['image'] = data['imageBase64'];
         }
-        
+
         updatedCards.add(jsonEncode(newCard));
-        print('🆕 Created new food card for: $_foodName');
+        print('✅ Created new food card for: $_foodName');
+      } else {
+        print('🔄 Updated existing card for: $_foodName');
       }
 
       // Always save the updated cards list
+      print('💾 Saving ${updatedCards.length} cards to food_cards list');
       await prefs.setStringList('food_cards', updatedCards);
-      print('✅ Updated food_cards list with ${updatedCards.length} cards');
+      print('✅ Successfully saved food_cards list with ${updatedCards.length} cards');
     } catch (e) {
       print('Error updating food_cards: $e');
     }
