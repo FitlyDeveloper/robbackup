@@ -1333,17 +1333,22 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // CLEAN prompt - let OpenAI analyze the actual image
-      const systemPrompt = `You are a professional chef and food analyst. Give this dish an APPETIZING RESTAURANT NAME, then identify ingredients.
+      const systemPrompt = `You are a professional chef and food analyst. LOOK CAREFULLY at the image and identify ONLY what you can actually see.
 
-Estimate the actual serving size of each item based on what you observe in the image.
+CRITICAL ACCURACY RULES:
+- Only identify ingredients that are CLEARLY VISIBLE in the image
+- Don't assume or guess ingredients that might be there
+- Look for: eggs (white/yellow), onions (translucent/caramelized), potatoes (golden/fried), meat (if visible), vegetables
+- Be PRECISE about colors, textures, and shapes you observe
+- Estimate realistic serving sizes based on visual portions
 
 Return ONLY valid JSON:
 
 {
-  "meal_name": "GOURMET RESTAURANT NAME (like 'Mediterranean Chicken Bowl' or 'Artisan Beef Sandwich')",
+  "meal_name": "ACCURATE DESCRIPTIVE NAME based on what you see",
   "ingredients": [
     {
-      "name": "specific food item",
+      "name": "ONLY ingredients you can clearly see",
       "weight_g": 150,
       "calories": 75,
       "protein_g": 3,
@@ -1391,12 +1396,12 @@ Rules:
                 { 
                   type: "text", 
                   text: lightning_fast ? 
-                    "LIGHTNING GOURMET ANALYSIS: Name this dish like a 5-star restaurant menu item! Think 'Artisan Beef Sandwich', 'Mediterranean Chicken Bowl', 'Classic Caesar Salad'. NO ingredient lists like 'meat + bread'! Then identify ALL components with accurate portions." :
+                    "LOOK CAREFULLY at this food image! Identify EXACTLY what you see - don't guess or assume. I see caramelized onions, eggs, potatoes - be PRECISE about what's actually visible. Name it like 'Caramelized Onion Breakfast Skillet' or 'Rustic Potato Hash with Eggs'. Then list ONLY what you can actually see in the image." :
                     (ultra_fast ? 
-                      "ULTRA-FAST GOURMET: Give this food a DELICIOUS restaurant name, then identify portions accurately." :
+                      "LOOK CLOSELY: Identify only what you can actually see in this food image. Be precise and accurate." :
                       (fast_mode ? 
-                        "FAST GOURMET: Name this dish professionally like a chef, then identify main ingredients." : 
-                        "GOURMET ANALYSIS: Give this food a proper restaurant-quality name, then identify every ingredient you can see."))
+                        "Analyze this food image carefully and identify only visible ingredients." : 
+                        "Carefully analyze this food image and identify every ingredient you can actually see."))
                 },
                 { 
                   type: "image_url", 

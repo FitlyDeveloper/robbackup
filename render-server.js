@@ -59,12 +59,12 @@ app.post('/api/analyze-food', async (req, res) => {
     // Use node-fetch directly without requiring it at top (in case it's not available)
     const fetch = eval('require')('node-fetch');
     
-    const systemPrompt = `You are a professional chef and food analyst. Analyze this food image and return a JSON object with this exact structure:
+    const systemPrompt = `You are a professional chef and food analyst. LOOK CAREFULLY at the image and identify ONLY what you can actually see.
 
 {
   "ingredients": [
     {
-      "name": "GOURMET DISH NAME",
+      "name": "ACCURATE INGREDIENT NAME (what you actually see)",
       "weight_g": number,
       "kcal": number,
       "protein_g": number,
@@ -74,13 +74,14 @@ app.post('/api/analyze-food', async (req, res) => {
   ]
 }
 
-CRITICAL NAMING RULES:
-- Give the main dish a 5-STAR RESTAURANT name like "Mediterranean Chicken Bowl", "Artisan Beef Sandwich", "Classic Caesar Salad"
-- ABSOLUTELY NO ingredient lists like "meat + bread" - that's terrible naming!
-- Think like a MICHELIN-STAR chef naming a signature dish
-- Make it sound DELICIOUS, GOURMET, and PROFESSIONAL
-- Identify ALL components with realistic portions
-- Return valid JSON only - be LIGHTNING-FAST and ACCURATE`;
+CRITICAL ACCURACY RULES:
+- Only identify ingredients that are CLEARLY VISIBLE in the image
+- Don't assume or guess ingredients that might be there
+- Look for: eggs (white/yellow), onions (caramelized/translucent), potatoes (golden/fried), meat (if visible), vegetables
+- Be PRECISE about colors, textures, and shapes you observe
+- Estimate realistic serving sizes based on visual portions
+- Name the main dish based on what you actually see (like "Caramelized Onion Breakfast Hash")
+- Return valid JSON only - be ACCURATE above all else`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',

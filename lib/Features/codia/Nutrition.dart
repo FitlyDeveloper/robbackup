@@ -983,8 +983,8 @@ class _NutritionPage extends State<NutritionPage>
 
     // PRIORITY 1: ALWAYS try to load saved data first - DON'T CLEAR ON REFRESH
     // Only apply widget data if this is a fresh navigation (not a refresh)
-    if (widget.nutritionData != null && 
-        widget.nutritionData!.isNotEmpty && 
+    if (widget.nutritionData != null &&
+        widget.nutritionData!.isNotEmpty &&
         widget.forceUseWidgetDataOnce) {
       print('🆕 FRESH NAVIGATION: Applying widget data (not a refresh)');
       vitamins.clear();
@@ -997,7 +997,8 @@ class _NutritionPage extends State<NutritionPage>
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
       });
-    } else if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+    } else if (widget.nutritionData != null &&
+        widget.nutritionData!.isNotEmpty) {
       print('🔄 REFRESH DETECTED: Skipping widget data to preserve saved data');
     }
 
@@ -1015,7 +1016,7 @@ class _NutritionPage extends State<NutritionPage>
         _dataLoaded = true; // Mark as loaded
       });
       print('✅ BULLETPROOF: UI state updated after loading saved data');
-      
+
       // If we successfully loaded saved data, we're done - don't process widget data
       if (vitaminCount > 0 || mineralCount > 0 || otherCount > 0) {
         print('✅ BULLETPROOF: Data found, skipping widget processing');
@@ -2422,21 +2423,22 @@ class _NutritionPage extends State<NutritionPage>
     print("🔧 Current scanId: $_scanId");
     print("🔧 BEFORE - Vitamins map size: ${vitamins.length}");
     print("🔧 BEFORE - Minerals map size: ${minerals.length}");
-    
+
     // CRITICAL: Check if data already exists - if so, DO NOT WIPE IT
     int existingVitamins = vitamins.values.where((v) => v.progress > 0).length;
     int existingMinerals = minerals.values.where((v) => v.progress > 0).length;
     int existingOther = other.values.where((v) => v.progress > 0).length;
-    
+
     if (existingVitamins > 0 || existingMinerals > 0 || existingOther > 0) {
-      print("🔒 EXISTING DATA FOUND - SKIPPING INITIALIZATION TO PRESERVE DATA");
-      print("🔒 Existing: V:$existingVitamins M:$existingMinerals O:$existingOther");
+      print(
+          "🔒 EXISTING DATA FOUND - SKIPPING INITIALIZATION TO PRESERVE DATA");
+      print(
+          "🔒 Existing: V:$existingVitamins M:$existingMinerals O:$existingOther");
       return; // EXIT EARLY - DO NOT WIPE EXISTING DATA
     }
     print("🔧 BEFORE - Other map size: ${other.length}");
 
     // Continue with initialization since no existing data was found
-    int existingOther = other.values.where((v) => v.progress > 0).length;
     print(
         "🔧 BEFORE - With actual data: Vitamins: $existingVitamins, Minerals: $existingMinerals, Other: $existingOther");
 
