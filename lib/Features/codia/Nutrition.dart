@@ -2181,7 +2181,8 @@ class _NutritionPage extends State<NutritionPage>
       // CRITICAL: Use AppEnv.key() to match the loading method
       String saveKey = AppEnv.key('nutrition_data_$_scanId');
       await prefs.setString(saveKey, structuredJson);
-      print('✅ Successfully saved consolidated nutrition data to key: $saveKey (${structuredJson.length} bytes)');
+      print(
+          '✅ Successfully saved consolidated nutrition data to key: $saveKey (${structuredJson.length} bytes)');
 
       // Keep it simple - don't overcomplicate with multiple saves
       print('🛡️ SIMPLE SAVE COMPLETED: Data saved to key: $saveKey');
@@ -3364,7 +3365,8 @@ class _NutritionPage extends State<NutritionPage>
       dataSource = loadKey;
 
       if (consolidatedJson != null) {
-        print('✅ Loaded consolidated JSON from key: $loadKey (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
+        print(
+            '✅ Loaded consolidated JSON from key: $loadKey (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
       } else {
         print('❌ Key "$loadKey" is NULL');
       }
@@ -3575,7 +3577,8 @@ class _NutritionPage extends State<NutritionPage>
       String saveKey = AppEnv.key('nutrition_data_$_scanId');
       await prefs.setString(saveKey, consolidatedJson);
 
-      print('✅ Successfully saved consolidated nutrition data to key: $saveKey (${consolidatedJson.length} bytes)');
+      print(
+          '✅ Successfully saved consolidated nutrition data to key: $saveKey (${consolidatedJson.length} bytes)');
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
