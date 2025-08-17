@@ -101,11 +101,11 @@ class NutritionDataManager {
 
     // BULLETPROOF STORAGE - Save to MANY keys for maximum redundancy
     await _saveToMultipleKeys(scanId, serializedData);
-    
+
     // ADDITIONAL PERMANENT STORAGE - Save to backup keys that NEVER get deleted
     final prefs = await SharedPreferences.getInstance();
     String dataJson = jsonEncode(serializedData);
-    
+
     // Save to bulletproof permanent keys
     await prefs.setString('BULLETPROOF_NUTRITION_$scanId', dataJson);
     await prefs.setString('PERMANENT_BACKUP_$scanId', dataJson);
@@ -133,8 +133,8 @@ class NutritionDataManager {
 
     // BULLETPROOF KEY PRIORITY - Check bulletproof keys first
     List<String> possibleKeys = [
-      'BULLETPROOF_NUTRITION_$scanId',  // NEW: Bulletproof keys first
-      'PERMANENT_BACKUP_$scanId',       // NEW: Permanent backup
+      'BULLETPROOF_NUTRITION_$scanId', // NEW: Bulletproof keys first
+      'PERMANENT_BACKUP_$scanId', // NEW: Permanent backup
       'NEVER_DELETE_NUTRITION_$scanId', // NEW: Never delete keys
       AppEnv.key('nutrition_data_$scanId'),
       AppEnv.key('food_nutrition_data_$scanId'),
@@ -733,7 +733,8 @@ class _NutritionPage extends State<NutritionPage>
         _dataLoaded = true;
         _ready = true;
         if (mounted) setState(() {});
-        print('🧪 hydrate done | source=manager-cache | nonZero=${vitaminCount + mineralCount + otherCount}');
+        print(
+            '🧪 hydrate done | source=manager-cache | nonZero=${vitaminCount + mineralCount + otherCount}');
         return;
       }
     }
@@ -980,9 +981,12 @@ class _NutritionPage extends State<NutritionPage>
     // Check SharedPreferences for debugging
     await _debugSharedPreferencesKeys();
 
-    // PRIORITY 1: ALWAYS try to load saved data first
-    // Fast path: if widget.nutritionData is provided, apply it immediately
-    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+    // PRIORITY 1: ALWAYS try to load saved data first - DON'T CLEAR ON REFRESH
+    // Only apply widget data if this is a fresh navigation (not a refresh)
+    if (widget.nutritionData != null && 
+        widget.nutritionData!.isNotEmpty && 
+        widget.forceUseWidgetDataOnce) {
+      print('🆕 FRESH NAVIGATION: Applying widget data (not a refresh)');
       vitamins.clear();
       minerals.clear();
       other.clear();
@@ -993,20 +997,30 @@ class _NutritionPage extends State<NutritionPage>
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
       });
+    } else if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+      print('🔄 REFRESH DETECTED: Skipping widget data to preserve saved data');
     }
 
+    // PRIORITY 1: Load bulletproof saved data FIRST (before any widget data)
     bool savedDataLoaded = await _loadSavedDataBulletproof();
-    print('📖 Saved data loaded: $savedDataLoaded');
+    print('📖 BULLETPROOF: Saved data loaded: $savedDataLoaded');
 
     // If savedDataLoaded succeeded, update the counts and trigger a state update
     if (savedDataLoaded) {
-      print('🔄 Saved data was loaded, updating UI state...');
+      print('✅ BULLETPROOF: Saved data was loaded, updating UI state...');
       setState(() {
         vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
+        _dataLoaded = true; // Mark as loaded
       });
-      print('🔄 UI state updated after loading saved data');
+      print('✅ BULLETPROOF: UI state updated after loading saved data');
+      
+      // If we successfully loaded saved data, we're done - don't process widget data
+      if (vitaminCount > 0 || mineralCount > 0 || otherCount > 0) {
+        print('✅ BULLETPROOF: Data found, skipping widget processing');
+        return; // EXIT EARLY - we have our data
+      }
     }
 
     // PRIORITY 2: If widget has micro values, merge them with saved data instead of replacing
@@ -1341,9 +1355,9 @@ class _NutritionPage extends State<NutritionPage>
         'nutrition_bulletproof_$_scanId',
         'nutrition_backup_$_scanId',
         'food_nutrition_data_$_scanId',
-        'BULLETPROOF_NUTRITION_$_scanId',    // NEW: Check bulletproof first
-        'PERMANENT_BACKUP_$_scanId',         // NEW: Permanent backup  
-        'NEVER_DELETE_NUTRITION_$_scanId',   // NEW: Never delete keys
+        'BULLETPROOF_NUTRITION_$_scanId', // NEW: Check bulletproof first
+        'PERMANENT_BACKUP_$_scanId', // NEW: Permanent backup
+        'NEVER_DELETE_NUTRITION_$_scanId', // NEW: Never delete keys
         'nutrition_data_$_scanId',
         'PERMANENT_GLOBAL_NUTRITION_DATA',
         'BULLETPROOF_NUTRITION_BACKUP',
@@ -2401,21 +2415,27 @@ class _NutritionPage extends State<NutritionPage>
   }
 
   // Initialize default values for vitamins, minerals, and other nutrients
+  // ONLY if maps are empty - DO NOT WIPE EXISTING DATA
   void _initializeDefaultValues() {
-    // ═══════════════════════════════════════════════════════════════
-    // QUESTION 3: Does _initializeDefaultValues() run when valid data exists?
-    // ═══════════════════════════════════════════════════════════════
-    print("🔧 === QUESTION 3: _initializeDefaultValues() INVESTIGATION ===");
-    // Do NOT skip defaults based on cache; we need local maps to exist to map values.
+    print("🔧 === SAFE _initializeDefaultValues() START ===");
     print("🔧 Called at: ${DateTime.now()}");
     print("🔧 Current scanId: $_scanId");
     print("🔧 BEFORE - Vitamins map size: ${vitamins.length}");
     print("🔧 BEFORE - Minerals map size: ${minerals.length}");
-    print("🔧 BEFORE - Other map size: ${other.length}");
-
-    // Count existing data WITH VALUES
+    
+    // CRITICAL: Check if data already exists - if so, DO NOT WIPE IT
     int existingVitamins = vitamins.values.where((v) => v.progress > 0).length;
     int existingMinerals = minerals.values.where((v) => v.progress > 0).length;
+    int existingOther = other.values.where((v) => v.progress > 0).length;
+    
+    if (existingVitamins > 0 || existingMinerals > 0 || existingOther > 0) {
+      print("🔒 EXISTING DATA FOUND - SKIPPING INITIALIZATION TO PRESERVE DATA");
+      print("🔒 Existing: V:$existingVitamins M:$existingMinerals O:$existingOther");
+      return; // EXIT EARLY - DO NOT WIPE EXISTING DATA
+    }
+    print("🔧 BEFORE - Other map size: ${other.length}");
+
+    // Continue with initialization since no existing data was found
     int existingOther = other.values.where((v) => v.progress > 0).length;
     print(
         "🔧 BEFORE - With actual data: Vitamins: $existingVitamins, Minerals: $existingMinerals, Other: $existingOther");
