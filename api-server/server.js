@@ -1004,11 +1004,6 @@ function processVisionResponse(visionResponse) {
     } catch {}
     return sum;
   };
-    try {
-      const v = getter(ing);
-      return s + (typeof v === 'number' && !Number.isNaN(v) ? v : 0);
-    } catch { return s; }
-  }, 0);
 
   // Vitamins (13)
   const vitaminsMap = {
