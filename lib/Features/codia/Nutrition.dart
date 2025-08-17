@@ -3358,22 +3358,21 @@ class _NutritionPage extends State<NutritionPage>
       String mainKey = AppEnv.key('staging_food_nutrition_data_$_scanId');
       String? consolidatedJson = prefs.getString(mainKey);
       String dataSource = mainKey;
-      
+
       // Only check fallbacks if main key is empty or has no vitamins
       if (consolidatedJson == null || consolidatedJson.isEmpty) {
         String fallbackKey = AppEnv.key('nutrition_data_$_scanId');
         consolidatedJson = prefs.getString(fallbackKey);
         dataSource = fallbackKey;
       }
-      
+
       String? savedData = consolidatedJson;
 
       if (consolidatedJson != null) {
         print(
             '✅ Loaded consolidated JSON from key: $dataSource (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
       } else {
-        print(
-            '❌ No nutrition data found in any of the ${keysToTry.length} keys for scanId: $_scanId');
+        print('❌ No nutrition data found in keys for scanId: $_scanId');
       }
 
       // If still not found, consider global but only if embedded scanId matches
@@ -3575,11 +3574,12 @@ class _NutritionPage extends State<NutritionPage>
       // SIMPLIFIED: Save to just 2 keys to avoid conflicts with food cards
       String primaryKey = AppEnv.key('staging_food_nutrition_data_$_scanId');
       String backupKey = AppEnv.key('nutrition_data_$_scanId');
-      
+
       await prefs.setString(primaryKey, consolidatedJson);
       await prefs.setString(backupKey, consolidatedJson);
 
-      print('✅ Successfully saved consolidated nutrition data to 2 keys (${consolidatedJson.length} bytes)');
+      print(
+          '✅ Successfully saved consolidated nutrition data to 2 keys (${consolidatedJson.length} bytes)');
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
