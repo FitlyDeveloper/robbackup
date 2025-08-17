@@ -997,6 +997,12 @@ class _NutritionPage extends State<NutritionPage>
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
       });
+      
+      // CRITICAL: Save the data immediately after processing
+      print('💾 FRESH NAVIGATION: Saving data immediately...');
+      await _bulletproofSave();
+      await NutritionDataManager.storeNutritionData(_scanId, vitamins, minerals, other);
+      print('💾 FRESH NAVIGATION: Data saved successfully');
     } else if (widget.nutritionData != null &&
         widget.nutritionData!.isNotEmpty) {
       print('🔄 REFRESH DETECTED: Skipping widget data to preserve saved data');
@@ -2172,6 +2178,11 @@ class _NutritionPage extends State<NutritionPage>
 
       // SAVE TO EVERY POSSIBLE KEY FORMAT
       List<String> allSaveKeys = [
+        // NEW BULLETPROOF KEYS (highest priority)
+        'BULLETPROOF_NUTRITION_$_scanId',
+        'PERMANENT_BACKUP_$_scanId',
+        'NEVER_DELETE_NUTRITION_$_scanId',
+
         // Standard keys
         'nutrition_data_$_scanId',
         'food_nutrition_data_$_scanId',
@@ -2182,9 +2193,6 @@ class _NutritionPage extends State<NutritionPage>
         'PERMANENT_GLOBAL_NUTRITION_DATA',
         'BULLETPROOF_NUTRITION_BACKUP',
         'LAST_NUTRITION_DATA',
-
-        // Alternative scanId formats (simplified)
-        'nutrition_data_$_scanId',
 
         // Food-specific keys
         'current_nutrition_scan_id',
@@ -3400,27 +3408,28 @@ class _NutritionPage extends State<NutritionPage>
       print(
           '🔍 Found ${nutritionKeys.length} nutrition-related keys: $nutritionKeys');
 
-      // STRICT: Prefer scanId-specific keys; only use global if it matches this scanId
+      // BULLETPROOF: Check all possible keys in priority order
       String dataSource = '';
       String? savedData;
 
-      // Specific key first
-      String specificKey = 'nutrition_data_$_scanId';
-      print('🔄 Checking specific key: "$specificKey"');
-      savedData = prefs.getString(specificKey);
-      if (savedData != null && savedData.isNotEmpty) {
-        dataSource = specificKey;
-        print('✅ Found data in "$specificKey" (${savedData.length} bytes)');
-      } else {
-        print('❌ "$specificKey" is ${savedData == null ? "NULL" : "EMPTY"}');
-        // Alternate specific key
-        String altSpecificKey = 'food_nutrition_data_$_scanId';
-        print('🔄 Checking alt specific key: "$altSpecificKey"');
-        savedData = prefs.getString(altSpecificKey);
+      // Priority order: bulletproof keys first, then legacy keys
+      List<String> keysToCheck = [
+        'BULLETPROOF_NUTRITION_$_scanId',     // NEW: Highest priority
+        'PERMANENT_BACKUP_$_scanId',          // NEW: Second priority  
+        'NEVER_DELETE_NUTRITION_$_scanId',    // NEW: Third priority
+        'nutrition_data_$_scanId',            // Legacy key
+        'food_nutrition_data_$_scanId',       // Alt legacy key
+      ];
+
+      for (String key in keysToCheck) {
+        print('🔄 Checking key: "$key"');
+        savedData = prefs.getString(key);
         if (savedData != null && savedData.isNotEmpty) {
-          dataSource = altSpecificKey;
-          print(
-              '✅ Found data in "$altSpecificKey" (${savedData.length} bytes)');
+          dataSource = key;
+          print('✅ Found data in "$key" (${savedData.length} bytes)');
+          break; // Use first found key
+        } else {
+          print('❌ "$key" is ${savedData == null ? "NULL" : "EMPTY"}');
         }
       }
 
@@ -3627,14 +3636,21 @@ class _NutritionPage extends State<NutritionPage>
       // Convert to JSON
       String dataJson = jsonEncode(nutritionData);
 
-      // Save to env-scoped keys used by the loader (both variants) plus env-scoped global backup
-      final keyPrimary = AppEnv.key('nutrition_data_$_scanId');
-      final keyFood = AppEnv.key('food_nutrition_data_$_scanId');
-      final keyGlobal = AppEnv.key('PERMANENT_GLOBAL_NUTRITION_DATA');
+      // BULLETPROOF SAVE: Save to multiple keys for maximum reliability
+      List<String> keysToSave = [
+        'BULLETPROOF_NUTRITION_$_scanId',     // NEW: Primary bulletproof key
+        'PERMANENT_BACKUP_$_scanId',          // NEW: Backup bulletproof key  
+        'NEVER_DELETE_NUTRITION_$_scanId',    // NEW: Never delete key
+        'nutrition_data_$_scanId',            // Legacy key for compatibility
+        'food_nutrition_data_$_scanId',       // Alt legacy key
+        'PERMANENT_GLOBAL_NUTRITION_DATA',    // Global backup
+      ];
 
-      await prefs.setString(keyPrimary, dataJson);
-      await prefs.setString(keyFood, dataJson);
-      await prefs.setString(keyGlobal, dataJson);
+      // Save to all keys
+      for (String key in keysToSave) {
+        await prefs.setString(key, dataJson);
+        print('💾 Saved to key: $key');
+      }
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
