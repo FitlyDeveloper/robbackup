@@ -1333,14 +1333,22 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // CLEAN prompt - let OpenAI analyze the actual image
-      const systemPrompt = `You are a professional chef and food analyst. LOOK CAREFULLY at the image and identify ONLY what you can actually see.
+      const systemPrompt = `You are a professional food analyst. ANALYZE THE VISUAL DETAILS CAREFULLY:
 
-CRITICAL ACCURACY RULES:
-- Only identify ingredients that are CLEARLY VISIBLE in the image
-- Don't assume or guess ingredients that might be there
-- Look for: eggs (white/yellow), onions (translucent/caramelized), potatoes (golden/fried), meat (if visible), vegetables
-- Be PRECISE about colors, textures, and shapes you observe
-- Estimate realistic serving sizes based on visual portions
+VISUAL ANALYSIS CHECKLIST:
+- Orange/golden cubes = likely sweet potato or regular potato
+- White creamy substance = likely yogurt, cream, or sauce
+- Meat pieces = identify by texture and color (chicken, beef, etc.)
+- Fermented vegetables = kimchi, sauerkraut (often reddish/orange with cabbage texture)
+- White chunks = could be cheese, tofu, or other protein
+- Look at TEXTURES, COLORS, and SHAPES - don't guess based on assumptions
+
+CRITICAL RULES:
+- Identify by VISUAL CHARACTERISTICS, not assumptions
+- Sweet potato = orange/golden cubes with smooth texture
+- Greek yogurt = white, creamy, smooth consistency  
+- Kimchi = fermented cabbage, often reddish/orange color
+- Chicken = white/light meat pieces with fibrous texture
 
 Return ONLY valid JSON:
 
@@ -1396,12 +1404,12 @@ Rules:
                 { 
                   type: "text", 
                   text: lightning_fast ? 
-                    "LOOK CAREFULLY at this food image! Identify EXACTLY what you see - don't guess or assume. I see caramelized onions, eggs, potatoes - be PRECISE about what's actually visible. Name it like 'Caramelized Onion Breakfast Skillet' or 'Rustic Potato Hash with Eggs'. Then list ONLY what you can actually see in the image." :
+                    "VISUAL ANALYSIS: Look at colors, textures, shapes. Orange cubes = sweet potato. White creamy = yogurt/sauce. Meat pieces = chicken/beef by texture. Reddish fermented vegetables = kimchi. Be PRECISE about what you observe visually, don't assume based on typical combinations." :
                     (ultra_fast ? 
-                      "LOOK CLOSELY: Identify only what you can actually see in this food image. Be precise and accurate." :
+                      "Analyze visual characteristics: colors, textures, shapes. Identify by what you see, not what you expect." :
                       (fast_mode ? 
-                        "Analyze this food image carefully and identify only visible ingredients." : 
-                        "Carefully analyze this food image and identify every ingredient you can actually see."))
+                        "Look at visual details: orange cubes, white cream, meat texture, fermented vegetables." : 
+                        "Carefully analyze visual characteristics and identify ingredients by their appearance."))
                 },
                 { 
                   type: "image_url", 

@@ -59,12 +59,12 @@ app.post('/api/analyze-food', async (req, res) => {
     // Use node-fetch directly without requiring it at top (in case it's not available)
     const fetch = eval('require')('node-fetch');
     
-    const systemPrompt = `You are a professional chef and food analyst. LOOK CAREFULLY at the image and identify ONLY what you can actually see.
+    const systemPrompt = `You are a professional food analyst. ANALYZE THE VISUAL DETAILS:
 
 {
   "ingredients": [
     {
-      "name": "ACCURATE INGREDIENT NAME (what you actually see)",
+      "name": "ACCURATE INGREDIENT NAME (based on visual characteristics)",
       "weight_g": number,
       "kcal": number,
       "protein_g": number,
@@ -74,14 +74,20 @@ app.post('/api/analyze-food', async (req, res) => {
   ]
 }
 
-CRITICAL ACCURACY RULES:
-- Only identify ingredients that are CLEARLY VISIBLE in the image
-- Don't assume or guess ingredients that might be there
-- Look for: eggs (white/yellow), onions (caramelized/translucent), potatoes (golden/fried), meat (if visible), vegetables
-- Be PRECISE about colors, textures, and shapes you observe
-- Estimate realistic serving sizes based on visual portions
-- Name the main dish based on what you actually see (like "Caramelized Onion Breakfast Hash")
-- Return valid JSON only - be ACCURATE above all else`;
+VISUAL IDENTIFICATION GUIDE:
+- Orange/golden cubes with smooth texture = sweet potato
+- White creamy smooth consistency = Greek yogurt or similar dairy
+- Light colored meat pieces with fibrous texture = chicken
+- Reddish/orange fermented vegetables with cabbage texture = kimchi
+- Look at COLORS, TEXTURES, SHAPES - not typical food combinations
+
+CRITICAL RULES:
+- Identify by VISUAL CHARACTERISTICS only
+- Don't assume ingredients based on what "should" go together
+- Sweet potato ≠ regular potato (look for orange color)
+- Kimchi ≠ caramelized onions (fermented vs cooked)
+- Greek yogurt ≠ eggs (creamy vs solid)
+- Return valid JSON only - VISUAL ACCURACY above all`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
