@@ -277,7 +277,7 @@ class FoodAnalyzerApi {
             }),
           )
           .timeout(const Duration(
-              seconds: 45)); // Increased to 45s to prevent timeout cascade
+              seconds: 25)); // Reduced to 25s for faster responses
 
       if (response.statusCode != 200) {
         throw Exception('Lightning API failed: ${response.statusCode}');

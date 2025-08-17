@@ -1462,24 +1462,24 @@ class _SnapFoodState extends State<SnapFood> {
     return completer.future;
   }
 
-  // LIGHTNING-FAST compression - EXTREME speed priority
+  // ULTRA-FAST compression - SPEED PRIORITY
   Future<Uint8List> _ultraFastCompression(Uint8List imageBytes) async {
     try {
-      // BALANCED TARGET: 400KB for speed + accuracy balance
-      const int lightningTarget = 400 * 1024;
+      // FASTER TARGET: 300KB for maximum speed
+      const int lightningTarget = 300 * 1024;
 
       if (imageBytes.length <= lightningTarget) {
         return imageBytes;
       }
 
       print(
-          '⚡⚡ BALANCED compression: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB → 400KB target');
+          '⚡⚡ ULTRA-FAST compression: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB → 300KB target');
 
-      // BALANCED settings for speed + accuracy
+      // SPEED-OPTIMIZED settings
       Uint8List compressed = await compressImage(
         imageBytes,
-        quality: 65, // Better quality for accuracy
-        targetWidth: 600, // Larger width for better recognition
+        quality: 70, // Good balance
+        targetWidth: 800, // Larger for better recognition but faster processing
       );
 
       print(

@@ -497,7 +497,7 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
     // CLEAN prompt - let OpenAI analyze the actual image
-    const systemPrompt = `You are a professional food analyst. Examine this image and identify every ingredient you can see.
+    const systemPrompt = `You are a professional chef and food analyst. Give this dish an APPETIZING RESTAURANT NAME, then identify ingredients.
 
 Estimate the actual serving size of each item based on what you observe in the image.
 
@@ -1338,7 +1338,7 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
       // CLEAN prompt - let OpenAI analyze the actual image
-      const systemPrompt = `You are a professional food analyst. Examine this image and identify every ingredient you can see.
+      const systemPrompt = `You are a professional chef and food analyst. Give this dish an APPETIZING RESTAURANT NAME, then identify ingredients.
 
 Estimate the actual serving size of each item based on what you observe in the image.
 
@@ -1396,12 +1396,12 @@ Rules:
                 { 
                   type: "text", 
                   text: lightning_fast ? 
-                    "FAST but ACCURATE analysis: identify ALL visible food items and estimate serving sizes. Be thorough but concise." :
+                    "FAST GOURMET analysis: Identify this dish with an APPETIZING, RESTAURANT-QUALITY name. Don't list ingredients - give it a proper food name like 'Gourmet Beef Sandwich' or 'Mediterranean Chicken Bowl'. Then identify ALL components accurately." :
                     (ultra_fast ? 
-                      "Quick analysis: identify main food items and estimate portions accurately." :
+                      "Quick gourmet analysis: Give this food a proper restaurant name, then identify portions accurately." :
                       (fast_mode ? 
-                        "Quickly analyze this food image and identify main ingredients. Focus on speed over detail." : 
-                        "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image."))
+                        "Analyze this food image and give it a proper dish name, then identify main ingredients." : 
+                        "Analyze this food image, give it a proper gourmet name, and identify every ingredient you can see."))
                 },
                 { 
                   type: "image_url", 
