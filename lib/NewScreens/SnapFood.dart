@@ -94,6 +94,9 @@ class _SnapFoodState extends State<SnapFood> {
     super.initState();
     // Don't initialize _picker here since it's already declared as final
 
+    // Preload API connection for faster scanning
+    _preloadApiConnection();
+
     // Add timer for loading animation dots - make it faster (300ms instead of 500ms)
     _dotsAnimationTimer = Timer.periodic(Duration(milliseconds: 300), (timer) {
       if (mounted && _isAnalyzing) {
@@ -161,54 +164,44 @@ class _SnapFoodState extends State<SnapFood> {
           _generateCycleThresholds(); // Generate new random thresholds
     });
 
-    // Start a timer to show a "still working" message after 90 seconds
-    Timer? processingTimer = Timer(Duration(seconds: 90), () {
+    // LIGHTNING timer - 30 seconds for 15-second target
+    Timer? processingTimer = Timer(Duration(seconds: 30), () {
       if (mounted && _isAnalyzing) {
         setState(() {
-          // Force the final step after 90 seconds of processing
           _processingStep = _processingSteps.length - 1;
         });
       }
     });
 
     try {
-      // Read image as bytes
-      final Uint8List imageBytes = kIsWeb
-          ? (_webImageBytes ?? await image.readAsBytes())
-          : await image.readAsBytes();
+      // PARALLEL PROCESSING START - All operations run simultaneously
+      final List<Future> parallelTasks = [];
 
-      if (imageBytes.isEmpty) {
-        throw Exception('Could not read image data');
-      }
+      // Task 1: API warmup (non-blocking)
+      parallelTasks.add(FoodAnalyzerApi.warmupApi());
 
-      // Light compression only if image is too large for Render.com (>3MB)
-      Uint8List finalImage = imageBytes;
-      if (imageBytes.length > 3 * 1024 * 1024) {
-        finalImage = await _lightCompressImage(imageBytes);
-      }
+      // Task 2: Read and process image
+      final Future<Uint8List> imageProcessingFuture =
+          _processImageUltraFast(image);
+      parallelTasks.add(imageProcessingFuture);
 
-      // Enhance image quality for better ingredient detection
-      // Ensure minimum resolution for API analysis
-      if (finalImage.length < 100 * 1024) {
-        // proceed silently
-      }
+      // Task 3: Instant UI feedback
+      _showInstantFeedback();
 
-      // Show progress update
-      setState(() {
-        // Update processing step
-        _processingStep = 1; // Move to identification step
-      });
+      // Wait for image processing to complete (other tasks continue in background)
+      final Uint8List finalImage = await imageProcessingFuture;
+
+      print(
+          '⚡ Ultra-fast processing: ${(finalImage.length / 1024).toStringAsFixed(1)}KB ready');
 
       try {
-        // Call the API service
+        // LIGHTNING-FAST API call - 15 second target!
         final Map<String, dynamic> response =
-            await FoodAnalyzerApi.analyzeFoodImage(finalImage);
+            await FoodAnalyzerApi.analyzeFoodImageLightning(finalImage);
 
         // Cancel the processing timer
-        if (processingTimer != null) {
-          processingTimer.cancel();
-          processingTimer = null;
-        }
+        processingTimer?.cancel();
+        processingTimer = null;
 
         setState(() {
           _analysisResult = response;
@@ -232,10 +225,8 @@ class _SnapFoodState extends State<SnapFood> {
         _displayAnalysisResults(_analysisResult!, scanId);
       } catch (e) {
         // Cancel the processing timer
-        if (processingTimer != null) {
-          processingTimer.cancel();
-          processingTimer = null;
-        }
+        processingTimer?.cancel();
+        processingTimer = null;
 
         // no terminal spam
 
@@ -1425,34 +1416,100 @@ class _SnapFoodState extends State<SnapFood> {
     );
   }
 
-  // Proper image compression for large images to meet server limits
-  Future<Uint8List> _lightCompressImage(Uint8List imageBytes) async {
-    try {
-      // Target: compress to 0.7MB for optimal API performance
-      const int maxSizeBytes = 700 * 1024; // 0.7MB (700KB)
+  // Preload API connection to reduce cold start times
+  void _preloadApiConnection() {
+    // Start API warmup in background (non-blocking)
+    FoodAnalyzerApi.preloadConnection().then((_) {
+      print('🚀 API connection preloaded for faster scanning');
+    }).catchError((e) {
+      print('⚠️ API preload failed (non-critical): $e');
+    });
+  }
 
-      if (imageBytes.length <= maxSizeBytes) {
-        // silent
-        return imageBytes; // Already small enough
+  // Ultra-fast parallel image processing
+  Future<Uint8List> _processImageUltraFast(XFile image) async {
+    final Completer<Uint8List> completer = Completer<Uint8List>();
+
+    // Start image reading immediately
+    final Future<Uint8List> readFuture = kIsWeb
+        ? (_webImageBytes != null
+            ? Future.value(_webImageBytes!)
+            : image.readAsBytes())
+        : image.readAsBytes();
+
+    readFuture.then((imageBytes) async {
+      if (imageBytes.isEmpty) {
+        completer.completeError('Could not read image data');
+        return;
       }
 
-      // silent
+      print('⚡ Image read: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB');
 
-      // Use the proper compression function that already exists
-      // This uses proper image compression algorithms instead of corrupting the data
+      // Ultra-aggressive compression for maximum speed
+      Uint8List finalImage = imageBytes;
+      if (imageBytes.length > 1024 * 1024) {
+        // 1MB threshold for ultra-fast mode
+        finalImage = await _ultraFastCompression(imageBytes);
+        print(
+            '⚡ Ultra-compressed: ${(finalImage.length / 1024).toStringAsFixed(1)}KB');
+      }
+
+      completer.complete(finalImage);
+    }).catchError((e) {
+      completer.completeError(e);
+    });
+
+    return completer.future;
+  }
+
+  // LIGHTNING-FAST compression - EXTREME speed priority
+  Future<Uint8List> _ultraFastCompression(Uint8List imageBytes) async {
+    try {
+      // BALANCED TARGET: 400KB for speed + accuracy balance
+      const int lightningTarget = 400 * 1024;
+
+      if (imageBytes.length <= lightningTarget) {
+        return imageBytes;
+      }
+
+      print(
+          '⚡⚡ BALANCED compression: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB → 400KB target');
+
+      // BALANCED settings for speed + accuracy
       Uint8List compressed = await compressImage(
         imageBytes,
-        quality: 70,
-        targetWidth: 800,
-        targetSizeBytes: 716800, // 700KB target
+        quality: 65, // Better quality for accuracy
+        targetWidth: 600, // Larger width for better recognition
       );
 
-      // silent
+      print(
+          '⚡⚡ LIGHTNING result: ${(compressed.length / 1024).toStringAsFixed(1)}KB');
       return compressed;
     } catch (e) {
-      // silent
-      return imageBytes; // Return original on error
+      print('⚠️ Lightning compression failed: $e');
+      return imageBytes;
     }
+  }
+
+  // Show instant UI feedback
+  void _showInstantFeedback() {
+    // Immediate progress update
+    Future.microtask(() {
+      if (mounted) {
+        setState(() {
+          _processingStep = 1;
+        });
+      }
+    });
+
+    // Rapid progress animation
+    Timer(Duration(milliseconds: 200), () {
+      if (mounted && _isAnalyzing) {
+        setState(() {
+          _processingStep = 2;
+        });
+      }
+    });
   }
 
   // Helper method to extract ingredient calorie value

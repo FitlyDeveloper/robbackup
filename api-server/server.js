@@ -11,6 +11,11 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Ultra-fast response cache for similar images
+const responseCache = new Map();
+const CACHE_MAX_SIZE = 100;
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
 // Create jobs directory if it doesn't exist
 const JOBS_DIR = path.join(__dirname, 'jobs');
 if (!fs.existsSync(JOBS_DIR)) {
@@ -1152,6 +1157,28 @@ app.get('/', (req, res) => {
   });
 });
 
+// Warmup endpoint to prevent cold starts
+app.get('/api/warmup', (req, res) => {
+  console.log('🔥 Warmup request received - keeping server warm');
+  
+  // Perform lightweight operations to warm up the server
+  const startTime = Date.now();
+  
+  // Simulate some processing to warm up modules
+  const testData = { message: 'warmup', timestamp: Date.now() };
+  JSON.stringify(testData);
+  
+  const responseTime = Date.now() - startTime;
+  
+  res.json({
+    status: 'success',
+    message: 'Server warmed up successfully',
+    responseTime: `${responseTime}ms`,
+    timestamp: new Date().toISOString(),
+    serverUptime: process.uptime()
+  });
+});
+
 // NEW JOB SUBMISSION ENDPOINT
 app.post('/api/jobs', limiter, async (req, res) => {
   try {
@@ -1263,7 +1290,16 @@ app.get('/api/jobs/:jobId', async (req, res) => {
 app.post('/api/analyze-food', limiter, async (req, res) => {
   try {
     console.log('🔥 Legacy analyze food endpoint called - NO FALLBACKS');
-    const { image } = req.body;
+    const { image, fast_mode, ultra_fast, lightning_fast } = req.body;
+    
+    // Log optimization modes
+    if (lightning_fast) {
+      console.log('⚡⚡⚡ LIGHTNING-FAST mode - 15 SECOND TARGET!');
+    } else if (ultra_fast) {
+      console.log('⚡⚡ ULTRA-FAST mode enabled - MAXIMUM SPEED');
+    } else if (fast_mode) {
+      console.log('⚡ Fast mode enabled - optimizing for speed');
+    }
 
     if (!image) {
       console.error('No image provided in request');
@@ -1271,6 +1307,22 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
         success: false,
         error: 'Image data is required'
       });
+    }
+
+    // LIGHTNING cache check for similar images - enhanced for speed
+    if (lightning_fast || ultra_fast) {
+      const imageHash = require('crypto').createHash('md5').update(image.substring(0, 1500)).digest('hex');
+      const cached = responseCache.get(imageHash);
+      
+      if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+        console.log(lightning_fast ? '⚡⚡⚡ LIGHTNING CACHE HIT - INSTANT!' : '⚡⚡ CACHE HIT - Instant response!');
+        return res.json({
+          success: true,
+          data: cached.data,
+          cached: true,
+          mode: lightning_fast ? 'lightning' : 'ultra_fast'
+        });
+      }
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -1316,10 +1368,11 @@ Rules:
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
+      const timeoutMs = lightning_fast ? 45000 : (ultra_fast ? 60000 : (fast_mode ? 75000 : 90000)); // Lightning: 45s, Ultra: 60s, Fast: 75s, Normal: 90s
       const timeoutId = setTimeout(() => {
-        console.log('🔥 OpenAI timeout - FAILING (aborting at 90s)');
+        console.log(`🔥 OpenAI timeout - FAILING (aborting at ${timeoutMs/1000}s)`);
         controller.abort();
-      }, 90000); // 90 second timeout (stay under Render free-tier limit)
+      }, timeoutMs);
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -1329,8 +1382,8 @@ Rules:
         },
         signal: controller.signal,
         body: JSON.stringify({
-          model: "gpt-4o-mini",
-          temperature: 0.1,
+          model: "gpt-4o-mini", // Always use mini for speed
+          temperature: lightning_fast ? 0.001 : (ultra_fast ? 0.01 : (fast_mode ? 0.05 : 0.1)), // EXTREME temperature for lightning
           response_format: { type: "json_object" },
           messages: [
             {
@@ -1340,12 +1393,28 @@ Rules:
             {
               role: "user",
               content: [
-                { type: "text", text: "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image." },
-                { type: "image_url", image_url: { url: processedImage } }
+                { 
+                  type: "text", 
+                  text: lightning_fast ? 
+                    "FAST but ACCURATE analysis: identify ALL visible food items and estimate serving sizes. Be thorough but concise." :
+                    (ultra_fast ? 
+                      "Quick analysis: identify main food items and estimate portions accurately." :
+                      (fast_mode ? 
+                        "Quickly analyze this food image and identify main ingredients. Focus on speed over detail." : 
+                        "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image."))
+                },
+                { 
+                  type: "image_url", 
+                  image_url: { 
+                    url: processedImage,
+                    detail: lightning_fast ? "high" : "low" // High detail for lightning accuracy
+                  } 
+                }
               ]
             }
           ],
-          max_tokens: 1500
+          max_tokens: lightning_fast ? 1200 : (ultra_fast ? 1000 : (fast_mode ? 1200 : 1500)), // Restored tokens for accuracy
+          stream: false // Ensure no streaming for fastest response
         })
       });
 
@@ -1387,6 +1456,25 @@ Rules:
         // Expand simple response to full nutrient profile using real nutritional knowledge
         const expandedResponse = expandToFullNutrients(jsonResponse);
         const finalResponse = processVisionResponse(expandedResponse);
+        
+        // Cache lightning/ultra-fast responses for instant future access
+        if (lightning_fast || ultra_fast) {
+          const imageHash = require('crypto').createHash('md5').update(image.substring(0, 1500)).digest('hex');
+          
+          // Manage cache size
+          if (responseCache.size >= CACHE_MAX_SIZE) {
+            const firstKey = responseCache.keys().next().value;
+            responseCache.delete(firstKey);
+          }
+          
+          responseCache.set(imageHash, {
+            data: finalResponse,
+            timestamp: Date.now(),
+            mode: lightning_fast ? 'lightning' : 'ultra_fast'
+          });
+          
+          console.log(lightning_fast ? '⚡⚡⚡ LIGHTNING response cached!' : '⚡⚡ Response cached for ultra-fast future access');
+        }
         
         return res.json({
           success: true,
