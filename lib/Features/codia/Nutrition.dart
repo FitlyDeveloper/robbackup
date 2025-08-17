@@ -3351,39 +3351,37 @@ class _NutritionPage extends State<NutritionPage>
       print(
           '🔍 Found ${nutritionKeys.length} nutrition-related keys: $nutritionKeys');
 
-      // BULLETPROOF: Check all possible keys in priority order
-      String dataSource = '';
-      String? savedData;
-
       // Load the consolidated nutrition data object (EXACTLY like FoodCardOpen.dart)
       print('🔄 Attempting to load saved data for scanId: $_scanId');
 
-      // CRITICAL: Use AppEnv.key() to match the saving method
       // Try multiple keys in priority order - find the one with actual data
       List<String> keysToTry = [
         AppEnv.key('staging_food_nutrition_data_$_scanId'),
-        AppEnv.key('BULLETPROOF_NUTRITION_$_scanId'), 
+        AppEnv.key('BULLETPROOF_NUTRITION_$_scanId'),
         AppEnv.key('NEVER_DELETE_NUTRITION_$_scanId'),
         AppEnv.key('PERMANENT_BACKUP_$_scanId'),
         AppEnv.key('nutrition_data_$_scanId'),
       ];
-      
+
       String? consolidatedJson;
       String dataSource = 'none';
-      
+      String? savedData;
+
       for (String key in keysToTry) {
         final testJson = prefs.getString(key);
         if (testJson != null && testJson.isNotEmpty) {
           // Check if this key has actual nutrient data (not empty maps)
           try {
             Map<String, dynamic> testData = jsonDecode(testJson);
-            if (testData.containsKey('vitamins') && testData['vitamins'] is Map) {
+            if (testData.containsKey('vitamins') &&
+                testData['vitamins'] is Map) {
               Map vitaminsMap = testData['vitamins'];
               if (vitaminsMap.isNotEmpty) {
                 // Found key with actual data!
                 consolidatedJson = testJson;
                 dataSource = key;
-                print('🎯 Found nutrition data with ${vitaminsMap.length} vitamins in key: $key');
+                print(
+                    '🎯 Found nutrition data with ${vitaminsMap.length} vitamins in key: $key');
                 break;
               }
             }
@@ -3392,13 +3390,15 @@ class _NutritionPage extends State<NutritionPage>
           }
         }
       }
-      
+
       savedData = consolidatedJson;
 
       if (consolidatedJson != null) {
-        print('✅ Loaded consolidated JSON from key: $dataSource (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
+        print(
+            '✅ Loaded consolidated JSON from key: $dataSource (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
       } else {
-        print('❌ No nutrition data found in any of the ${keysToTry.length} keys for scanId: $_scanId');
+        print(
+            '❌ No nutrition data found in any of the ${keysToTry.length} keys for scanId: $_scanId');
       }
 
       // If still not found, consider global but only if embedded scanId matches
@@ -3599,17 +3599,19 @@ class _NutritionPage extends State<NutritionPage>
       String consolidatedJson = jsonEncode(nutritionData);
       // Save to multiple keys for maximum persistence (based on terminal analysis)
       List<String> saveKeys = [
-        AppEnv.key('staging_food_nutrition_data_$_scanId'),  // Primary key (works well)
-        AppEnv.key('BULLETPROOF_NUTRITION_$_scanId'), 
+        AppEnv.key(
+            'staging_food_nutrition_data_$_scanId'), // Primary key (works well)
+        AppEnv.key('BULLETPROOF_NUTRITION_$_scanId'),
         AppEnv.key('NEVER_DELETE_NUTRITION_$_scanId'),
         AppEnv.key('nutrition_data_$_scanId'),
       ];
-      
+
       for (String key in saveKeys) {
         await prefs.setString(key, consolidatedJson);
       }
 
-      print('✅ Successfully saved consolidated nutrition data to ${saveKeys.length} keys (${consolidatedJson.length} bytes)');
+      print(
+          '✅ Successfully saved consolidated nutrition data to ${saveKeys.length} keys (${consolidatedJson.length} bytes)');
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
