@@ -997,11 +997,12 @@ class _NutritionPage extends State<NutritionPage>
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
       });
-      
+
       // CRITICAL: Save the data immediately after processing
       print('💾 FRESH NAVIGATION: Saving data immediately...');
       await _bulletproofSave();
-      await NutritionDataManager.storeNutritionData(_scanId, vitamins, minerals, other);
+      await NutritionDataManager.storeNutritionData(
+          _scanId, vitamins, minerals, other);
       print('💾 FRESH NAVIGATION: Data saved successfully');
     } else if (widget.nutritionData != null &&
         widget.nutritionData!.isNotEmpty) {
@@ -2176,73 +2177,12 @@ class _NutritionPage extends State<NutritionPage>
       flatData['lastSaved'] = DateTime.now().millisecondsSinceEpoch;
       String flatJson = jsonEncode(flatData);
 
-      // SAVE TO EVERY POSSIBLE KEY FORMAT
-      List<String> allSaveKeys = [
-        // NEW BULLETPROOF KEYS (highest priority)
-        'BULLETPROOF_NUTRITION_$_scanId',
-        'PERMANENT_BACKUP_$_scanId',
-        'NEVER_DELETE_NUTRITION_$_scanId',
+      // Save everything in ONE operation (EXACTLY like FoodCardOpen.dart)
+      await prefs.setString('nutrition_data_$_scanId', structuredJson);
+      print('✅ Successfully saved consolidated nutrition data for $_scanId (${structuredJson.length} bytes)');
 
-        // Standard keys
-        'nutrition_data_$_scanId',
-        'food_nutrition_data_$_scanId',
-        'nutrition_bulletproof_$_scanId',
-        'nutrition_backup_$_scanId',
-
-        // Global keys
-        'PERMANENT_GLOBAL_NUTRITION_DATA',
-        'BULLETPROOF_NUTRITION_BACKUP',
-        'LAST_NUTRITION_DATA',
-
-        // Food-specific keys
-        'current_nutrition_scan_id',
-        'latest_nutrition_backup',
-      ];
-
-      // Save structured data to all keys
-      for (String key in allSaveKeys) {
-        try {
-          await prefs.setString(key, structuredJson);
-          print('✅ Saved structured data to: $key');
-        } catch (e) {
-          print('❌ Failed to save structured data to $key: $e');
-        }
-      }
-
-      // ALSO save flat data to backup keys
-      List<String> flatSaveKeys = [
-        'flat_nutrition_$_scanId',
-        'micronutrients_$_scanId',
-        'raw_nutrition_data',
-      ];
-
-      for (String key in flatSaveKeys) {
-        try {
-          await prefs.setString(key, flatJson);
-          print('✅ Saved flat data to: $key');
-        } catch (e) {
-          print('❌ Failed to save flat data to $key: $e');
-        }
-      }
-
-      // ALSO use the original save methods as backup
-      try {
-        await _saveNutritionData();
-        print('✅ Original _saveNutritionData completed');
-      } catch (e) {
-        print('❌ Original _saveNutritionData failed: $e');
-      }
-
-      try {
-        await NutritionDataManager.storeNutritionData(
-            _scanId, vitamins, minerals, other);
-        print('✅ NutritionDataManager save completed');
-      } catch (e) {
-        print('❌ NutritionDataManager save failed: $e');
-      }
-
-      print(
-          '🛡️ BULLETPROOF SAVE COMPLETED: Data saved to ${allSaveKeys.length + flatSaveKeys.length} locations');
+      // Keep it simple - don't overcomplicate with multiple saves
+      print('🛡️ SIMPLE SAVE COMPLETED: Data saved to nutrition_data_$_scanId');
     } catch (e) {
       print('❌ Critical error in bulletproof save: $e');
     }
@@ -3412,25 +3352,17 @@ class _NutritionPage extends State<NutritionPage>
       String dataSource = '';
       String? savedData;
 
-      // Priority order: bulletproof keys first, then legacy keys
-      List<String> keysToCheck = [
-        'BULLETPROOF_NUTRITION_$_scanId',     // NEW: Highest priority
-        'PERMANENT_BACKUP_$_scanId',          // NEW: Second priority  
-        'NEVER_DELETE_NUTRITION_$_scanId',    // NEW: Third priority
-        'nutrition_data_$_scanId',            // Legacy key
-        'food_nutrition_data_$_scanId',       // Alt legacy key
-      ];
-
-      for (String key in keysToCheck) {
-        print('🔄 Checking key: "$key"');
-        savedData = prefs.getString(key);
-        if (savedData != null && savedData.isNotEmpty) {
-          dataSource = key;
-          print('✅ Found data in "$key" (${savedData.length} bytes)');
-          break; // Use first found key
-        } else {
-          print('❌ "$key" is ${savedData == null ? "NULL" : "EMPTY"}');
-        }
+      // Load the consolidated nutrition data object (EXACTLY like FoodCardOpen.dart)
+      print('🔄 Attempting to load saved data for scanId: $_scanId');
+      
+      final consolidatedJson = prefs.getString('nutrition_data_$_scanId');
+      savedData = consolidatedJson;
+      dataSource = 'nutrition_data_$_scanId';
+      
+      if (consolidatedJson != null) {
+        print('✅ Loaded consolidated JSON (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
+      } else {
+        print('❌ "nutrition_data_$_scanId" is NULL');
       }
 
       // If still not found, consider global but only if embedded scanId matches
@@ -3633,24 +3565,11 @@ class _NutritionPage extends State<NutritionPage>
             }))),
       };
 
-      // Convert to JSON
-      String dataJson = jsonEncode(nutritionData);
-
-      // BULLETPROOF SAVE: Save to multiple keys for maximum reliability
-      List<String> keysToSave = [
-        'BULLETPROOF_NUTRITION_$_scanId',     // NEW: Primary bulletproof key
-        'PERMANENT_BACKUP_$_scanId',          // NEW: Backup bulletproof key  
-        'NEVER_DELETE_NUTRITION_$_scanId',    // NEW: Never delete key
-        'nutrition_data_$_scanId',            // Legacy key for compatibility
-        'food_nutrition_data_$_scanId',       // Alt legacy key
-        'PERMANENT_GLOBAL_NUTRITION_DATA',    // Global backup
-      ];
-
-      // Save to all keys
-      for (String key in keysToSave) {
-        await prefs.setString(key, dataJson);
-        print('💾 Saved to key: $key');
-      }
+      // Save everything in ONE operation (EXACTLY like FoodCardOpen.dart)
+      String consolidatedJson = jsonEncode(nutritionData);
+      await prefs.setString('nutrition_data_$_scanId', consolidatedJson);
+      
+      print('✅ Successfully saved consolidated nutrition data for $_scanId (${consolidatedJson.length} bytes)');
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
