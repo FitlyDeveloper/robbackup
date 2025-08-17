@@ -254,6 +254,11 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         // Important: Now set the original values to match current values
         // This will ensure _checkForUnsavedChanges() returns false initially
         _resetUnsavedChangesState();
+        
+        // CRITICAL: Save data immediately when FoodCardOpen opens
+        // This ensures the food card is saved even if user doesn't interact
+        print('🔄 FoodCardOpen: Saving data immediately on screen load');
+        _saveData();
       }
     });
   }
@@ -1053,7 +1058,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print('🔍 _updateFoodCardsOptimized called for food: $_foodName');
       final List<String>? storedCards = prefs.getStringList('food_cards');
       print('📦 Current food_cards count: ${storedCards?.length ?? 0}');
-      
+
       // CRITICAL FIX: Always create/update food_cards list, don't skip if null
       List<String> updatedCards = [];
       bool foundCard = false;
@@ -1115,7 +1120,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       // Always save the updated cards list
       print('💾 Saving ${updatedCards.length} cards to food_cards list');
       await prefs.setStringList('food_cards', updatedCards);
-      print('✅ Successfully saved food_cards list with ${updatedCards.length} cards');
+      print(
+          '✅ Successfully saved food_cards list with ${updatedCards.length} cards');
     } catch (e) {
       print('Error updating food_cards: $e');
     }
