@@ -1465,15 +1465,15 @@ class _SnapFoodState extends State<SnapFood> {
   // ULTRA-FAST compression - SPEED PRIORITY
   Future<Uint8List> _ultraFastCompression(Uint8List imageBytes) async {
     try {
-      // FASTER TARGET: 300KB for maximum speed
-      const int lightningTarget = 300 * 1024;
+      // ULTRA-FAST TARGET: 250KB for maximum speed
+      const int lightningTarget = 250 * 1024;
 
       if (imageBytes.length <= lightningTarget) {
         return imageBytes;
       }
 
       print(
-          '⚡⚡ ULTRA-FAST compression: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB → 300KB target');
+          '⚡⚡ ULTRA-FAST compression: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB → 250KB target');
 
       // SPEED-OPTIMIZED settings
       Uint8List compressed = await compressImage(

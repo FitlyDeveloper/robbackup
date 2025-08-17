@@ -504,7 +504,7 @@ Estimate the actual serving size of each item based on what you observe in the i
 Return ONLY valid JSON:
 
 {
-  "meal_name": "Descriptive Meal Name",
+  "meal_name": "GOURMET RESTAURANT NAME (like 'Mediterranean Chicken Bowl' or 'Artisan Beef Sandwich')",
   "ingredients": [
     {
       "name": "specific food item",
@@ -1345,7 +1345,7 @@ Estimate the actual serving size of each item based on what you observe in the i
 Return ONLY valid JSON:
 
 {
-  "meal_name": "Descriptive Meal Name",
+  "meal_name": "GOURMET RESTAURANT NAME (like 'Mediterranean Chicken Bowl' or 'Artisan Beef Sandwich')",
   "ingredients": [
     {
       "name": "specific food item",
@@ -1396,12 +1396,12 @@ Rules:
                 { 
                   type: "text", 
                   text: lightning_fast ? 
-                    "FAST GOURMET analysis: Identify this dish with an APPETIZING, RESTAURANT-QUALITY name. Don't list ingredients - give it a proper food name like 'Gourmet Beef Sandwich' or 'Mediterranean Chicken Bowl'. Then identify ALL components accurately." :
+                    "LIGHTNING GOURMET ANALYSIS: Name this dish like a 5-star restaurant menu item! Think 'Artisan Beef Sandwich', 'Mediterranean Chicken Bowl', 'Classic Caesar Salad'. NO ingredient lists like 'meat + bread'! Then identify ALL components with accurate portions." :
                     (ultra_fast ? 
-                      "Quick gourmet analysis: Give this food a proper restaurant name, then identify portions accurately." :
+                      "ULTRA-FAST GOURMET: Give this food a DELICIOUS restaurant name, then identify portions accurately." :
                       (fast_mode ? 
-                        "Analyze this food image and give it a proper dish name, then identify main ingredients." : 
-                        "Analyze this food image, give it a proper gourmet name, and identify every ingredient you can see."))
+                        "FAST GOURMET: Name this dish professionally like a chef, then identify main ingredients." : 
+                        "GOURMET ANALYSIS: Give this food a proper restaurant-quality name, then identify every ingredient you can see."))
                 },
                 { 
                   type: "image_url", 

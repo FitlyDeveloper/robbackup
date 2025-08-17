@@ -75,11 +75,12 @@ app.post('/api/analyze-food', async (req, res) => {
 }
 
 CRITICAL NAMING RULES:
-- Give the main dish an APPETIZING, RESTAURANT-QUALITY name like "Mediterranean Chicken Bowl", "Artisan Beef Sandwich", "Classic Caesar Salad"
-- DO NOT list ingredients like "meat + bread" - think like a chef naming a menu item
-- Make it sound DELICIOUS and PROFESSIONAL
+- Give the main dish a 5-STAR RESTAURANT name like "Mediterranean Chicken Bowl", "Artisan Beef Sandwich", "Classic Caesar Salad"
+- ABSOLUTELY NO ingredient lists like "meat + bread" - that's terrible naming!
+- Think like a MICHELIN-STAR chef naming a signature dish
+- Make it sound DELICIOUS, GOURMET, and PROFESSIONAL
 - Identify ALL components with realistic portions
-- Return valid JSON only - be FAST and ACCURATE`;
+- Return valid JSON only - be LIGHTNING-FAST and ACCURATE`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
