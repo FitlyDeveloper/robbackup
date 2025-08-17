@@ -3354,44 +3354,19 @@ class _NutritionPage extends State<NutritionPage>
       // Load the consolidated nutrition data object (EXACTLY like FoodCardOpen.dart)
       print('🔄 Attempting to load saved data for scanId: $_scanId');
 
-      // Try multiple keys in priority order - find the one with actual data
-      List<String> keysToTry = [
-        AppEnv.key('staging_food_nutrition_data_$_scanId'),
-        AppEnv.key('BULLETPROOF_NUTRITION_$_scanId'),
-        AppEnv.key('NEVER_DELETE_NUTRITION_$_scanId'),
-        AppEnv.key('PERMANENT_BACKUP_$_scanId'),
-        AppEnv.key('nutrition_data_$_scanId'),
-      ];
-
-      String? consolidatedJson;
-      String dataSource = 'none';
-      String? savedData;
-
-      for (String key in keysToTry) {
-        final testJson = prefs.getString(key);
-        if (testJson != null && testJson.isNotEmpty) {
-          // Check if this key has actual nutrient data (not empty maps)
-          try {
-            Map<String, dynamic> testData = jsonDecode(testJson);
-            if (testData.containsKey('vitamins') &&
-                testData['vitamins'] is Map) {
-              Map vitaminsMap = testData['vitamins'];
-              if (vitaminsMap.isNotEmpty) {
-                // Found key with actual data!
-                consolidatedJson = testJson;
-                dataSource = key;
-                print(
-                    '🎯 Found nutrition data with ${vitaminsMap.length} vitamins in key: $key');
-                break;
-              }
-            }
-          } catch (e) {
-            print('⚠️ Error parsing key $key: $e');
-          }
-        }
+      // SIMPLIFIED: Try the main key first, then fallbacks (don't interfere with food cards)
+      String mainKey = AppEnv.key('staging_food_nutrition_data_$_scanId');
+      String? consolidatedJson = prefs.getString(mainKey);
+      String dataSource = mainKey;
+      
+      // Only check fallbacks if main key is empty or has no vitamins
+      if (consolidatedJson == null || consolidatedJson.isEmpty) {
+        String fallbackKey = AppEnv.key('nutrition_data_$_scanId');
+        consolidatedJson = prefs.getString(fallbackKey);
+        dataSource = fallbackKey;
       }
-
-      savedData = consolidatedJson;
+      
+      String? savedData = consolidatedJson;
 
       if (consolidatedJson != null) {
         print(
@@ -3597,21 +3572,14 @@ class _NutritionPage extends State<NutritionPage>
 
       // Save everything in ONE operation (EXACTLY like FoodCardOpen.dart)
       String consolidatedJson = jsonEncode(nutritionData);
-      // Save to multiple keys for maximum persistence (based on terminal analysis)
-      List<String> saveKeys = [
-        AppEnv.key(
-            'staging_food_nutrition_data_$_scanId'), // Primary key (works well)
-        AppEnv.key('BULLETPROOF_NUTRITION_$_scanId'),
-        AppEnv.key('NEVER_DELETE_NUTRITION_$_scanId'),
-        AppEnv.key('nutrition_data_$_scanId'),
-      ];
+      // SIMPLIFIED: Save to just 2 keys to avoid conflicts with food cards
+      String primaryKey = AppEnv.key('staging_food_nutrition_data_$_scanId');
+      String backupKey = AppEnv.key('nutrition_data_$_scanId');
+      
+      await prefs.setString(primaryKey, consolidatedJson);
+      await prefs.setString(backupKey, consolidatedJson);
 
-      for (String key in saveKeys) {
-        await prefs.setString(key, consolidatedJson);
-      }
-
-      print(
-          '✅ Successfully saved consolidated nutrition data to ${saveKeys.length} keys (${consolidatedJson.length} bytes)');
+      print('✅ Successfully saved consolidated nutrition data to 2 keys (${consolidatedJson.length} bytes)');
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
