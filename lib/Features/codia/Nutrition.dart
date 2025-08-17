@@ -3359,16 +3359,16 @@ class _NutritionPage extends State<NutritionPage>
       print('🔄 Attempting to load saved data for scanId: $_scanId');
 
       // CRITICAL: Use AppEnv.key() to match the saving method
-      String loadKey = AppEnv.key('nutrition_data_$_scanId');
-      final consolidatedJson = prefs.getString(loadKey);
+      // Load the consolidated nutrition data object (EXACTLY like FoodCardOpen.dart)
+      final consolidatedJson = prefs.getString('nutrition_data_$_scanId');
       savedData = consolidatedJson;
-      dataSource = loadKey;
+      dataSource = 'nutrition_data_$_scanId';
 
       if (consolidatedJson != null) {
         print(
-            '✅ Loaded consolidated JSON from key: $loadKey (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
+            '✅ Loaded consolidated JSON from key: nutrition_data_$_scanId (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
       } else {
-        print('❌ Key "$loadKey" is NULL');
+        print('❌ Key "nutrition_data_$_scanId" is NULL');
       }
 
       // If still not found, consider global but only if embedded scanId matches
@@ -3415,58 +3415,54 @@ class _NutritionPage extends State<NutritionPage>
 
         int vitaminCount = 0, mineralCount = 0, otherCount = 0;
 
-        // Load vitamins
+        // Load vitamins - DIRECT ASSIGNMENT (no containsKey check)
         if (data.containsKey('vitamins')) {
           Map<String, dynamic> vitData = data['vitamins'];
           print('🔄 Processing ${vitData.length} vitamins from saved data');
 
           vitData.forEach((key, value) {
-            if (vitamins.containsKey(key)) {
-              double progress = (value['progress'] ?? 0.0).toDouble();
-              if (progress > 0) vitaminCount++;
+            double progress = (value['progress'] ?? 0.0).toDouble();
+            if (progress > 0) vitaminCount++;
 
-              vitamins[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: progress,
-                progressColor: _getProgressColor(progress),
-                hasInfo: value['hasInfo'] ?? false,
-              );
+            vitamins[key] = NutrientInfo(
+              name: value['name'] ?? key,
+              value: value['value'] ?? '0',
+              percent: value['percent'] ?? '0%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: value['hasInfo'] ?? false,
+            );
 
-              if (progress > 0) {
-                print(
-                    '✅ Restored vitamin $key: ${value['value']} (${value['percent']})');
-              }
+            if (progress > 0) {
+              print(
+                  '✅ Restored vitamin $key: ${value['value']} (${value['percent']})');
             }
           });
         } else {
           print('❌ No vitamins data found in saved JSON');
         }
 
-        // Load minerals
+        // Load minerals - DIRECT ASSIGNMENT (no containsKey check)
         if (data.containsKey('minerals')) {
           Map<String, dynamic> minData = data['minerals'];
           print('🔄 Processing ${minData.length} minerals from saved data');
 
           minData.forEach((key, value) {
-            if (minerals.containsKey(key)) {
-              double progress = (value['progress'] ?? 0.0).toDouble();
-              if (progress > 0) mineralCount++;
+            double progress = (value['progress'] ?? 0.0).toDouble();
+            if (progress > 0) mineralCount++;
 
-              minerals[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: progress,
-                progressColor: _getProgressColor(progress),
-                hasInfo: value['hasInfo'] ?? false,
-              );
+            minerals[key] = NutrientInfo(
+              name: value['name'] ?? key,
+              value: value['value'] ?? '0',
+              percent: value['percent'] ?? '0%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: value['hasInfo'] ?? false,
+            );
 
-              if (progress > 0) {
-                print(
-                    '✅ Restored mineral $key: ${value['value']} (${value['percent']})');
-              }
+            if (progress > 0) {
+              print(
+                  '✅ Restored mineral $key: ${value['value']} (${value['percent']})');
             }
           });
         } else {
@@ -3480,23 +3476,21 @@ class _NutritionPage extends State<NutritionPage>
               '🔄 Processing ${otherData.length} other nutrients from saved data');
 
           otherData.forEach((key, value) {
-            if (other.containsKey(key)) {
-              double progress = (value['progress'] ?? 0.0).toDouble();
-              if (progress > 0) otherCount++;
+            double progress = (value['progress'] ?? 0.0).toDouble();
+            if (progress > 0) otherCount++;
 
-              other[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: progress,
-                progressColor: _getProgressColor(progress),
-                hasInfo: value['hasInfo'] ?? false,
-              );
+            other[key] = NutrientInfo(
+              name: value['name'] ?? key,
+              value: value['value'] ?? '0',
+              percent: value['percent'] ?? '0%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: value['hasInfo'] ?? false,
+            );
 
-              if (progress > 0) {
-                print(
-                    '✅ Restored other nutrient $key: ${value['value']} (${value['percent']})');
-              }
+            if (progress > 0) {
+              print(
+                  '✅ Restored other nutrient $key: ${value['value']} (${value['percent']})');
             }
           });
         } else {
@@ -3573,12 +3567,10 @@ class _NutritionPage extends State<NutritionPage>
 
       // Save everything in ONE operation (EXACTLY like FoodCardOpen.dart)
       String consolidatedJson = jsonEncode(nutritionData);
-      // CRITICAL: Use AppEnv.key() to match the loading method
-      String saveKey = AppEnv.key('nutrition_data_$_scanId');
-      await prefs.setString(saveKey, consolidatedJson);
+      // EXACT SAME PATTERN: 'food_data_$foodId' becomes 'nutrition_data_$_scanId'
+      await prefs.setString('nutrition_data_$_scanId', consolidatedJson);
 
-      print(
-          '✅ Successfully saved consolidated nutrition data to key: $saveKey (${consolidatedJson.length} bytes)');
+      print('✅ Successfully saved consolidated nutrition data for $_scanId (${consolidatedJson.length} bytes)');
 
       print('💾 Saved nutrition data for ID: $_scanId');
 
