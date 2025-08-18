@@ -232,54 +232,19 @@ function expandToFullNutrients(simpleResponse) {
   const expandedIngredients = simpleResponse.ingredients.map(ingredient => {
     const name = ingredient.name.toLowerCase();
     
-    // Start with OpenAI's provided values - PRESERVE ALL MICRONUTRIENTS
+    // Start with OpenAI's provided values
     const expanded = {
       name: ingredient.name,
       weight_g: ingredient.weight_g || 100,
       calories: ingredient.calories || 100,
       protein_g: ingredient.protein_g || 0,
       fat_g: ingredient.fat_g || 0,
-      carbs_g: ingredient.carbs_g || 0,
-      // CRITICAL: Pass through ALL micronutrients from OpenAI
-      vitamin_a: ingredient.vitamin_a || 0,
-      vitamin_c: ingredient.vitamin_c || 0,
-      vitamin_d: ingredient.vitamin_d || 0,
-      vitamin_e: ingredient.vitamin_e || 0,
-      vitamin_k: ingredient.vitamin_k || 0,
-      vitamin_b1: ingredient.vitamin_b1 || 0,
-      vitamin_b2: ingredient.vitamin_b2 || 0,
-      vitamin_b3: ingredient.vitamin_b3 || 0,
-      vitamin_b5: ingredient.vitamin_b5 || 0,
-      vitamin_b6: ingredient.vitamin_b6 || 0,
-      vitamin_b7: ingredient.vitamin_b7 || 0,
-      vitamin_b9: ingredient.vitamin_b9 || 0,
-      vitamin_b12: ingredient.vitamin_b12 || 0,
-      calcium: ingredient.calcium || 0,
-      chloride: ingredient.chloride || 0,
-      chromium: ingredient.chromium || 0,
-      copper: ingredient.copper || 0,
-      fluoride: ingredient.fluoride || 0,
-      iodine: ingredient.iodine || 0,
-      iron: ingredient.iron || 0,
-      magnesium: ingredient.magnesium || 0,
-      manganese: ingredient.manganese || 0,
-      molybdenum: ingredient.molybdenum || 0,
-      phosphorus: ingredient.phosphorus || 0,
-      potassium: ingredient.potassium || 0,
-      selenium: ingredient.selenium || 0,
-      sodium: ingredient.sodium || 0,
-      zinc: ingredient.zinc || 0,
-      fiber: ingredient.fiber || 0,
-      cholesterol: ingredient.cholesterol || 0,
-      sugar: ingredient.sugar || 0,
-      saturated_fats: ingredient.saturated_fats || 0,
-      omega_3: ingredient.omega_3 || 0,
-      omega_6: ingredient.omega_6 || 0
+      carbs_g: ingredient.carbs_g || 0
     };
     
     // NO SCALING - Keep original values from API server
     const actualWeight = expanded.weight_g;
-    console.log(`🔬 Keeping original API values for ${ingredient.name} (${actualWeight}g) with micronutrients`);
+    console.log(`🔬 Keeping original API values for ${ingredient.name} (${actualWeight}g)`);
     
     console.log(`✅ Expanded ${ingredient.name} (${actualWeight}g) with accurate nutrition data`);
     return expanded;
@@ -343,40 +308,40 @@ Return ONLY valid JSON with COMPLETE nutrition data including ALL 34 micronutrie
       "protein_g": 3,
       "fat_g": 1.5,
       "carbs_g": 15,
-      "vitamin_a": 0,
-      "vitamin_c": 0,
-      "vitamin_d": 0,
-      "vitamin_e": 0,
-      "vitamin_k": 0,
-      "vitamin_b1": 0,
-      "vitamin_b2": 0,
-      "vitamin_b3": 0,
-      "vitamin_b5": 0,
-      "vitamin_b6": 0,
-      "vitamin_b7": 0,
-      "vitamin_b9": 0,
-      "vitamin_b12": 0,
-      "calcium": 0,
-      "chloride": 0,
-      "chromium": 0,
-      "copper": 0,
-      "fluoride": 0,
-      "iodine": 0,
-      "iron": 0,
-      "magnesium": 0,
-      "manganese": 0,
-      "molybdenum": 0,
-      "phosphorus": 0,
-      "potassium": 0,
-      "selenium": 0,
-      "sodium": 0,
-      "zinc": 0,
-      "fiber": 0,
-      "cholesterol": 0,
-      "sugar": 0,
-      "saturated_fats": 0,
-      "omega_3": 0,
-      "omega_6": 0
+      "vitamin_a": 450,
+      "vitamin_c": 12,
+      "vitamin_d": 2,
+      "vitamin_e": 1.5,
+      "vitamin_k": 8,
+      "vitamin_b1": 0.08,
+      "vitamin_b2": 0.12,
+      "vitamin_b3": 1.8,
+      "vitamin_b5": 0.6,
+      "vitamin_b6": 0.15,
+      "vitamin_b7": 3,
+      "vitamin_b9": 25,
+      "vitamin_b12": 0.3,
+      "calcium": 45,
+      "chloride": 120,
+      "chromium": 2,
+      "copper": 0.15,
+      "fluoride": 0.8,
+      "iodine": 8,
+      "iron": 1.2,
+      "magnesium": 35,
+      "manganese": 0.4,
+      "molybdenum": 5,
+      "phosphorus": 65,
+      "potassium": 280,
+      "selenium": 2.5,
+      "sodium": 85,
+      "zinc": 0.8,
+      "fiber": 2.5,
+      "cholesterol": 15,
+      "sugar": 8,
+      "saturated_fats": 0.6,
+      "omega_3": 120,
+      "omega_6": 1.8
     }
   ]
 }
@@ -548,21 +513,21 @@ Rules:
               if (jsonResponse.ingredients && Array.isArray(jsonResponse.ingredients) && jsonResponse.ingredients.length > 0) {
                 console.log('✅ JSON repair successful!');
                 
-                // Expand simple response to full nutrient profile using real nutritional knowledge
-                const expandedResponse = expandToFullNutrients(jsonResponse);
-                const finalResponse = processVisionResponse(expandedResponse);
-                
-                await updateJobStatus(jobId, {
-                  status: 'completed',
-                  progress: 100,
+                  // Expand simple response to full nutrient profile using real nutritional knowledge
+                  const expandedResponse = expandToFullNutrients(jsonResponse);
+                  const finalResponse = processVisionResponse(expandedResponse);
+                  
+                  await updateJobStatus(jobId, {
+                    status: 'completed',
+                    progress: 100,
                   message: 'Analysis complete (repaired JSON)',
-                  completedAt: Date.now(),
-                  result: finalResponse
-                });
-                
+                    completedAt: Date.now(),
+                    result: finalResponse
+                  });
+                  
                 console.log(`Job ${jobId} marked completed (repaired JSON) at ${new Date().toISOString()}`);
-                return; // Exit early on success
-              }
+                  return; // Exit early on success
+                }
             } catch (repairError) {
               console.log('🔧 JSON repair failed:', repairError.message);
             }
@@ -1266,40 +1231,40 @@ Return ONLY valid JSON with COMPLETE nutrition data including ALL 34 micronutrie
       "protein_g": 3,
       "fat_g": 1.5,
       "carbs_g": 15,
-      "vitamin_a": 0,
-      "vitamin_c": 0,
-      "vitamin_d": 0,
-      "vitamin_e": 0,
-      "vitamin_k": 0,
-      "vitamin_b1": 0,
-      "vitamin_b2": 0,
-      "vitamin_b3": 0,
-      "vitamin_b5": 0,
-      "vitamin_b6": 0,
-      "vitamin_b7": 0,
-      "vitamin_b9": 0,
-      "vitamin_b12": 0,
-      "calcium": 0,
-      "chloride": 0,
-      "chromium": 0,
-      "copper": 0,
-      "fluoride": 0,
-      "iodine": 0,
-      "iron": 0,
-      "magnesium": 0,
-      "manganese": 0,
-      "molybdenum": 0,
-      "phosphorus": 0,
-      "potassium": 0,
-      "selenium": 0,
-      "sodium": 0,
-      "zinc": 0,
-      "fiber": 0,
-      "cholesterol": 0,
-      "sugar": 0,
-      "saturated_fats": 0,
-      "omega_3": 0,
-      "omega_6": 0
+      "vitamin_a": 450,
+      "vitamin_c": 12,
+      "vitamin_d": 2,
+      "vitamin_e": 1.5,
+      "vitamin_k": 8,
+      "vitamin_b1": 0.08,
+      "vitamin_b2": 0.12,
+      "vitamin_b3": 1.8,
+      "vitamin_b5": 0.6,
+      "vitamin_b6": 0.15,
+      "vitamin_b7": 3,
+      "vitamin_b9": 25,
+      "vitamin_b12": 0.3,
+      "calcium": 45,
+      "chloride": 120,
+      "chromium": 2,
+      "copper": 0.15,
+      "fluoride": 0.8,
+      "iodine": 8,
+      "iron": 1.2,
+      "magnesium": 35,
+      "manganese": 0.4,
+      "molybdenum": 5,
+      "phosphorus": 65,
+      "potassium": 280,
+      "selenium": 2.5,
+      "sodium": 85,
+      "zinc": 0.8,
+      "fiber": 2.5,
+      "cholesterol": 15,
+      "sugar": 8,
+      "saturated_fats": 0.6,
+      "omega_3": 120,
+      "omega_6": 1.8
     }
   ]
 }
@@ -1340,16 +1305,16 @@ Rules:
             {
               role: "user",
               content: [
-                                 { 
-                   type: "text", 
-                   text: lightning_fast ? 
+                { 
+                  type: "text", 
+                  text: lightning_fast ? 
                      "VISUAL ANALYSIS: Look at colors, textures, shapes. Orange cubes = sweet potato. White creamy = yogurt/sauce. Meat pieces = chicken/beef by texture. Reddish fermented vegetables = kimchi. Be PRECISE about what you observe visually, don't assume based on typical combinations. Provide ACCURATE values for ALL 34 nutrients including vitamins, minerals, and other nutrients." :
-                     (ultra_fast ? 
+                    (ultra_fast ? 
                        "Analyze visual characteristics: colors, textures, shapes. Identify by what you see, not what you expect. Include COMPLETE nutrient analysis for all identified foods including ALL vitamins, minerals, and other nutrients." :
-                       (fast_mode ? 
+                      (fast_mode ? 
                          "Look at visual details: orange cubes, white cream, meat texture, fermented vegetables. Provide COMPLETE nutritional analysis including ALL vitamins, minerals, and other nutrients." : 
                          "Carefully analyze visual characteristics and identify ingredients by their appearance. Provide COMPLETE nutrition data including ALL 34 vitamins, minerals, and other nutrients."))
-                 },
+                },
                 { 
                   type: "image_url", 
                   image_url: { 
@@ -1386,48 +1351,48 @@ Rules:
       
       console.log('🔥 OpenAI response received, length:', content.length);
       
-             try {
-         // Try to parse the response
-         const jsonResponse = JSON.parse(content);
-         
-         if (!jsonResponse.ingredients || !Array.isArray(jsonResponse.ingredients) || jsonResponse.ingredients.length === 0) {
-           console.log('🔥 No valid ingredients in response - FAILING');
-           return res.status(500).json({
-             success: false,
-             error: 'No food ingredients detected in the image'
-           });
-         }
+      try {
+        // Try to parse the response
+        const jsonResponse = JSON.parse(content);
+        
+        if (!jsonResponse.ingredients || !Array.isArray(jsonResponse.ingredients) || jsonResponse.ingredients.length === 0) {
+          console.log('🔥 No valid ingredients in response - FAILING');
+          return res.status(500).json({
+            success: false,
+            error: 'No food ingredients detected in the image'
+          });
+        }
 
-         console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
-         
-         // Expand simple response to full nutrient profile using real nutritional knowledge
-         const expandedResponse = expandToFullNutrients(jsonResponse);
-         const finalResponse = processVisionResponse(expandedResponse);
-         
-         // Cache lightning/ultra-fast responses for instant future access
-         if (lightning_fast || ultra_fast) {
-           const imageHash = require('crypto').createHash('md5').update(image.substring(0, 1500)).digest('hex');
-           
-           // Manage cache size
-           if (responseCache.size >= CACHE_MAX_SIZE) {
-             const firstKey = responseCache.keys().next().value;
-             responseCache.delete(firstKey);
-           }
-           
-           responseCache.set(imageHash, {
-             data: finalResponse,
-             timestamp: Date.now(),
-             mode: lightning_fast ? 'lightning' : 'ultra_fast'
-           });
-           
-           console.log(lightning_fast ? '⚡⚡⚡ LIGHTNING response cached!' : '⚡⚡ Response cached for ultra-fast future access');
-         }
-         
-         return res.json({
-           success: true,
-           data: finalResponse
-         });
-       } catch (parseError) {
+        console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
+        
+        // Expand simple response to full nutrient profile using real nutritional knowledge
+        const expandedResponse = expandToFullNutrients(jsonResponse);
+        const finalResponse = processVisionResponse(expandedResponse);
+        
+        // Cache lightning/ultra-fast responses for instant future access
+        if (lightning_fast || ultra_fast) {
+          const imageHash = require('crypto').createHash('md5').update(image.substring(0, 1500)).digest('hex');
+          
+          // Manage cache size
+          if (responseCache.size >= CACHE_MAX_SIZE) {
+            const firstKey = responseCache.keys().next().value;
+            responseCache.delete(firstKey);
+          }
+          
+          responseCache.set(imageHash, {
+            data: finalResponse,
+            timestamp: Date.now(),
+            mode: lightning_fast ? 'lightning' : 'ultra_fast'
+          });
+          
+          console.log(lightning_fast ? '⚡⚡⚡ LIGHTNING response cached!' : '⚡⚡ Response cached for ultra-fast future access');
+        }
+        
+        return res.json({
+          success: true,
+          data: finalResponse
+        });
+      } catch (parseError) {
          console.log('🔥 JSON parse failed - attempting repair:', parseError.message);
          
          // ROBUST JSON REPAIR SYSTEM
@@ -1521,11 +1486,11 @@ Rules:
          
          // If all repair attempts failed, return error
          console.log('🔥 All JSON repair attempts failed - FAILING');
-         return res.status(500).json({
-           success: false,
-           error: 'OpenAI generated invalid JSON that could not be repaired'
-         });
-       }
+        return res.status(500).json({
+          success: false,
+          error: 'OpenAI generated invalid JSON that could not be repaired'
+        });
+      }
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log('🔥 OpenAI call aborted due to timeout');
