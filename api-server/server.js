@@ -104,6 +104,16 @@ function getJobStatus(jobId) {
 // Convert flat nutrient structure from OpenAI to nested structure expected by app
 function convertFlatNutrientsToNested(ingredients) {
   return ingredients.map(ingredient => {
+    // Helper to safely pick the first present numeric value among alternative keys
+    const pickNumber = (...keys) => {
+      for (const key of keys) {
+        const raw = ingredient[key];
+        if (raw === undefined || raw === null) continue;
+        const num = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/[^0-9.+-eE]/g, ''));
+        if (!Number.isNaN(num)) return num;
+      }
+      return 0;
+    };
     const converted = {
       name: ingredient.name,
       weight_g: ingredient.weight_g || 100,
@@ -112,36 +122,37 @@ function convertFlatNutrientsToNested(ingredients) {
       fat_g: ingredient.fat_g || 0,
       carbs_g: ingredient.carbs_g || 0,
       vitamins: {
-        vitamin_A_mcg: ingredient.vitamin_A || 0,        // 0/700 mcg
-        vitamin_C_mg: ingredient.vitamin_C || 0,         // 0/75 mg
-        vitamin_D_mcg: ingredient.vitamin_D || 0,        // 0/15 mcg
-        vitamin_E_mg: ingredient.vitamin_E || 0,         // 0/15 mg
-        vitamin_K_mcg: ingredient.vitamin_K || 0,        // 0/90 mcg
-        vitamin_B1_mg: ingredient.vitamin_B1 || 0,       // 0/1.1 mg
-        vitamin_B2_mg: ingredient.vitamin_B2 || 0,       // 0/1.1 mg
-        vitamin_B3_mg: ingredient.vitamin_B3 || 0,       // 0/14 mg
-        vitamin_B5_mg: ingredient.vitamin_B5 || 0,       // 0/5 mg
-        vitamin_B6_mg: ingredient.vitamin_B6 || 0,       // 0/1.3 mg
-        vitamin_B7_mcg: ingredient.vitamin_B7 || 0,      // 0/30 mcg
-        vitamin_B9_mcg: ingredient.vitamin_B9 || 0,      // 0/400 mcg
-        vitamin_B12_mcg: ingredient.vitamin_B12 || 0     // 0/2.4 mcg
+        // Accept both flat lower-case (preferred) and legacy camel/upper-case keys
+        vitamin_A_mcg: pickNumber('vitamin_a', 'vitamin_A', 'vitaminA_mcg', 'vitamin_a_mcg'),        // mcg
+        vitamin_C_mg: pickNumber('vitamin_c', 'vitamin_C', 'vitaminC_mg', 'vitamin_c_mg'),           // mg
+        vitamin_D_mcg: pickNumber('vitamin_d', 'vitamin_D', 'vitaminD_mcg', 'vitamin_d_mcg'),        // mcg
+        vitamin_E_mg: pickNumber('vitamin_e', 'vitamin_E', 'vitaminE_mg', 'vitamin_e_mg'),           // mg
+        vitamin_K_mcg: pickNumber('vitamin_k', 'vitamin_K', 'vitaminK_mcg', 'vitamin_k_mcg'),        // mcg
+        vitamin_B1_mg: pickNumber('vitamin_b1', 'vitamin_B1', 'vitaminB1_mg', 'thiamin', 'thiamine'),// mg
+        vitamin_B2_mg: pickNumber('vitamin_b2', 'vitamin_B2', 'vitaminB2_mg', 'riboflavin'),         // mg
+        vitamin_B3_mg: pickNumber('vitamin_b3', 'vitamin_B3', 'vitaminB3_mg', 'niacin'),             // mg
+        vitamin_B5_mg: pickNumber('vitamin_b5', 'vitamin_B5', 'vitaminB5_mg', 'pantothenic_acid'),   // mg
+        vitamin_B6_mg: pickNumber('vitamin_b6', 'vitamin_B6', 'vitaminB6_mg'),                       // mg
+        vitamin_B7_mcg: pickNumber('vitamin_b7', 'vitamin_B7', 'vitaminB7_mcg', 'biotin'),           // mcg
+        vitamin_B9_mcg: pickNumber('vitamin_b9', 'vitamin_B9', 'vitaminB9_mcg', 'folate', 'folic_acid'), // mcg
+        vitamin_B12_mcg: pickNumber('vitamin_b12', 'vitamin_B12', 'vitaminB12_mcg', 'cobalamin')     // mcg
       },
       minerals: {
-        calcium_mg: ingredient.calcium || 0,            // 0/1000 mg
-        chloride_mg: ingredient.chloride || 0,          // 0/2300 mg
-        chromium_mcg: ingredient.chromium || 0,         // 0/35 mcg
-        copper_mcg: ingredient.copper || 0,             // 0/900 mcg
-        fluoride_mg: ingredient.fluoride || 0,          // 0/4 mg
-        iodine_mcg: ingredient.iodine || 0,             // 0/150 mcg
-        iron_mg: ingredient.iron || 0,                  // 0/18 mg
-        magnesium_mg: ingredient.magnesium || 0,        // 0/400 mg
-        manganese_mg: ingredient.manganese || 0,        // 0/2.3 mg
-        molybdenum_mcg: ingredient.molybdenum || 0,     // 0/45 mcg
-        phosphorus_mg: ingredient.phosphorus || 0,      // 0/700 mg
-        potassium_mg: ingredient.potassium || 0,        // 0/3500 mg
-        selenium_mcg: ingredient.selenium || 0,         // 0/55 mcg
-        sodium_mg: ingredient.sodium || 0,              // 0/2300 mg
-        zinc_mg: ingredient.zinc || 0                   // 0/11 mg
+        calcium_mg: pickNumber('calcium', 'calcium_mg'),              // mg
+        chloride_mg: pickNumber('chloride', 'chloride_mg'),           // mg
+        chromium_mcg: pickNumber('chromium', 'chromium_mcg'),         // mcg
+        copper_mcg: pickNumber('copper', 'copper_mcg'),               // mcg
+        fluoride_mg: pickNumber('fluoride', 'fluoride_mg'),           // mg
+        iodine_mcg: pickNumber('iodine', 'iodine_mcg'),               // mcg
+        iron_mg: pickNumber('iron', 'iron_mg'),                       // mg
+        magnesium_mg: pickNumber('magnesium', 'magnesium_mg'),        // mg
+        manganese_mg: pickNumber('manganese', 'manganese_mg'),        // mg
+        molybdenum_mcg: pickNumber('molybdenum', 'molybdenum_mcg'),   // mcg
+        phosphorus_mg: pickNumber('phosphorus', 'phosphorus_mg'),     // mg
+        potassium_mg: pickNumber('potassium', 'potassium_mg'),        // mg
+        selenium_mcg: pickNumber('selenium', 'selenium_mcg'),         // mcg
+        sodium_mg: pickNumber('sodium', 'sodium_mg'),                 // mg
+        zinc_mg: pickNumber('zinc', 'zinc_mg')                        // mg
       },
       other: {
         // Prefer unit-suffixed keys if model returned them; fallback to generic keys
