@@ -203,6 +203,11 @@ class _SnapFoodState extends State<SnapFood> {
         processingTimer?.cancel();
         processingTimer = null;
 
+        // VALIDATE API RESPONSE - Prevent mock data
+        if (!_validateApiResponse(response)) {
+          throw Exception('Invalid API response - possible mock data detected');
+        }
+
         setState(() {
           _analysisResult = response;
           _formattedAnalysisResult = null;
@@ -586,6 +591,50 @@ class _SnapFoodState extends State<SnapFood> {
   // Helper method to extract nutrient values from a map, filtering by threshold
   // removed unused: _extractNutrientValues
 
+  // Validate API response to prevent mock data
+  bool _validateApiResponse(Map<String, dynamic> response) {
+    // Check if response has required fields
+    if (!response.containsKey('meal_name') &&
+        !response.containsKey('food_name') &&
+        !response.containsKey('name')) {
+      debugPrint('❌ API response missing food name');
+      return false;
+    }
+
+    // Check if calories are reasonable (not 0 or extremely high)
+    if (response.containsKey('calories')) {
+      int calories = int.tryParse(response['calories'].toString()) ?? 0;
+      if (calories == 0 || calories > 5000) {
+        debugPrint('❌ API response has suspicious calories: $calories');
+        return false;
+      }
+    }
+
+    // Check if ingredients list exists and is not empty
+    if (!response.containsKey('ingredients') ||
+        response['ingredients'] == null ||
+        (response['ingredients'] is List && response['ingredients'].isEmpty)) {
+      debugPrint('❌ API response missing or empty ingredients');
+      return false;
+    }
+
+    // Check for suspicious default values
+    String foodName = response['meal_name']?.toString() ??
+        response['food_name']?.toString() ??
+        response['name']?.toString() ??
+        '';
+
+    if (foodName.toLowerCase().contains('chicken') &&
+        !foodName.toLowerCase().contains('dish') &&
+        !foodName.toLowerCase().contains('meal')) {
+      debugPrint('❌ API response has suspicious generic food name: $foodName');
+      return false;
+    }
+
+    debugPrint('✅ API response validation passed');
+    return true;
+  }
+
   // Helper method to extract numeric value from a string, preserving decimal places
   String _extractNumericValue(String input) {
     // Use a more precise RegExp that captures decimal values properly
@@ -671,21 +720,50 @@ class _SnapFoodState extends State<SnapFood> {
       }
     } catch (e) {}
 
-    // Compress image to 0.4MB for efficiency, but allow any card size
+    // CRITICAL: Compress image to 100KB to prevent quota exceeded errors
     String? finalBase64Image;
     if (base64Image != null && base64Image.isNotEmpty) {
-      print('🔍 SNAPFOOD: Compressing image to 0.4MB for efficiency...');
+      print(
+          '🔍 SNAPFOOD: Compressing image to 100KB to prevent quota errors...');
       try {
         finalBase64Image = await _compressImageForStorage(base64Image);
         print(
             '🔍 SNAPFOOD: Image compressed from ${(base64Image.length / 1024).toStringAsFixed(1)}KB to ${(finalBase64Image.length / 1024).toStringAsFixed(1)}KB');
+
+        // If still too large, compress more aggressively
+        if (finalBase64Image.length > 100 * 1024) {
+          print(
+              '⚠️ SNAPFOOD: Image still too large, compressing more aggressively...');
+          finalBase64Image = await _compressImageForStorage(finalBase64Image);
+          print(
+              '🔍 SNAPFOOD: Final compression: ${(finalBase64Image.length / 1024).toStringAsFixed(1)}KB');
+        }
       } catch (e) {
         print('⚠️ SNAPFOOD: Image compression failed, using original: $e');
         finalBase64Image = base64Image; // Use original if compression fails
       }
     }
 
-    // Create food card data with original image
+    // CRITICAL: Create nutrition data structure for permanent storage
+    Map<String, dynamic> nutritionData = {};
+
+    // Add all the micronutrients from the scan results
+    if (finalMicronutrients.isNotEmpty) {
+      nutritionData.addAll(finalMicronutrients);
+      print(
+          '💾 SNAPFOOD: Added ${finalMicronutrients.length} micronutrients to food card');
+    }
+
+    // Add macronutrients to nutrition data
+    nutritionData['protein'] = protein;
+    nutritionData['fat'] = fat;
+    nutritionData['carbs'] = carbs;
+    nutritionData['calories'] = calories;
+    nutritionData['food_name'] =
+        foodName.isNotEmpty ? foodName : 'Analyzed Meal';
+    nutritionData['last_updated'] = DateTime.now().millisecondsSinceEpoch;
+
+    // Create food card data with original image AND nutrition data
     final Map<String, dynamic> foodCard = {
       'name': foodName.isNotEmpty ? foodName : 'Analyzed Meal',
       'calories': calories,
@@ -699,7 +777,12 @@ class _SnapFoodState extends State<SnapFood> {
       'ingredients': ingredientsList,
       'health_score': healthScore,
       'scan_id': finalScanId, // Store scanId in the food card data
+      // CRITICAL: Store nutrition data directly in the food card
+      'nutrition_data': nutritionData,
     };
+
+    // DEBUG: Log what we're about to save
+    debugPrint('Saving nutrition data for scanId: $finalScanId');
 
     // Separate try block for storage operations
     final prefs = await SharedPreferences.getInstance();
@@ -720,74 +803,38 @@ class _SnapFoodState extends State<SnapFood> {
       final int cardSizeBytes = foodCardJson.length;
       final double cardSizeMB = cardSizeBytes / (1024 * 1024);
 
-      print(
-          '📊 SNAPFOOD: Final card size: ${cardSizeMB.toStringAsFixed(2)}MB (no size limits)');
+      debugPrint(
+          'SNAPFOOD: Final card size: ${cardSizeMB.toStringAsFixed(2)}MB');
 
       // Add the card (compressed image, but any card size allowed)
       storedCards.insert(0, foodCardJson);
 
-      // No size limits - allow infinite cards and sizes
-      print('📝 SNAPFOOD: Keeping all ${storedCards.length} cards (no limits)');
-
       // Save updated list - no quota management, allow all sizes
       await prefs.setStringList('food_cards', storedCards);
-      print(
-          '💾 SNAPFOOD: Successfully saved ${storedCards.length} cards to SharedPreferences (no size limits)');
+      debugPrint('SNAPFOOD: Successfully saved ${storedCards.length} cards');
 
       // VERIFY THE SAVE WORKED
       final List<String>? verifyCards = prefs.getStringList('food_cards');
       if (verifyCards != null && verifyCards.length == storedCards.length) {
-        print(
-            '✅ SNAPFOOD: Verified save worked - ${verifyCards.length} cards in storage');
-
-        // CRITICAL DEBUG: Show what was actually saved
-        print('🔍 SNAPFOOD: Cards now in SharedPreferences after save:');
-        for (int i = 0; i < verifyCards.length; i++) {
-          try {
-            final Map<String, dynamic> cardData = jsonDecode(verifyCards[i]);
-            final String name = cardData['name'] ?? 'Unknown';
-            final String scanId = cardData['scan_id'] ?? 'No scan_id';
-            print('🔍 Verified Card $i: "$name" (scan_id: $scanId)');
-          } catch (e) {
-            print('🔍 Verified Card $i: [INVALID JSON]');
-          }
-        }
+        debugPrint('SNAPFOOD: Save verified successfully');
       } else {
-        print(
-            '❌ SNAPFOOD: Save verification FAILED - expected ${storedCards.length}, got ${verifyCards?.length ?? 0}');
+        debugPrint('SNAPFOOD: Save verification failed');
 
-        // CRITICAL DEBUG: Show what's actually in storage vs what we tried to save
-        print('🔍 SNAPFOOD: What we tried to save:');
-        for (int i = 0; i < storedCards.length; i++) {
-          try {
-            final Map<String, dynamic> cardData = jsonDecode(storedCards[i]);
-            final String name = cardData['name'] ?? 'Unknown';
-            print('🔍 Attempted Card $i: "$name"');
-          } catch (e) {
-            print('🔍 Attempted Card $i: [INVALID JSON]');
-          }
-        }
-
-        print('🔍 SNAPFOOD: What\'s actually in storage:');
-        if (verifyCards != null) {
-          for (int i = 0; i < verifyCards.length; i++) {
-            try {
-              final Map<String, dynamic> cardData = jsonDecode(verifyCards[i]);
-              final String name = cardData['name'] ?? 'Unknown';
-              print('🔍 Actual Card $i: "$name"');
-            } catch (e) {
-              print('🔍 Actual Card $i: [INVALID JSON]');
-            }
-          }
-        } else {
-          print('🔍 SNAPFOOD: Storage is completely empty!');
+        // CRITICAL: Save nutrition data separately if food card save failed
+        try {
+          // Save nutrition data to individual key as backup
+          String nutritionKey = 'nutrition_backup_$finalScanId';
+          await prefs.setString(nutritionKey, jsonEncode(nutritionData));
+          debugPrint('SNAPFOOD: Saved nutrition data backup');
+        } catch (e) {
+          debugPrint('SNAPFOOD: Failed to save nutrition backup');
         }
       }
 
       // Invalidate nutrition cache since new food data was added
       // main_codia.NutritionTracker.invalidateCacheStatic();
     } catch (e) {
-      print('❌ SNAPFOOD: Failed to save food card: $e');
+      debugPrint('SNAPFOOD: Failed to save food card');
       // Try to save without image if storage fails
       try {
         final Map<String, dynamic> foodCardWithoutImage =
@@ -800,9 +847,9 @@ class _SnapFoodState extends State<SnapFood> {
             prefs.getStringList('food_cards') ?? [];
         storedCards.insert(0, foodCardJson);
         await prefs.setStringList('food_cards', storedCards);
-        print('✅ SNAPFOOD: Saved card without image as fallback');
+        debugPrint('SNAPFOOD: Saved card without image as fallback');
       } catch (e2) {
-        print('❌ SNAPFOOD: Failed to save even without image: $e2');
+        debugPrint('SNAPFOOD: Failed to save even without image');
       }
     }
 
@@ -832,8 +879,6 @@ class _SnapFoodState extends State<SnapFood> {
     } catch (e) {}
 
     // Don't store display image separately - it's already in the card data
-    print(
-        '💾 Display image stored directly in card data (no separate storage)');
 
     // SAVE SCAN DATA TO NUTRITION MANAGER PERMANENTLY
     if (finalMicronutrients.isNotEmpty) {
@@ -1837,25 +1882,17 @@ class CornerPainter extends CustomPainter {
 // Image compression helper function - PROPER COMPRESSION
 Future<String> _compressImageForStorage(String base64Image) async {
   try {
-    print('🔍 SNAPFOOD: Starting compression function...');
-    print('🔍 SNAPFOOD: Input base64 length: ${base64Image.length}');
-
     // Decode base64 to bytes
     final Uint8List imageBytes = base64Decode(base64Image);
 
-    // Target size: 0.4MB (400KB)
-    final int targetSize = 400 * 1024; // 400KB target
+    // Target size: 100KB to prevent quota exceeded errors
+    final int targetSize = 100 * 1024; // 100KB target
 
     if (imageBytes.length <= targetSize) {
-      print(
-          '📝 SNAPFOOD: Image already small enough (${(imageBytes.length / 1024).toStringAsFixed(1)}KB)');
       return base64Image; // Already small enough
     }
 
     // PROPER COMPRESSION: Use quality-based compression instead of truncation
-    print(
-        '📝 SNAPFOOD: Compressing large image (${(imageBytes.length / 1024).toStringAsFixed(1)}KB) to 400KB target');
-
     // Use proper image compression with quality reduction
     Uint8List compressedBytes = await compressImage(
       imageBytes,
@@ -1865,7 +1902,6 @@ Future<String> _compressImageForStorage(String base64Image) async {
 
     // If still too large, compress more aggressively
     if (compressedBytes.length > targetSize) {
-      print('📝 SNAPFOOD: First compression not enough, compressing more...');
       compressedBytes = await compressImage(
         compressedBytes,
         quality: 40, // Reduce quality to 40%
@@ -1874,11 +1910,9 @@ Future<String> _compressImageForStorage(String base64Image) async {
     }
 
     final String compressedBase64 = base64Encode(compressedBytes);
-    print(
-        '📝 SNAPFOOD: Compressed image from ${(imageBytes.length / 1024).toStringAsFixed(1)}KB to ${(compressedBytes.length / 1024).toStringAsFixed(1)}KB');
     return compressedBase64;
   } catch (e) {
-    print('⚠️ SNAPFOOD: Image compression failed: $e');
+    debugPrint('SNAPFOOD: Image compression failed');
     return base64Image; // Return original if compression fails
   }
 }
@@ -1903,15 +1937,12 @@ Future<void> _cleanupOldImageKeys(SharedPreferences prefs) async {
       for (String key in keysToRemove) {
         try {
           await prefs.remove(key);
-          print('🧹 Cleaned up old image key: $key');
         } catch (e) {
-          print('⚠️ Failed to clean up image key $key: $e');
+          debugPrint('Failed to clean up image key');
         }
       }
-      print(
-          '🧹 Storage cleanup completed - removed ${keysToRemove.length} old image keys');
     }
   } catch (e) {
-    print('⚠️ Storage cleanup failed: $e');
+    debugPrint('Storage cleanup failed');
   }
 }

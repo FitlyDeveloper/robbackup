@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fitness_app/core/env.dart';
 import 'dart:convert';
@@ -133,9 +134,12 @@ class NutritionDataManager {
 
     // BULLETPROOF KEY PRIORITY - Check bulletproof keys first
     List<String> possibleKeys = [
-      'BULLETPROOF_NUTRITION_$scanId', // NEW: Bulletproof keys first
-      'PERMANENT_BACKUP_$scanId', // NEW: Permanent backup
-      'NEVER_DELETE_NUTRITION_$scanId', // NEW: Never delete keys
+      'BULLETPROOF_NUTRITION_$scanId', // Bulletproof keys first
+      'staging_PERMANENT_NUTRITION_$scanId', // Staging permanent
+      'PERMANENT_NUTRITION_$scanId', // Permanent nutrition
+      'staging_food_nutrition_data_$scanId', // Staging food nutrition
+      'PERMANENT_BACKUP_$scanId', // Permanent backup
+      'NEVER_DELETE_NUTRITION_$scanId', // Never delete keys
       AppEnv.key('nutrition_data_$scanId'),
       AppEnv.key('food_nutrition_data_$scanId'),
       AppEnv.key('nutrition_bulletproof_$scanId'),
@@ -196,6 +200,10 @@ class NutritionDataManager {
 
       // Save to multiple keys for maximum redundancy
       List<String> keys = [
+        'BULLETPROOF_NUTRITION_$scanId', // Bulletproof keys first
+        'staging_PERMANENT_NUTRITION_$scanId', // Staging permanent
+        'PERMANENT_NUTRITION_$scanId', // Permanent nutrition
+        'staging_food_nutrition_data_$scanId', // Staging food nutrition
         AppEnv.key('nutrition_bulletproof_$scanId'),
         AppEnv.key('nutrition_backup_$scanId'),
         AppEnv.key('food_nutrition_data_$scanId'),
@@ -250,20 +258,38 @@ class NutritionDataManager {
       print('📖 Total SharedPreferences keys found: ${allKeys.length}');
 
       // List all nutrition-related keys for debugging
-      List<String> nutritionKeys =
-          allKeys.where((k) => k.toLowerCase().contains('nutrition')).toList();
+      List<String> nutritionKeys = allKeys
+          .where((k) =>
+              k.toLowerCase().contains('nutrition') ||
+              k.toUpperCase().contains('NUTRITION'))
+          .toList();
       print(
           '📖 Found ${nutritionKeys.length} nutrition-related keys: $nutritionKeys');
+
+      // Also show all keys for debugging
+      print('📖 All available keys: $allKeys');
 
       int loadedEntries = 0;
       int totalNutrients = 0;
 
-      // Primary bulletproof keys
+      // Primary bulletproof keys - check multiple patterns
       for (String key in allKeys) {
+        String? scanId;
         if (key.startsWith('nutrition_bulletproof_')) {
-          String scanId = key.replaceFirst('nutrition_bulletproof_', '');
+          scanId = key.replaceFirst('nutrition_bulletproof_', '');
+        } else if (key.startsWith('BULLETPROOF_NUTRITION_')) {
+          scanId = key.replaceFirst('BULLETPROOF_NUTRITION_', '');
+        } else if (key.startsWith('staging_PERMANENT_NUTRITION_')) {
+          scanId = key.replaceFirst('staging_PERMANENT_NUTRITION_', '');
+        } else if (key.startsWith('PERMANENT_NUTRITION_')) {
+          scanId = key.replaceFirst('PERMANENT_NUTRITION_', '');
+        } else if (key.startsWith('staging_food_nutrition_data_')) {
+          scanId = key.replaceFirst('staging_food_nutrition_data_', '');
+        }
+
+        if (scanId != null) {
           String? dataJson = prefs.getString(key);
-          print('📖 Loading bulletproof data for scanId: $scanId');
+          print('📖 Loading data for scanId: $scanId from key: $key');
 
           if (dataJson != null && dataJson.isNotEmpty) {
             try {
@@ -718,6 +744,18 @@ class _NutritionPage extends State<NutritionPage>
     final seedKeys = widget.nutritionData?.keys.length ?? 0;
     print('🧪 hydrate start | scanId=$_scanId | seedMicrosKeys=$seedKeys');
 
+    // CRITICAL: Ensure NutritionDataManager is initialized
+    if (!NutritionDataManager._isInitialized) {
+      print('🔧 NutritionDataManager not initialized, initializing now...');
+      try {
+        await NutritionDataManager.initialize();
+        print('✅ NutritionDataManager initialized successfully');
+      } catch (e) {
+        print('❌ Failed to initialize NutritionDataManager: $e');
+        // Continue without NutritionDataManager - will use direct SharedPreferences
+      }
+    }
+
     // 0) Fast-path: if manager already has structured data for this scanId, apply it synchronously
     if (NutritionDataManager._persistentData.containsKey(_scanId)) {
       final cached = NutritionDataManager._persistentData[_scanId]!;
@@ -791,8 +829,26 @@ class _NutritionPage extends State<NutritionPage>
       }
     }
 
-    // Load from storage once
-    final ok = await _loadSavedDataBulletproof();
+    // Load from storage once - try multiple approaches
+    bool ok = await _loadSavedDataBulletproof();
+
+    // If bulletproof load failed, try NutritionDataManager as fallback
+    if (!ok && NutritionDataManager._isInitialized) {
+      print('🔄 Bulletproof load failed, trying NutritionDataManager...');
+      ok = await NutritionDataManager.loadNutritionData(
+          _scanId, vitamins, minerals, other);
+    }
+
+    // If still failed, try aggressive search
+    if (!ok) {
+      print('🔄 All standard methods failed, trying aggressive search...');
+      await _forceLoadFromAllStorageSources();
+      // Check if any data was loaded
+      ok = vitamins.values.where((v) => v.progress > 0).length > 0 ||
+          minerals.values.where((v) => v.progress > 0).length > 0 ||
+          other.values.where((v) => v.progress > 0).length > 0;
+    }
+
     if (!mounted) return;
     _dataLoaded = ok;
     // Ensure maps exist even if storage returned an empty structured payload
@@ -981,59 +1037,68 @@ class _NutritionPage extends State<NutritionPage>
     // Check SharedPreferences for debugging
     await _debugSharedPreferencesKeys();
 
-    // PRIORITY 1: ALWAYS try to load saved data first - DON'T CLEAR ON REFRESH
-    // Only apply widget data if this is a fresh navigation (not a refresh)
-    if (widget.nutritionData != null &&
-        widget.nutritionData!.isNotEmpty &&
-        widget.forceUseWidgetDataOnce) {
-      print('🆕 FRESH NAVIGATION: Applying widget data (not a refresh)');
+    // CRITICAL: ALWAYS save widget data if provided, regardless of refresh status
+    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+      print('🆕 WIDGET DATA PROVIDED: Processing and saving immediately...');
+      print('📊 Widget data keys: ${widget.nutritionData!.keys.toList()}');
+
+      // Clear existing data and apply fresh widget data
       vitamins.clear();
       minerals.clear();
       other.clear();
       _initializeDefaultValues();
       _updateNutrientValuesFromData(widget.nutritionData!);
+
       setState(() {
         vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
       });
 
-      // CRITICAL: Save the data immediately after processing
-      print('💾 FRESH NAVIGATION: Saving data immediately...');
+      // CRITICAL: Save the data immediately after processing - BULLETPROOF SAVE
+      print(
+          '💾 IMMEDIATE SAVE: Saving nutrition data to multiple locations...');
       await _bulletproofSave();
       await NutritionDataManager.storeNutritionData(
           _scanId, vitamins, minerals, other);
-      print('💾 FRESH NAVIGATION: Data saved successfully');
-    } else if (widget.nutritionData != null &&
-        widget.nutritionData!.isNotEmpty) {
-      print('🔄 REFRESH DETECTED: Skipping widget data to preserve saved data');
+      print('💾 IMMEDIATE SAVE: Data saved successfully to all locations');
+
+      // Verify the save worked
+      await _verifySaveWorked();
     }
 
-    // CRITICAL FIX: Initialize maps FIRST so vitamins.containsKey() works during load
-    if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
-      print('🔧 CRITICAL: Initializing maps BEFORE loading data so containsKey() works');
-      _initializeDefaultValues();
-    }
-
-    // PRIORITY 1: Load bulletproof saved data AFTER maps are initialized
+    // PRIORITY 1: Load bulletproof saved data FIRST (before any widget data)
     bool savedDataLoaded = await _loadSavedDataBulletproof();
-    print('📖 BULLETPROOF: Saved data loaded: $savedDataLoaded');
 
     // If savedDataLoaded succeeded, update the counts and trigger a state update
     if (savedDataLoaded) {
-      print('✅ BULLETPROOF: Saved data was loaded, updating UI state...');
       setState(() {
         vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
         mineralCount = minerals.values.where((v) => v.progress > 0).length;
         otherCount = other.values.where((v) => v.progress > 0).length;
         _dataLoaded = true; // Mark as loaded
       });
-      print('✅ BULLETPROOF: UI state updated after loading saved data');
 
       // If we successfully loaded saved data, we're done - don't process widget data
       if (vitaminCount > 0 || mineralCount > 0 || otherCount > 0) {
-        print('✅ BULLETPROOF: Data found, skipping widget processing');
         return; // EXIT EARLY - we have our data
+      }
+    }
+
+    // FALLBACK: If bulletproof loading failed, try direct key loading
+    if (!savedDataLoaded) {
+      bool directLoaded = await _loadNutritionDataDirect();
+      if (directLoaded) {
+        setState(() {
+          vitaminCount = vitamins.values.where((v) => v.progress > 0).length;
+          mineralCount = minerals.values.where((v) => v.progress > 0).length;
+          otherCount = other.values.where((v) => v.progress > 0).length;
+          _dataLoaded = true;
+        });
+
+        if (vitaminCount > 0 || mineralCount > 0 || otherCount > 0) {
+          return;
+        }
       }
     }
 
@@ -1790,173 +1855,223 @@ class _NutritionPage extends State<NutritionPage>
     }
   }
 
-  // Load nutrition data from SharedPreferences or cache
-  Future<void> _loadNutritionData() async {
-    print('📖 Loading nutrition data for scan ID: $_scanId');
+  // COMPREHENSIVE LOADING - Check all possible storage locations
+  Future<void> _loadNutritionDataSimple() async {
+    debugPrint('Loading nutrition data for scanId: $_scanId');
+    debugPrint('Checking all possible storage locations...');
 
-    // PRIORITY 1: If we have fresh widget data, use it immediately
-    if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      print('🆕 Fresh widget data provided, using it...');
-      print('📊 INPUT DATA KEYS: ${widget.nutritionData!.keys.toList()}');
-      print('🔑 SCAN ID FOR SAVING: $_scanId');
+    try {
+      final prefs = await SharedPreferences.getInstance();
 
-      _updateNutrientValuesFromData(widget.nutritionData!);
+      // PRIORITY 1: If we have fresh widget data, use it and save it
+      if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
+        debugPrint('Using fresh widget data');
+        _updateNutrientValuesFromData(widget.nutritionData!);
+
+        // SAVE TO DEDICATED STORAGE IMMEDIATELY
+        await _saveNutritionDataToDedicatedStorage();
+
+        setState(() {
+          _dataLoaded = true;
+        });
+        return;
+      }
+
+      // PRIORITY 2: Load from all possible nutrition storage keys
+      Set<String> allKeys = prefs.getKeys();
+      List<String> possibleKeys = [
+        AppEnv.key('nutrition_data_$_scanId'),
+        'staging_PERMANENT_NUTRITION_$_scanId',
+        'BULLETPROOF_NUTRITION_$_scanId',
+        'staging_food_nutrition_data_$_scanId',
+        'PERMANENT_NUTRITION_$_scanId',
+        'GLOBAL_NUTRITION_BACKUP',
+        // Also try without AppEnv.key() prefix
+        'nutrition_data_$_scanId',
+        'staging_PERMANENT_NUTRITION_$_scanId',
+        'BULLETPROOF_NUTRITION_$_scanId',
+        'staging_food_nutrition_data_$_scanId',
+        'PERMANENT_NUTRITION_$_scanId',
+      ];
+
+      debugPrint(
+          'Available keys: ${allKeys.where((key) => key.contains('nutrition') || key.contains('NUTRITION')).toList()}');
+      debugPrint('Looking for keys: $possibleKeys');
+
+      for (String key in possibleKeys) {
+        if (allKeys.contains(key)) {
+          debugPrint('Found key: $key');
+          String? savedData = prefs.getString(key);
+          if (savedData != null && savedData.isNotEmpty) {
+            debugPrint('Data found in $key, length: ${savedData.length}');
+            try {
+              Map<String, dynamic> nutritionData = jsonDecode(savedData);
+              debugPrint('Parsed data keys: ${nutritionData.keys.toList()}');
+
+              // Handle different data formats
+              if (nutritionData.containsKey('vitamins') &&
+                  nutritionData.containsKey('minerals') &&
+                  nutritionData.containsKey('other')) {
+                // This is the structured format - extract flat data from it
+                Map<String, dynamic> flatData = {};
+
+                // Extract vitamins
+                if (nutritionData['vitamins'] is Map) {
+                  nutritionData['vitamins'].forEach((key, value) {
+                    if (value is Map && value.containsKey('value')) {
+                      String valueStr = value['value'].toString();
+                      // Extract just the numeric part before the "/"
+                      if (valueStr.contains('/')) {
+                        String numericPart = valueStr.split('/')[0].trim();
+                        flatData[key] = numericPart;
+                      } else {
+                        flatData[key] = valueStr;
+                      }
+                    }
+                  });
+                }
+
+                // Extract minerals
+                if (nutritionData['minerals'] is Map) {
+                  nutritionData['minerals'].forEach((key, value) {
+                    if (value is Map && value.containsKey('value')) {
+                      String valueStr = value['value'].toString();
+                      // Extract just the numeric part before the "/"
+                      if (valueStr.contains('/')) {
+                        String numericPart = valueStr.split('/')[0].trim();
+                        flatData[key] = numericPart;
+                      } else {
+                        flatData[key] = valueStr;
+                      }
+                    }
+                  });
+                }
+
+                // Extract other nutrients
+                if (nutritionData['other'] is Map) {
+                  nutritionData['other'].forEach((key, value) {
+                    if (value is Map && value.containsKey('value')) {
+                      String valueStr = value['value'].toString();
+                      // Extract just the numeric part before the "/"
+                      if (valueStr.contains('/')) {
+                        String numericPart = valueStr.split('/')[0].trim();
+                        flatData[key] = numericPart;
+                      } else {
+                        flatData[key] = valueStr;
+                      }
+                    }
+                  });
+                }
+
+                // Use the flat data with the proper function
+                debugPrint('Extracted flat data: ${flatData.keys.toList()}');
+                _updateNutrientValuesFromData(flatData);
+
+                setState(() {
+                  vitaminCount =
+                      vitamins.values.where((v) => v.progress > 0).length;
+                  mineralCount =
+                      minerals.values.where((v) => v.progress > 0).length;
+                  otherCount = other.values.where((v) => v.progress > 0).length;
+                  _dataLoaded = true;
+                });
+                debugPrint('Loaded from $key (structured format)');
+                return;
+              } else if (nutritionData.containsKey('scanId') &&
+                  nutritionData['scanId'] == _scanId) {
+                // This might be a different format, try to extract nutrition data
+                if (nutritionData.containsKey('vitamins') ||
+                    nutritionData.containsKey('minerals') ||
+                    nutritionData.containsKey('other')) {
+                  _processNutritionDataFromFoodCard(nutritionData);
+
+                  setState(() {
+                    vitaminCount =
+                        vitamins.values.where((v) => v.progress > 0).length;
+                    mineralCount =
+                        minerals.values.where((v) => v.progress > 0).length;
+                    otherCount =
+                        other.values.where((v) => v.progress > 0).length;
+                    _dataLoaded = true;
+                  });
+                  debugPrint('Loaded from $key (alternative format)');
+                  return;
+                }
+              }
+            } catch (e) {
+              debugPrint('Failed to parse data from $key');
+            }
+          }
+        }
+      }
+
+      // PRIORITY 3: Fallback to food_cards
+      List<String>? foodCards = prefs.getStringList('food_cards');
+
+      if (foodCards != null && foodCards.isNotEmpty) {
+        for (int i = 0; i < foodCards.length; i++) {
+          try {
+            Map<String, dynamic> cardData = jsonDecode(foodCards[i]);
+            String cardScanId = cardData['scan_id']?.toString() ?? '';
+
+            if (cardScanId == _scanId &&
+                cardData.containsKey('nutrition_data')) {
+              Map<String, dynamic> nutritionData = cardData['nutrition_data'];
+              _processNutritionDataFromFoodCard(nutritionData);
+
+              // SAVE TO DEDICATED STORAGE FOR NEXT TIME
+              await _saveNutritionDataToDedicatedStorage();
+
+              setState(() {
+                vitaminCount =
+                    vitamins.values.where((v) => v.progress > 0).length;
+                mineralCount =
+                    minerals.values.where((v) => v.progress > 0).length;
+                otherCount = other.values.where((v) => v.progress > 0).length;
+                _dataLoaded = true;
+              });
+              debugPrint('Loaded from food_cards');
+              return;
+            }
+          } catch (e) {
+            // Continue to next card
+          }
+        }
+      }
+
+      // If no data found, mark as loaded anyway
+      debugPrint('No nutrition data found for scanId: $_scanId');
       setState(() {
         _dataLoaded = true;
       });
-
-      // BULLETPROOF SAVE: Save to EVERY possible location
-      await _bulletproofSave();
-
-      // ALSO save to NutritionDataManager for redundancy
-      await NutritionDataManager.storeNutritionData(
-          _scanId, vitamins, minerals, other);
-
-      // LOG SUCCESS
-      int totalNutrients = vitamins.values.where((v) => v.progress > 0).length +
-          minerals.values.where((v) => v.progress > 0).length +
-          other.values.where((v) => v.progress > 0).length;
-
-      print('💾 SUCCESS: Saved $totalNutrients nutrients with actual values');
-      print(
-          '💾 Vitamins with values: ${vitamins.values.where((v) => v.progress > 0).map((v) => '${v.name}:${v.value}').join(', ')}');
-      return;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // CRITICAL: Handle navigation from OUTSIDE food context (no widget data)
-    // ═══════════════════════════════════════════════════════════════
-    print('🚨 === NO WIDGET DATA - EXTERNAL NAVIGATION DETECTED ===');
-    print('🚨 This happens when navigating from outside food context');
-    print('🚨 Must rely entirely on cached/saved data for scanId: $_scanId');
-
-    // PRIORITY 2A: Try NutritionDataManager memory cache FIRST (fastest)
-    bool managerSuccess = await NutritionDataManager.loadNutritionData(
-        _scanId, vitamins, minerals, other);
-    if (managerSuccess) {
-      print('✅ MANAGER SUCCESS: Loaded from NutritionDataManager cache');
+    } catch (e) {
+      debugPrint('Error loading nutrition data: $e');
       setState(() {
         _dataLoaded = true;
       });
-      return;
     }
-
-    // PRIORITY 2B: Try bulletproof saved data recovery
-    bool savedSuccess = await _loadSavedDataBulletproof();
-    if (savedSuccess) {
-      print('✅ SAVED SUCCESS: Loaded from SharedPreferences backup');
-      setState(() {
-        _dataLoaded = true;
-      });
-      return;
-    }
-
-    // PRIORITY 2: IMMEDIATELY try aggressive search (since standard methods are failing)
-    print('🚨 NO WIDGET DATA - Starting aggressive search immediately...');
-    await _forceLoadFromAllStorageSources();
-
-    // PRIORITY 3: Try to load from NutritionDataManager (memory cache + SharedPreferences) as backup
-    bool success = await NutritionDataManager.loadNutritionData(
-        _scanId, vitamins, minerals, other);
-    if (success) {
-      setState(() {
-        _dataLoaded = true;
-      });
-      print('✅ Successfully loaded nutrition data from NutritionDataManager');
-      return;
-    }
-
-    // PRIORITY 4: Only keep defaults if truly no data exists anywhere
-    print('❌ No data found after aggressive search, keeping defaults');
-    setState(() {
-      _dataLoaded = true;
-    });
   }
 
   // Called when another route is popped and this route shows up
   @override
   void didPopNext() async {
-    // ═══════════════════════════════════════════════════════════════
-    // QUESTION 1: Is _initializeAndLoadData() called on re-entry?
-    // ═══════════════════════════════════════════════════════════════
-    print('🧠 === QUESTION 1: DIDPOPNEXT TRIGGERED - WILL CALL INIT ===');
-    print('🧠 init called with scanId: $_scanId');
-    print('🧠 Called via didPopNext at: ${DateTime.now()}');
-
-    // ═══════════════════════════════════════════════════════════════
-    // QUESTION 5: Does didPopNext() fire correctly via RouteObserver?
-    // ═══════════════════════════════════════════════════════════════
-    print('🔄 === QUESTION 5: didPopNext() INVESTIGATION ===');
-    print('🔄 didPopNext() triggered at: ${DateTime.now()}');
-    print('🔄 This confirms RouteObserver is working correctly');
-    print('🔄 ANSWER 5: didPopNext() DID fire - RouteObserver is functional');
-
-    // Also check scanId consistency in didPopNext
-    print('🔄 didPopNext() current _scanId: "$_scanId"');
-    print('🔄 didPopNext() widget.scanId: "${widget.scanId}"');
-
-    if (_scanId != widget.scanId) {
-      print(
-          '🚨 SCANID MISMATCH in didPopNext: _scanId "$_scanId" != widget.scanId "${widget.scanId}"');
-    }
-
-    // Debug complete data flow when returning to screen
-    await _debugCompleteDataFlow('DID_POP_NEXT_START');
-
-    print('🔑 Current scanId: $_scanId');
-    print('🔑 Widget scanId: ${widget.scanId}');
-    print('📊 Widget has data: ${widget.nutritionData != null}');
+    debugPrint('Nutrition: didPopNext triggered');
 
     // Verify scanId consistency
     if (_scanId != widget.scanId) {
-      print(
-          '🚨 WARNING: scanId mismatch! Internal: $_scanId, Widget: ${widget.scanId}');
       _scanId = widget.scanId; // Fix the mismatch
-    }
-
-    // Log current nutrient state before reloading
-    int currentVitamins = vitamins.values.where((v) => v.progress > 0).length;
-    int currentMinerals = minerals.values.where((v) => v.progress > 0).length;
-    int currentOther = other.values.where((v) => v.progress > 0).length;
-    print(
-        '📊 BEFORE RELOAD - Vitamins: $currentVitamins, Minerals: $currentMinerals, Other: $currentOther');
-
-    // ═══════════════════════════════════════════════════════════════
-    // QUESTION 1: Call _initializeAndLoadData() to test full reload
-    // ═══════════════════════════════════════════════════════════════
-    if (!_ready) {
-      print('🧠 === calling memoized hydrate from didPopNext ===');
-      await _load;
-    } else {
-      print('🧠 didPopNext: already ready; no reload');
     }
 
     // ALWAYS reload saved data when returning to screen
     bool reloadSuccess = await _loadSavedDataBulletproof();
-    print('📖 Reload success: $reloadSuccess');
 
     // If we have fresh widget data, use it and save it
     if (widget.nutritionData != null && widget.nutritionData!.isNotEmpty) {
-      print('🆕 Fresh widget data available, updating...');
-      print('🆕 Widget data keys: ${widget.nutritionData!.keys.toList()}');
       _updateNutrientValuesFromData(widget.nutritionData!);
       await _saveNutritionData();
       await NutritionDataManager.storeNutritionData(
           _scanId, vitamins, minerals, other);
-      print('💾 Fresh data processed and saved');
     }
-
-    // Log final state
-    int finalVitamins = vitamins.values.where((v) => v.progress > 0).length;
-    int finalMinerals = minerals.values.where((v) => v.progress > 0).length;
-    int finalOther = other.values.where((v) => v.progress > 0).length;
-    print(
-        '🏁 AFTER RELOAD - Vitamins: $finalVitamins, Minerals: $finalMinerals, Other: $finalOther');
-
-    // Final debug to see complete state after reload
-    await _debugCompleteDataFlow('DID_POP_NEXT_END');
-
-    print('🔄 === didPopNext() END ===');
 
     setState(() {
       _dataLoaded = true;
@@ -2132,17 +2247,18 @@ class _NutritionPage extends State<NutritionPage>
     }
   }
 
-  // BULLETPROOF SAVE: Save nutrition data to EVERY possible location
+  // BULLETPROOF SAVE: Save nutrition data using the SAME pattern as FoodCardOpen.dart
   Future<void> _bulletproofSave() async {
-    print('🛡️ BULLETPROOF SAVE: Saving to ALL possible locations...');
+    print('🛡️ BULLETPROOF SAVE: Saving using FoodCardOpen.dart pattern...');
 
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Create the nutrition data in multiple formats
-      Map<String, dynamic> structuredData = {
+      // Create the nutrition data in the same format as food cards
+      Map<String, dynamic> nutritionCard = {
         'scanId': _scanId,
         'lastSaved': DateTime.now().millisecondsSinceEpoch,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
         'vitamins':
             Map.fromEntries(vitamins.entries.map((e) => MapEntry(e.key, {
                   'name': e.value.name,
@@ -2172,26 +2288,61 @@ class _NutritionPage extends State<NutritionPage>
       };
 
       // Convert to JSON
-      String structuredJson = jsonEncode(structuredData);
+      String nutritionCardJson = jsonEncode(nutritionCard);
 
-      // Create flat data (original micronutrient format)
-      Map<String, dynamic> flatData = {};
-      if (widget.nutritionData != null) {
-        flatData.addAll(widget.nutritionData!);
-      }
-      flatData['scanId'] = _scanId;
-      flatData['lastSaved'] = DateTime.now().millisecondsSinceEpoch;
-      String flatJson = jsonEncode(flatData);
+      // CRITICAL: Save to nutrition_cards StringList (same pattern as food_cards)
+      List<String> nutritionCards =
+          prefs.getStringList('nutrition_cards') ?? [];
 
-      // Save everything in ONE operation (EXACTLY like FoodCardOpen.dart)
-      // CRITICAL: Use AppEnv.key() to match the loading method
-      String saveKey = AppEnv.key('nutrition_data_$_scanId');
-      await prefs.setString(saveKey, structuredJson);
+      // Remove existing entry for this scanId if it exists
+      nutritionCards.removeWhere((cardJson) {
+        try {
+          Map<String, dynamic> cardData = jsonDecode(cardJson);
+          return cardData['scanId'] == _scanId;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      // Add new nutrition card at the beginning
+      nutritionCards.insert(0, nutritionCardJson);
+
+      // Save the updated list
+      await prefs.setStringList('nutrition_cards', nutritionCards);
       print(
-          '✅ Successfully saved consolidated nutrition data to key: $saveKey (${structuredJson.length} bytes)');
+          '✅ Saved to nutrition_cards StringList (${nutritionCards.length} cards)');
 
-      // Keep it simple - don't overcomplicate with multiple saves
-      print('🛡️ SIMPLE SAVE COMPLETED: Data saved to key: $saveKey');
+      // Also save individual backup (same as FoodCardOpen.dart)
+      String backupKey = 'nutrition_card_$_scanId';
+      await prefs.setString(backupKey, nutritionCardJson);
+      print('🛡️ Stored individual backup at "$backupKey"');
+
+      // Legacy keys for backward compatibility
+      List<String> legacyKeys = [
+        AppEnv.key('nutrition_data_$_scanId'),
+        'BULLETPROOF_NUTRITION_$_scanId',
+        'PERMANENT_NUTRITION_$_scanId',
+        'nutrition_data_$_scanId',
+      ];
+
+      for (String key in legacyKeys) {
+        try {
+          await prefs.setString(key, nutritionCardJson);
+          print('✅ Saved to legacy key: $key');
+        } catch (e) {
+          print('❌ Failed to save to legacy key $key: $e');
+        }
+      }
+
+      print(
+          '🛡️ BULLETPROOF SAVE: Successfully saved using FoodCardOpen.dart pattern');
+      print('📊 Data size: ${nutritionCardJson.length} bytes');
+
+      // Count nutrients for verification
+      int totalNutrients = vitamins.values.where((v) => v.progress > 0).length +
+          minerals.values.where((v) => v.progress > 0).length +
+          other.values.where((v) => v.progress > 0).length;
+      print('📊 Saved $totalNutrients nutrients with actual values');
     } catch (e) {
       print('❌ Critical error in bulletproof save: $e');
     }
@@ -2204,13 +2355,12 @@ class _NutritionPage extends State<NutritionPage>
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Check all the keys we should have saved to
+      // Check all the keys we should have saved to (match the save keys)
       List<String> keysToCheck = [
-        'nutrition_bulletproof_$_scanId',
-        'nutrition_backup_$_scanId',
-        'food_nutrition_data_$_scanId',
-        'nutrition_data_$_scanId',
-        'PERMANENT_GLOBAL_NUTRITION_DATA',
+        AppEnv.key('nutrition_data_$_scanId'), // Primary key
+        'BULLETPROOF_NUTRITION_$_scanId', // Never-delete key
+        'PERMANENT_NUTRITION_$_scanId', // Permanent backup
+        'nutrition_data_$_scanId', // Simple key without env prefix
       ];
 
       bool foundAnyData = false;
@@ -2373,78 +2523,10 @@ class _NutritionPage extends State<NutritionPage>
   }
 
   // Initialize default values for vitamins, minerals, and other nutrients
-  // ONLY if maps are empty - DO NOT WIPE EXISTING DATA
+  // SIMPLE INITIALIZATION - Only initialize if maps are empty
   void _initializeDefaultValues() {
-    print("🔧 === SAFE _initializeDefaultValues() START ===");
-    print("🔧 Called at: ${DateTime.now()}");
-    print("🔧 Current scanId: $_scanId");
-    print("🔧 BEFORE - Vitamins map size: ${vitamins.length}");
-    print("🔧 BEFORE - Minerals map size: ${minerals.length}");
-
-    // CRITICAL: Check if data already exists - if so, DO NOT WIPE IT
-    int existingVitamins = vitamins.values.where((v) => v.progress > 0).length;
-    int existingMinerals = minerals.values.where((v) => v.progress > 0).length;
-    int existingOther = other.values.where((v) => v.progress > 0).length;
-
-    if (existingVitamins > 0 || existingMinerals > 0 || existingOther > 0) {
-      print(
-          "🔒 EXISTING DATA FOUND - SKIPPING INITIALIZATION TO PRESERVE DATA");
-      print(
-          "🔒 Existing: V:$existingVitamins M:$existingMinerals O:$existingOther");
-      return; // EXIT EARLY - DO NOT WIPE EXISTING DATA
-    }
-
-    // ADDITIONAL SAFETY: If maps have proper structure but 0 values, preserve structure
-    if (vitamins.isNotEmpty && minerals.isNotEmpty && other.isNotEmpty) {
-      print("🔒 MAPS ALREADY INITIALIZED - PRESERVING EXISTING STRUCTURE");
-      print("🔒 Map sizes: V:${vitamins.length} M:${minerals.length} O:${other.length}");
-      return; // EXIT EARLY - MAPS ARE ALREADY SET UP
-    }
-    print("🔧 BEFORE - Other map size: ${other.length}");
-
-    // Continue with initialization since no existing data was found
-    print(
-        "🔧 BEFORE - With actual data: Vitamins: $existingVitamins, Minerals: $existingMinerals, Other: $existingOther");
-
-    // Check if NutritionDataManager has data for this scanId BEFORE we potentially wipe anything
-    bool managerHasData =
-        NutritionDataManager._persistentData.containsKey(_scanId);
-    print("🔧 NutritionDataManager has data for $_scanId: $managerHasData");
-
-    if (managerHasData) {
-      var cachedData = NutritionDataManager._persistentData[_scanId];
-      if (cachedData != null) {
-        var cachedVitamins = (cachedData['vitamins'] as Map?)
-                ?.values
-                ?.where((v) => v is Map && (v['progress'] ?? 0.0) > 0)
-                ?.length ??
-            0;
-        var cachedMinerals = (cachedData['minerals'] as Map?)
-                ?.values
-                ?.where((v) => v is Map && (v['progress'] ?? 0.0) > 0)
-                ?.length ??
-            0;
-        var cachedOther = (cachedData['other'] as Map?)
-                ?.values
-                ?.where((v) => v is Map && (v['progress'] ?? 0.0) > 0)
-                ?.length ??
-            0;
-        print(
-            "🔧 Manager cached data with values: V:$cachedVitamins M:$cachedMinerals O:$cachedOther");
-
-        if (cachedVitamins > 0 || cachedMinerals > 0 || cachedOther > 0) {
-          print(
-              "🚨 QUESTION 3 ANSWER: _initializeDefaultValues() is running even though NutritionDataManager HAS VALID DATA!");
-          print(
-              "🚨 This could be the root cause - we're initializing defaults when real data exists in cache!");
-        }
-      }
-    }
-
-    // CRITICAL FIX: Only initialize if maps are completely empty
-    // This prevents wiping out saved scan data
+    // Only initialize if maps are completely empty
     if (vitamins.isEmpty) {
-      print("🔧 Vitamins map is empty, initializing defaults");
       // VITAMINS
       vitamins = {
         'Vitamin A': NutrientInfo(
@@ -2694,17 +2776,7 @@ class _NutritionPage extends State<NutritionPage>
 
   // Update nutrient values from data provided by SnapFood or other sources
   void _updateNutrientValuesFromData(Map<String, dynamic> data) {
-    print('🔄 === _updateNutrientValuesFromData() START ===');
-    print('📊 Input data keys: ${data.keys.toList()}');
-    print('📊 Input data size: ${data.length}');
-    print('🔑 Current scanId: $_scanId');
-
-    // Log current state before update
-    int vitaminsBefore = vitamins.values.where((v) => v.progress > 0).length;
-    int mineralsBefore = minerals.values.where((v) => v.progress > 0).length;
-    int otherBefore = other.values.where((v) => v.progress > 0).length;
-    print(
-        '📊 BEFORE UPDATE - Vitamins: $vitaminsBefore, Minerals: $mineralsBefore, Other: $otherBefore');
+    debugPrint('Updating nutrient values from data');
 
     // Ensure local maps are initialized before mapping incoming values
     if (vitamins.isEmpty || minerals.isEmpty || other.isEmpty) {
@@ -2824,9 +2896,8 @@ class _NutritionPage extends State<NutritionPage>
     int vitaminsAfter = vitamins.values.where((v) => v.progress > 0).length;
     int mineralsAfter = minerals.values.where((v) => v.progress > 0).length;
     int otherAfter = other.values.where((v) => v.progress > 0).length;
-    print(
-        '📊 AFTER UPDATE - Vitamins: $vitaminsAfter, Minerals: $mineralsAfter, Other: $otherAfter');
-    print('🔄 === _updateNutrientValuesFromData() END ===');
+    debugPrint(
+        'Updated nutrients - Vitamins: $vitaminsAfter, Minerals: $mineralsAfter, Other: $otherAfter');
   }
 
   // Helper method to extract a numeric value from a string
@@ -3348,195 +3419,519 @@ class _NutritionPage extends State<NutritionPage>
     );
   }
 
-  // BULLETPROOF LOAD - SIMPLE AND GUARANTEED
+  // BULLETPROOF LOAD - Load nutrition data directly from food_cards StringList
   Future<bool> _loadSavedDataBulletproof() async {
     try {
-      print('🔄 ===== BULLETPROOF LOAD STARTED =====');
-      print('🔄 Loading saved data for scanId: $_scanId');
-
       final prefs = await SharedPreferences.getInstance();
-      Set<String> allKeys = prefs.getKeys();
-      print('🔍 Total SharedPreferences keys: ${allKeys.length}');
 
-      // List all nutrition-related keys
-      List<String> nutritionKeys =
-          allKeys.where((k) => k.toLowerCase().contains('nutrition')).toList();
-      print(
-          '🔍 Found ${nutritionKeys.length} nutrition-related keys: $nutritionKeys');
+      // CRITICAL: Load from food_cards StringList (same as codia_page.dart)
+      List<String>? foodCards = prefs.getStringList('food_cards');
 
-      // BULLETPROOF: Check all possible keys in priority order
-      String dataSource = '';
-      String? savedData;
+      if (foodCards != null && foodCards.isNotEmpty) {
+        // Search for the specific scanId in the food cards
+        for (int i = 0; i < foodCards.length; i++) {
+          String cardJson = foodCards[i];
+          try {
+            Map<String, dynamic> cardData = jsonDecode(cardJson);
+            String cardScanId = cardData['scan_id']?.toString() ?? '';
+            String cardName = cardData['name']?.toString() ?? 'Unknown';
 
-      // Load the consolidated nutrition data object (EXACTLY like FoodCardOpen.dart)
-      print('🔄 Attempting to load saved data for scanId: $_scanId');
+            if (cardScanId == _scanId) {
+              print('✅ Found food card with matching scanId: $_scanId');
 
-      // CRITICAL: Use AppEnv.key() to match the saving method
-      String loadKey = AppEnv.key('nutrition_data_$_scanId');
-      final consolidatedJson = prefs.getString(loadKey);
-      savedData = consolidatedJson;
-      dataSource = loadKey;
+              // Check if this food card has nutrition data
+              if (cardData.containsKey('nutrition_data')) {
+                Map<String, dynamic> nutritionData = cardData['nutrition_data'];
+                print(
+                    '✅ Found nutrition_data in food card (${nutritionData.length} nutrients)');
 
-      if (consolidatedJson != null) {
-        print(
-            '✅ Loaded consolidated JSON from key: $loadKey (first 200 chars): ${consolidatedJson.length > 200 ? consolidatedJson.substring(0, 200) + "..." : consolidatedJson}');
-      } else {
-        print('❌ Key "$loadKey" is NULL');
+                // Process the nutrition data directly from the food card
+                return _processNutritionDataFromFoodCard(nutritionData);
+              } else {
+                print('❌ Food card found but no nutrition_data field');
+              }
+            }
+          } catch (e) {
+            print('❌ Error parsing food card: $e');
+          }
+        }
+        print('❌ No matching scanId found in food_cards');
+      }
+
+      // Fallback: Try nutrition_cards StringList (legacy)
+      List<String>? nutritionCards = prefs.getStringList('nutrition_cards');
+
+      if (nutritionCards != null && nutritionCards.isNotEmpty) {
+        for (String cardJson in nutritionCards) {
+          try {
+            Map<String, dynamic> cardData = jsonDecode(cardJson);
+            String cardScanId = cardData['scanId']?.toString() ?? '';
+
+            if (cardScanId == _scanId) {
+              print('✅ Found nutrition data in legacy StringList');
+              return _processNutritionCardData(cardData);
+            }
+          } catch (e) {
+            print('❌ Error parsing nutrition card: $e');
+          }
+        }
+      }
+
+      // Fallback: Try individual backup keys
+      List<String> backupKeys = [
+        'nutrition_backup_$_scanId', // New backup from SnapFood.dart
+        'nutrition_card_$_scanId',
+        AppEnv.key('nutrition_data_$_scanId'),
+        AppEnv.key('PERMANENT_NUTRITION_$_scanId'), // Add AppEnv.key prefix
+        AppEnv.key('BULLETPROOF_NUTRITION_$_scanId'), // Add AppEnv.key prefix
+        AppEnv.key(
+            'food_nutrition_data_$_scanId'), // Add AppEnv.key prefix for food_nutrition_data
+        'BULLETPROOF_NUTRITION_$_scanId',
+        'PERMANENT_NUTRITION_$_scanId',
+        'nutrition_data_$_scanId',
+        'food_nutrition_data_$_scanId', // Without prefix
+      ];
+
+      print('🔄 Trying backup keys...');
+
+      for (String key in backupKeys) {
+        final String? data = prefs.getString(key);
+        if (data != null && data.isNotEmpty) {
+          try {
+            Map<String, dynamic> cardData = jsonDecode(data);
+            bool success = _processNutritionCardData(cardData);
+            if (success) {
+              return true;
+            }
+          } catch (e) {
+            // Silent fail
+          }
+        }
       }
 
       // If still not found, consider global but only if embedded scanId matches
-      if (savedData == null || savedData.isEmpty) {
-        String globalKey = 'PERMANENT_GLOBAL_NUTRITION_DATA';
-        print('🔄 Checking global key: "$globalKey"');
-        final globalData = prefs.getString(globalKey);
-        if (globalData != null && globalData.isNotEmpty) {
-          try {
-            final probe = jsonDecode(globalData);
-            final embeddedId =
-                probe is Map ? (probe['scanId']?.toString() ?? '') : '';
-            if (embeddedId == _scanId) {
-              savedData = globalData;
-              dataSource = globalKey;
-              print('✅ Using global data that matches scanId ($_scanId)');
-            } else {
-              print('⚠️ Ignoring global data (scanId $embeddedId != $_scanId)');
-            }
-          } catch (e) {
-            print('⚠️ Invalid JSON in global key; skipping: $e');
+      String globalKey = 'PERMANENT_GLOBAL_NUTRITION_DATA';
+      print('🔄 Checking global key: "$globalKey"');
+      final globalData = prefs.getString(globalKey);
+      if (globalData != null && globalData.isNotEmpty) {
+        try {
+          final probe = jsonDecode(globalData);
+          final embeddedId =
+              probe is Map ? (probe['scanId']?.toString() ?? '') : '';
+          if (embeddedId == _scanId) {
+            print('✅ Using global data that matches scanId ($_scanId)');
+            return _processNutritionCardData(probe);
+          } else {
+            print('⚠️ Ignoring global data (scanId $embeddedId != $_scanId)');
           }
-        } else {
-          print('❌ "$globalKey" is ${globalData == null ? "NULL" : "EMPTY"}');
+        } catch (e) {
+          print('⚠️ Invalid JSON in global key; skipping: $e');
         }
-      }
-
-      if (savedData != null && savedData.isNotEmpty) {
-        print(
-            '🔄 Found saved nutrition data from $dataSource, parsing JSON...');
-
-        Map<String, dynamic> data = jsonDecode(savedData);
-        // Validate embedded scanId
-        final embeddedId = data['scanId']?.toString() ?? '';
-        if (embeddedId.isNotEmpty && embeddedId != _scanId) {
-          print(
-              '⚠️ Data source $dataSource has scanId $embeddedId, expected $_scanId. Aborting load.');
-          return false;
-        }
-        print('🔄 Successfully parsed JSON data');
-        print('🔄 Data keys: ${data.keys.toList()}');
-        print('🔄 Data scanId: ${data['scanId']}');
-        print('🔄 Data timestamp: ${data['lastSaved'] ?? data['timestamp']}');
-
-        int vitaminCount = 0, mineralCount = 0, otherCount = 0;
-
-        // Load vitamins
-        if (data.containsKey('vitamins')) {
-          Map<String, dynamic> vitData = data['vitamins'];
-          print('🔄 Processing ${vitData.length} vitamins from saved data');
-
-          vitData.forEach((key, value) {
-            if (vitamins.containsKey(key)) {
-              double progress = (value['progress'] ?? 0.0).toDouble();
-              if (progress > 0) vitaminCount++;
-
-              vitamins[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: progress,
-                progressColor: _getProgressColor(progress),
-                hasInfo: value['hasInfo'] ?? false,
-              );
-
-              if (progress > 0) {
-                print(
-                    '✅ Restored vitamin $key: ${value['value']} (${value['percent']})');
-              }
-            }
-          });
-        } else {
-          print('❌ No vitamins data found in saved JSON');
-        }
-
-        // Load minerals
-        if (data.containsKey('minerals')) {
-          Map<String, dynamic> minData = data['minerals'];
-          print('🔄 Processing ${minData.length} minerals from saved data');
-
-          minData.forEach((key, value) {
-            if (minerals.containsKey(key)) {
-              double progress = (value['progress'] ?? 0.0).toDouble();
-              if (progress > 0) mineralCount++;
-
-              minerals[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: progress,
-                progressColor: _getProgressColor(progress),
-                hasInfo: value['hasInfo'] ?? false,
-              );
-
-              if (progress > 0) {
-                print(
-                    '✅ Restored mineral $key: ${value['value']} (${value['percent']})');
-              }
-            }
-          });
-        } else {
-          print('❌ No minerals data found in saved JSON');
-        }
-
-        // Load other nutrients
-        if (data.containsKey('other')) {
-          Map<String, dynamic> otherData = data['other'];
-          print(
-              '🔄 Processing ${otherData.length} other nutrients from saved data');
-
-          otherData.forEach((key, value) {
-            if (other.containsKey(key)) {
-              double progress = (value['progress'] ?? 0.0).toDouble();
-              if (progress > 0) otherCount++;
-
-              other[key] = NutrientInfo(
-                name: value['name'] ?? key,
-                value: value['value'] ?? '0',
-                percent: value['percent'] ?? '0%',
-                progress: progress,
-                progressColor: _getProgressColor(progress),
-                hasInfo: value['hasInfo'] ?? false,
-              );
-
-              if (progress > 0) {
-                print(
-                    '✅ Restored other nutrient $key: ${value['value']} (${value['percent']})');
-              }
-            }
-          });
-        } else {
-          print('❌ No other nutrients data found in saved JSON');
-        }
-
-        int totalLoaded = vitaminCount + mineralCount + otherCount;
-        // Persist loaded data to memory cache for quick reuse on re-entry
-        await NutritionDataManager.storeNutritionData(
-            _scanId, vitamins, minerals, other);
-        print('✅ ===== BULLETPROOF LOAD COMPLETE =====');
-        print('✅ Successfully loaded $totalLoaded nutrients with values');
-        print(
-            '✅ Vitamins: $vitaminCount, Minerals: $mineralCount, Other: $otherCount');
-        print('✅ Data source: $dataSource');
-        return true;
       } else {
-        print('❌ ===== BULLETPROOF LOAD FAILED =====');
-        print('❌ No saved nutrition data found in any key');
-        print(
-            '❌ Checked keys: PERMANENT_GLOBAL_NUTRITION_DATA, nutrition_data_$_scanId');
-        return false;
+        print('❌ "$globalKey" is ${globalData == null ? "NULL" : "EMPTY"}');
       }
+
+      print('❌ ===== BULLETPROOF LOAD FAILED =====');
+      print('❌ No saved nutrition data found in any key');
+      return false;
     } catch (e) {
       print('❌ ===== BULLETPROOF LOAD ERROR =====');
       print('❌ Error loading saved data: $e');
       print('❌ Stack trace: ${StackTrace.current}');
+      return false;
+    }
+  }
+
+  // DEDICATED STORAGE - Save nutrition data to a separate, reliable storage
+  Future<void> _saveNutritionDataToDedicatedStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Create nutrition data map in structured format
+      Map<String, dynamic> nutritionData = {
+        'scanId': _scanId,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'vitamins': {},
+        'minerals': {},
+        'other': {},
+      };
+
+      // Add all vitamins with values > 0
+      vitamins.forEach((key, value) {
+        if (value.progress > 0) {
+          nutritionData['vitamins'][key] = {
+            'name': value.name,
+            'value': value.value,
+            'percent': value.percent,
+            'progress': value.progress,
+            'progressColor': value.progressColor.value,
+            'hasInfo': value.hasInfo,
+          };
+        }
+      });
+
+      // Add all minerals with values > 0
+      minerals.forEach((key, value) {
+        if (value.progress > 0) {
+          nutritionData['minerals'][key] = {
+            'name': value.name,
+            'value': value.value,
+            'percent': value.percent,
+            'progress': value.progress,
+            'progressColor': value.progressColor.value,
+            'hasInfo': value.hasInfo,
+          };
+        }
+      });
+
+      // Add all other nutrients with values > 0
+      other.forEach((key, value) {
+        if (value.progress > 0) {
+          nutritionData['other'][key] = {
+            'name': value.name,
+            'value': value.value,
+            'percent': value.percent,
+            'progress': value.progress,
+            'progressColor': value.progressColor.value,
+            'hasInfo': value.hasInfo,
+          };
+        }
+      });
+
+      // Save to dedicated storage with multiple key formats for redundancy
+      String nutritionKey = AppEnv.key('nutrition_data_$_scanId');
+      await prefs.setString(nutritionKey, jsonEncode(nutritionData));
+
+      // Also save to non-prefixed key for compatibility
+      String nutritionKeyNoPrefix = 'nutrition_data_$_scanId';
+      await prefs.setString(nutritionKeyNoPrefix, jsonEncode(nutritionData));
+
+      // Save to bulletproof keys
+      await prefs.setString(
+          'BULLETPROOF_NUTRITION_$_scanId', jsonEncode(nutritionData));
+      await prefs.setString(
+          'staging_PERMANENT_NUTRITION_$_scanId', jsonEncode(nutritionData));
+    } catch (e) {
+      debugPrint('Error saving nutrition data: $e');
+    }
+  }
+
+  // NEW: Direct nutrition data loading function
+  Future<bool> _loadNutritionDataDirect() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Set<String> allKeys = prefs.getKeys();
+
+      // Look for any key that contains our scanId
+      for (String key in allKeys) {
+        if (key.contains(_scanId) && key.contains('nutrition')) {
+          final String? data = prefs.getString(key);
+          if (data != null && data.isNotEmpty) {
+            try {
+              Map<String, dynamic> cardData = jsonDecode(data);
+              bool success = _processNutritionCardData(cardData);
+              if (success) {
+                return true;
+              }
+            } catch (e) {
+              // Continue to next key
+            }
+          }
+        }
+      }
+
+      // Also try global keys
+      List<String> globalKeys = [
+        'PERMANENT_GLOBAL_NUTRITION_DATA',
+        'staging_GLOBAL_NUTRITION_BACKUP',
+      ];
+
+      for (String key in globalKeys) {
+        if (allKeys.contains(key)) {
+          final String? data = prefs.getString(key);
+          if (data != null && data.isNotEmpty) {
+            try {
+              Map<String, dynamic> cardData = jsonDecode(data);
+              String dataScanId = cardData['scanId']?.toString() ?? '';
+              if (dataScanId == _scanId) {
+                bool success = _processNutritionCardData(cardData);
+                if (success) {
+                  return true;
+                }
+              }
+            } catch (e) {
+              // Continue to next key
+            }
+          }
+        }
+      }
+
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Helper method to process nutrition data directly from food card
+  bool _processNutritionDataFromFoodCard(Map<String, dynamic> nutritionData) {
+    try {
+      debugPrint('Processing nutrition data from food card');
+
+      int vitaminCount = 0, mineralCount = 0, otherCount = 0;
+
+      // Process all micronutrients from the flat nutrition data
+      nutritionData.forEach((key, value) {
+        // Skip non-nutrient fields
+        if (['food_name', 'last_updated', 'protein', 'fat', 'carbs', 'calories']
+            .contains(key)) {
+          return;
+        }
+
+        // Convert value to double
+        double numericValue = 0.0;
+        if (value is num) {
+          numericValue = value.toDouble();
+        } else if (value is String) {
+          numericValue = double.tryParse(value) ?? 0.0;
+        }
+
+        // Categorize and process the nutrient
+        if (key.startsWith('vitamin_')) {
+          // Vitamin
+          String vitaminKey = key.replaceFirst('vitamin_', '');
+          if (vitamins.containsKey(vitaminKey)) {
+            double progress =
+                _calculateProgress(numericValue, vitaminKey, 'vitamin');
+            if (progress > 0) vitaminCount++;
+
+            vitamins[vitaminKey] = NutrientInfo(
+              name: 'Vitamin ${vitaminKey.toUpperCase()}',
+              value: '${numericValue.toStringAsFixed(2)}',
+              percent: '${(progress * 100).toStringAsFixed(1)}%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: true,
+            );
+
+            if (progress > 0) {
+              debugPrint('Restored vitamin $vitaminKey: $numericValue');
+            }
+          }
+        } else if ([
+          'calcium',
+          'chloride',
+          'chromium',
+          'copper',
+          'fluoride',
+          'iodine',
+          'iron',
+          'magnesium',
+          'manganese',
+          'molybdenum',
+          'phosphorus',
+          'potassium',
+          'selenium',
+          'sodium',
+          'zinc'
+        ].contains(key)) {
+          // Mineral
+          if (minerals.containsKey(key)) {
+            double progress = _calculateProgress(numericValue, key, 'mineral');
+            if (progress > 0) mineralCount++;
+
+            minerals[key] = NutrientInfo(
+              name: key.substring(0, 1).toUpperCase() + key.substring(1),
+              value: '${numericValue.toStringAsFixed(2)}',
+              percent: '${(progress * 100).toStringAsFixed(1)}%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: true,
+            );
+
+            if (progress > 0) {
+              debugPrint('Restored mineral $key: $numericValue');
+            }
+          }
+        } else if ([
+          'fiber',
+          'cholesterol',
+          'sugar',
+          'saturated_fats',
+          'omega_3',
+          'omega_6'
+        ].contains(key)) {
+          // Other nutrient
+          if (other.containsKey(key)) {
+            double progress = _calculateProgress(numericValue, key, 'other');
+            if (progress > 0) otherCount++;
+
+            String displayName = key.replaceAll('_', ' ');
+            displayName = displayName
+                .split(' ')
+                .map((word) =>
+                    word.substring(0, 1).toUpperCase() + word.substring(1))
+                .join(' ');
+
+            other[key] = NutrientInfo(
+              name: displayName,
+              value: '${numericValue.toStringAsFixed(2)}',
+              percent: '${(progress * 100).toStringAsFixed(1)}%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: true,
+            );
+
+            if (progress > 0) {
+              debugPrint('Restored other nutrient $key: $numericValue');
+            }
+          }
+        }
+      });
+
+      int totalLoaded = vitaminCount + mineralCount + otherCount;
+      print('✅ ===== FOOD CARD NUTRITION PROCESSING COMPLETE =====');
+      print('✅ Successfully loaded $totalLoaded nutrients with values');
+      print(
+          '✅ Vitamins: $vitaminCount, Minerals: $mineralCount, Other: $otherCount');
+      return totalLoaded > 0;
+    } catch (e) {
+      print('❌ Error processing nutrition data from food card: $e');
+      return false;
+    }
+  }
+
+  // Helper method to calculate progress percentage
+  double _calculateProgress(double value, String nutrient, String category) {
+    // This is a simplified calculation - you might want to use actual daily values
+    // For now, we'll use a basic threshold approach
+    Map<String, double> dailyValues = {
+      // Vitamins
+      'a': 700.0, 'c': 75.0, 'd': 15.0, 'e': 15.0, 'k': 90.0,
+      'b1': 1.1, 'b2': 1.1, 'b3': 14.0, 'b5': 5.0, 'b6': 1.3, 'b7': 30.0,
+      'b9': 400.0, 'b12': 2.4,
+      // Minerals
+      'calcium': 1000.0, 'chloride': 2300.0, 'chromium': 35.0, 'copper': 900.0,
+      'fluoride': 4.0,
+      'iodine': 150.0, 'iron': 18.0, 'magnesium': 400.0, 'manganese': 2.3,
+      'molybdenum': 45.0,
+      'phosphorus': 700.0, 'potassium': 3500.0, 'selenium': 55.0,
+      'sodium': 2300.0, 'zinc': 11.0,
+      // Other
+      'fiber': 25.0, 'cholesterol': 300.0, 'sugar': 50.0,
+      'saturated_fats': 20.0, 'omega_3': 1000.0, 'omega_6': 17000.0,
+    };
+
+    double dailyValue = dailyValues[nutrient] ?? 100.0;
+    double progress = (value / dailyValue).clamp(0.0, 1.0);
+    return progress;
+  }
+
+  // Helper method to process nutrition card data
+  bool _processNutritionCardData(Map<String, dynamic> data) {
+    try {
+      print('🔄 Processing nutrition card data...');
+      print('🔄 Data keys: ${data.keys.toList()}');
+      print('🔄 Data scanId: ${data['scanId']}');
+      print('🔄 Data timestamp: ${data['lastSaved'] ?? data['timestamp']}');
+
+      int vitaminCount = 0, mineralCount = 0, otherCount = 0;
+
+      // Load vitamins
+      if (data.containsKey('vitamins')) {
+        Map<String, dynamic> vitaminData = data['vitamins'];
+        print('🔄 Processing ${vitaminData.length} vitamins from saved data');
+
+        vitaminData.forEach((key, value) {
+          if (vitamins.containsKey(key)) {
+            double progress = (value['progress'] ?? 0.0).toDouble();
+            if (progress > 0) vitaminCount++;
+
+            vitamins[key] = NutrientInfo(
+              name: value['name'] ?? key,
+              value: value['value'] ?? '0',
+              percent: value['percent'] ?? '0%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: value['hasInfo'] ?? false,
+            );
+
+            if (progress > 0) {
+              print(
+                  '✅ Restored vitamin $key: ${value['value']} (${value['percent']})');
+            }
+          }
+        });
+      } else {
+        print('❌ No vitamins data found in saved JSON');
+      }
+
+      // Load minerals
+      if (data.containsKey('minerals')) {
+        Map<String, dynamic> mineralData = data['minerals'];
+        print('🔄 Processing ${mineralData.length} minerals from saved data');
+
+        mineralData.forEach((key, value) {
+          if (minerals.containsKey(key)) {
+            double progress = (value['progress'] ?? 0.0).toDouble();
+            if (progress > 0) mineralCount++;
+
+            minerals[key] = NutrientInfo(
+              name: value['name'] ?? key,
+              value: value['value'] ?? '0',
+              percent: value['percent'] ?? '0%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: value['hasInfo'] ?? false,
+            );
+
+            if (progress > 0) {
+              print(
+                  '✅ Restored mineral $key: ${value['value']} (${value['percent']})');
+            }
+          }
+        });
+      } else {
+        print('❌ No minerals data found in saved JSON');
+      }
+
+      // Load other nutrients
+      if (data.containsKey('other')) {
+        Map<String, dynamic> otherData = data['other'];
+        print(
+            '🔄 Processing ${otherData.length} other nutrients from saved data');
+
+        otherData.forEach((key, value) {
+          if (other.containsKey(key)) {
+            double progress = (value['progress'] ?? 0.0).toDouble();
+            if (progress > 0) otherCount++;
+
+            other[key] = NutrientInfo(
+              name: value['name'] ?? key,
+              value: value['value'] ?? '0',
+              percent: value['percent'] ?? '0%',
+              progress: progress,
+              progressColor: _getProgressColor(progress),
+              hasInfo: value['hasInfo'] ?? false,
+            );
+
+            if (progress > 0) {
+              print(
+                  '✅ Restored other nutrient $key: ${value['value']} (${value['percent']})');
+            }
+          }
+        });
+      } else {
+        print('❌ No other nutrients data found in saved JSON');
+      }
+
+      int totalLoaded = vitaminCount + mineralCount + otherCount;
+      print('✅ ===== NUTRITION CARD PROCESSING COMPLETE =====');
+      print('✅ Successfully loaded $totalLoaded nutrients with values');
+      print(
+          '✅ Vitamins: $vitaminCount, Minerals: $mineralCount, Other: $otherCount');
+      return totalLoaded > 0;
+    } catch (e) {
+      print('❌ Error processing nutrition card data: $e');
       return false;
     }
   }
