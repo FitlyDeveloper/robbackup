@@ -732,58 +732,7 @@ Rules:
   }
 }
 
-// Process direct response with all nutrients already provided
-function processDirectResponse(directResponse) {
-  console.log('🔬 Processing direct response with complete nutrient data');
-  
-  // Ensure all required fields are present
-  const processed = {
-    meal_name: directResponse.meal_name || 'Analyzed Meal',
-    calories: directResponse.calories || '0',
-    protein: directResponse.protein || '0',
-    fat: directResponse.fat || '0',
-    carbs: directResponse.carbs || '0',
-    ingredients: directResponse.ingredients || [],
-    // Include all micronutrients
-    vitamin_a: directResponse.vitamin_a || '0',
-    vitamin_c: directResponse.vitamin_c || '0',
-    vitamin_d: directResponse.vitamin_d || '0',
-    vitamin_e: directResponse.vitamin_e || '0',
-    vitamin_k: directResponse.vitamin_k || '0',
-    vitamin_b1: directResponse.vitamin_b1 || '0',
-    vitamin_b2: directResponse.vitamin_b2 || '0',
-    vitamin_b3: directResponse.vitamin_b3 || '0',
-    vitamin_b5: directResponse.vitamin_b5 || '0',
-    vitamin_b6: directResponse.vitamin_b6 || '0',
-    vitamin_b7: directResponse.vitamin_b7 || '0',
-    vitamin_b9: directResponse.vitamin_b9 || '0',
-    vitamin_b12: directResponse.vitamin_b12 || '0',
-    calcium: directResponse.calcium || '0',
-    chloride: directResponse.chloride || '0',
-    chromium: directResponse.chromium || '0',
-    copper: directResponse.copper || '0',
-    fluoride: directResponse.fluoride || '0',
-    iodine: directResponse.iodine || '0',
-    iron: directResponse.iron || '0',
-    magnesium: directResponse.magnesium || '0',
-    manganese: directResponse.manganese || '0',
-    molybdenum: directResponse.molybdenum || '0',
-    phosphorus: directResponse.phosphorus || '0',
-    potassium: directResponse.potassium || '0',
-    selenium: directResponse.selenium || '0',
-    sodium: directResponse.sodium || '0',
-    zinc: directResponse.zinc || '0',
-    fiber: directResponse.fiber || '0',
-    cholesterol: directResponse.cholesterol || '0',
-    sugar: directResponse.sugar || '0',
-    saturated_fats: directResponse.saturated_fats || '0',
-    omega_3: directResponse.omega_3 || '0',
-    omega_6: directResponse.omega_6 || '0'
-  };
-  
-  console.log('✅ Processed direct response with complete nutrient profile');
-  return processed;
-}
+
 
 // Process Vision API response into our expected format
 function processVisionResponse(visionResponse) {
@@ -1385,8 +1334,8 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-      // COMPREHENSIVE prompt for accurate food analysis with micronutrients
-      const systemPrompt = `You are a professional nutritionist and food analyst. ANALYZE THE VISUAL DETAILS CAREFULLY and provide COMPLETE nutritional information:
+      // CLEAN prompt - let OpenAI analyze the actual image with proper format
+      const systemPrompt = `You are a professional food analyst. ANALYZE THE VISUAL DETAILS CAREFULLY:
 
 VISUAL ANALYSIS CHECKLIST:
 - Orange/golden cubes = likely sweet potato or regular potato
@@ -1403,70 +1352,29 @@ CRITICAL RULES:
 - Kimchi = fermented cabbage, often reddish/orange color
 - Chicken = white/light meat pieces with fibrous texture
 
-Return ONLY valid JSON with COMPLETE nutritional data:
+Return ONLY valid JSON:
 
 {
   "meal_name": "ACCURATE DESCRIPTIVE NAME based on what you see",
-  "calories": "TOTAL_CALORIES",
-  "protein": "TOTAL_PROTEIN_G",
-  "fat": "TOTAL_FAT_G", 
-  "carbs": "TOTAL_CARBS_G",
   "ingredients": [
     {
       "name": "ONLY ingredients you can clearly see",
-      "amount": "ESTIMATED_AMOUNT",
-      "calories": "CALORIES_FOR_THIS_INGREDIENT",
-      "protein": "PROTEIN_G_FOR_THIS_INGREDIENT",
-      "fat": "FAT_G_FOR_THIS_INGREDIENT", 
-      "carbs": "CARBS_G_FOR_THIS_INGREDIENT"
+      "weight_g": 150,
+      "calories": 75,
+      "protein_g": 3,
+      "fat_g": 1.5,
+      "carbs_g": 15
     }
-  ],
-  "vitamin_a": "VITAMIN_A_MCG",
-  "vitamin_c": "VITAMIN_C_MG",
-  "vitamin_d": "VITAMIN_D_MCG",
-  "vitamin_e": "VITAMIN_E_MG",
-  "vitamin_k": "VITAMIN_K_MCG",
-  "vitamin_b1": "VITAMIN_B1_MG",
-  "vitamin_b2": "VITAMIN_B2_MG",
-  "vitamin_b3": "VITAMIN_B3_MG",
-  "vitamin_b5": "VITAMIN_B5_MG",
-  "vitamin_b6": "VITAMIN_B6_MG",
-  "vitamin_b7": "VITAMIN_B7_MCG",
-  "vitamin_b9": "VITAMIN_B9_MCG",
-  "vitamin_b12": "VITAMIN_B12_MCG",
-  "calcium": "CALCIUM_MG",
-  "chloride": "CHLORIDE_MG",
-  "chromium": "CHROMIUM_MCG",
-  "copper": "COPPER_MCG",
-  "fluoride": "FLUORIDE_MG",
-  "iodine": "IODINE_MCG",
-  "iron": "IRON_MG",
-  "magnesium": "MAGNESIUM_MG",
-  "manganese": "MANGANESE_MG",
-  "molybdenum": "MOLYBDENUM_MCG",
-  "phosphorus": "PHOSPHORUS_MG",
-  "potassium": "POTASSIUM_MG",
-  "selenium": "SELENIUM_MCG",
-  "sodium": "SODIUM_MG",
-  "zinc": "ZINC_MG",
-  "fiber": "FIBER_G",
-  "cholesterol": "CHOLESTEROL_MG",
-  "sugar": "SUGAR_G",
-  "saturated_fats": "SATURATED_FATS_G",
-  "omega_3": "OMEGA_3_MG",
-  "omega_6": "OMEGA_6_G"
+  ]
 }
 
 Rules:
 1. Identify ALL food items visible in the image
-2. Estimate amounts based on the actual portion size you see
+2. Estimate weight_g based on the actual portion size you see
 3. Use specific food names
 4. Break down complex dishes into components
 5. Include all visible ingredients, garnishes, and components
-6. Provide ACCURATE micronutrient values based on the identified foods
-7. Use REAL nutritional data - don't make up values
-8. NO extra text outside JSON structure
-9. All micronutrient values must be realistic for the identified foods`;
+6. NO extra text outside JSON structure`;
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
@@ -1498,12 +1406,12 @@ Rules:
                 { 
                   type: "text", 
                   text: lightning_fast ? 
-                    "VISUAL ANALYSIS: Look at colors, textures, shapes. Orange cubes = sweet potato. White creamy = yogurt/sauce. Meat pieces = chicken/beef by texture. Reddish fermented vegetables = kimchi. Be PRECISE about what you observe visually, don't assume based on typical combinations. Provide ACCURATE micronutrient values for the identified foods." :
+                    "VISUAL ANALYSIS: Look at colors, textures, shapes. Orange cubes = sweet potato. White creamy = yogurt/sauce. Meat pieces = chicken/beef by texture. Reddish fermented vegetables = kimchi. Be PRECISE about what you observe visually, don't assume based on typical combinations." :
                     (ultra_fast ? 
-                      "Analyze visual characteristics: colors, textures, shapes. Identify by what you see, not what you expect. Include COMPLETE micronutrient analysis for all identified foods." :
+                      "Analyze visual characteristics: colors, textures, shapes. Identify by what you see, not what you expect." :
                       (fast_mode ? 
-                        "Look at visual details: orange cubes, white cream, meat texture, fermented vegetables. Provide detailed nutritional analysis including vitamins and minerals." : 
-                        "Carefully analyze visual characteristics and identify ingredients by their appearance. Include comprehensive micronutrient data for accurate nutrition tracking."))
+                        "Look at visual details: orange cubes, white cream, meat texture, fermented vegetables." : 
+                        "Carefully analyze visual characteristics and identify ingredients by their appearance."))
                 },
                 { 
                   type: "image_url", 
@@ -1555,17 +1463,9 @@ Rules:
 
         console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
         
-        // Process the response - handle both old and new formats
-        let finalResponse;
-        
-        if (jsonResponse.ingredients && Array.isArray(jsonResponse.ingredients)) {
-          // New format with ingredients array - expand to full nutrients
-          const expandedResponse = expandToFullNutrients(jsonResponse);
-          finalResponse = processVisionResponse(expandedResponse);
-        } else {
-          // Direct format with all nutrients already provided
-          finalResponse = processDirectResponse(jsonResponse);
-        }
+        // Expand simple response to full nutrient profile using real nutritional knowledge
+        const expandedResponse = expandToFullNutrients(jsonResponse);
+        const finalResponse = processVisionResponse(expandedResponse);
         
         // Cache lightning/ultra-fast responses for instant future access
         if (lightning_fast || ultra_fast) {
