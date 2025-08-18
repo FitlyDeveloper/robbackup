@@ -224,12 +224,12 @@ async function processAndAnalyzeImage(jobId, userId, image) {
       message: 'Image processed, calling OpenAI API...'
     });
 
-                   // SIMPLIFIED prompt - focus on essential nutrients to avoid JSON parsing errors
-      const systemPrompt = `You are a professional nutritionist and food analyst. Give this dish an APPETIZING RESTAURANT NAME, then identify ingredients with essential nutritional information.
+                                       // COMPREHENSIVE prompt - request ALL 34 micronutrients tracked on nutrition.dart screen
+       const systemPrompt = `You are a professional nutritionist and food analyst. Give this dish an APPETIZING RESTAURANT NAME, then identify ingredients with COMPLETE nutritional information including ALL vitamins, minerals, and other nutrients.
 
 Estimate the actual serving size of each item based on what you observe in the image.
 
-Return ONLY valid JSON with essential nutrition data:
+Return ONLY valid JSON with COMPLETE nutrition data including ALL 34 micronutrients:
 
 {
   "meal_name": "GOURMET RESTAURANT NAME (like 'Mediterranean Chicken Bowl' or 'Artisan Beef Sandwich')",
@@ -241,20 +241,40 @@ Return ONLY valid JSON with essential nutrition data:
       "protein_g": 3,
       "fat_g": 1.5,
       "carbs_g": 15,
+      "vitamin_a": 0,
       "vitamin_c": 0,
+      "vitamin_d": 0,
+      "vitamin_e": 0,
+      "vitamin_k": 0,
       "vitamin_b1": 0,
+      "vitamin_b2": 0,
       "vitamin_b3": 0,
+      "vitamin_b5": 0,
       "vitamin_b6": 0,
+      "vitamin_b7": 0,
+      "vitamin_b9": 0,
+      "vitamin_b12": 0,
       "calcium": 0,
+      "chloride": 0,
+      "chromium": 0,
+      "copper": 0,
+      "fluoride": 0,
+      "iodine": 0,
       "iron": 0,
       "magnesium": 0,
+      "manganese": 0,
+      "molybdenum": 0,
       "phosphorus": 0,
       "potassium": 0,
+      "selenium": 0,
+      "sodium": 0,
       "zinc": 0,
       "fiber": 0,
       "cholesterol": 0,
       "sugar": 0,
-      "saturated_fats": 0
+      "saturated_fats": 0,
+      "omega_3": 0,
+      "omega_6": 0
     }
   ]
 }
@@ -265,7 +285,7 @@ Rules:
 3. Use specific food names
 4. Break down complex dishes into components
 5. Include all visible ingredients, garnishes, and components
-6. Provide ACCURATE values for the essential nutrients listed
+6. Provide ACCURATE values for ALL 34 nutrients listed above
 7. NO extra text outside JSON structure`;
 
     let finalResponse = null;
@@ -299,7 +319,7 @@ Rules:
               {
                 role: "user",
                 content: [
-                                     { type: "text", text: "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image. Provide essential nutritional analysis including vitamins, minerals, and other nutrients for each ingredient." },
+                                     { type: "text", text: "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image. Provide COMPLETE nutritional analysis including ALL vitamins, minerals, and other nutrients for each ingredient." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
@@ -1077,8 +1097,8 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       // Use the original image without compression
       const processedImage = image;
       
-             // SIMPLIFIED prompt - focus on essential nutrients to avoid JSON parsing errors
-       const systemPrompt = `You are a professional nutritionist and food analyst. ANALYZE THE VISUAL DETAILS CAREFULLY and provide accurate nutritional information:
+                    // COMPREHENSIVE prompt - request ALL 34 micronutrients tracked on nutrition.dart screen
+        const systemPrompt = `You are a professional nutritionist and food analyst. ANALYZE THE VISUAL DETAILS CAREFULLY and provide COMPLETE nutritional information including ALL vitamins, minerals, and other nutrients:
 
 VISUAL ANALYSIS CHECKLIST:
 - Orange/golden cubes = likely sweet potato or regular potato
@@ -1095,7 +1115,7 @@ CRITICAL RULES:
 - Kimchi = fermented cabbage, often reddish/orange color
 - Chicken = white/light meat pieces with fibrous texture
 
-Return ONLY valid JSON with essential nutrition data:
+Return ONLY valid JSON with COMPLETE nutrition data including ALL 34 micronutrients:
 
 {
   "meal_name": "ACCURATE DESCRIPTIVE NAME based on what you see",
@@ -1107,20 +1127,40 @@ Return ONLY valid JSON with essential nutrition data:
       "protein_g": 3,
       "fat_g": 1.5,
       "carbs_g": 15,
+      "vitamin_a": 0,
       "vitamin_c": 0,
+      "vitamin_d": 0,
+      "vitamin_e": 0,
+      "vitamin_k": 0,
       "vitamin_b1": 0,
+      "vitamin_b2": 0,
       "vitamin_b3": 0,
+      "vitamin_b5": 0,
       "vitamin_b6": 0,
+      "vitamin_b7": 0,
+      "vitamin_b9": 0,
+      "vitamin_b12": 0,
       "calcium": 0,
+      "chloride": 0,
+      "chromium": 0,
+      "copper": 0,
+      "fluoride": 0,
+      "iodine": 0,
       "iron": 0,
       "magnesium": 0,
+      "manganese": 0,
+      "molybdenum": 0,
       "phosphorus": 0,
       "potassium": 0,
+      "selenium": 0,
+      "sodium": 0,
       "zinc": 0,
       "fiber": 0,
       "cholesterol": 0,
       "sugar": 0,
-      "saturated_fats": 0
+      "saturated_fats": 0,
+      "omega_3": 0,
+      "omega_6": 0
     }
   ]
 }
@@ -1131,7 +1171,7 @@ Rules:
 3. Use specific food names
 4. Break down complex dishes into components
 5. Include all visible ingredients, garnishes, and components
-6. Provide ACCURATE values for the essential nutrients listed
+6. Provide ACCURATE values for ALL 34 nutrients listed above
 7. NO extra text outside JSON structure`;
 
       // Make OpenAI API call with timeout
@@ -1164,12 +1204,12 @@ Rules:
                                  { 
                    type: "text", 
                    text: lightning_fast ? 
-                     "VISUAL ANALYSIS: Look at colors, textures, shapes. Orange cubes = sweet potato. White creamy = yogurt/sauce. Meat pieces = chicken/beef by texture. Reddish fermented vegetables = kimchi. Be PRECISE about what you observe visually, don't assume based on typical combinations. Provide ACCURATE values for the essential nutrients listed." :
+                     "VISUAL ANALYSIS: Look at colors, textures, shapes. Orange cubes = sweet potato. White creamy = yogurt/sauce. Meat pieces = chicken/beef by texture. Reddish fermented vegetables = kimchi. Be PRECISE about what you observe visually, don't assume based on typical combinations. Provide ACCURATE values for ALL 34 nutrients including vitamins, minerals, and other nutrients." :
                      (ultra_fast ? 
-                       "Analyze visual characteristics: colors, textures, shapes. Identify by what you see, not what you expect. Include essential nutrient analysis for all identified foods." :
+                       "Analyze visual characteristics: colors, textures, shapes. Identify by what you see, not what you expect. Include COMPLETE nutrient analysis for all identified foods including ALL vitamins, minerals, and other nutrients." :
                        (fast_mode ? 
-                         "Look at visual details: orange cubes, white cream, meat texture, fermented vegetables. Provide nutritional analysis including essential vitamins and minerals." : 
-                         "Carefully analyze visual characteristics and identify ingredients by their appearance. Provide essential nutrition data including vitamins, minerals, and other nutrients."))
+                         "Look at visual details: orange cubes, white cream, meat texture, fermented vegetables. Provide COMPLETE nutritional analysis including ALL vitamins, minerals, and other nutrients." : 
+                         "Carefully analyze visual characteristics and identify ingredients by their appearance. Provide COMPLETE nutrition data including ALL 34 vitamins, minerals, and other nutrients."))
                  },
                 { 
                   type: "image_url", 
