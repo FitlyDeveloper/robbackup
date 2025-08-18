@@ -789,7 +789,7 @@ function processVisionResponse(visionResponse) {
   Object.entries(vitaminsMap).forEach(([nestedKey, flatKey]) => {
     const val = sumNested(
       ing => ing.vitamins ? ing.vitamins[nestedKey] : 0,
-      ing => ing[nestedKey.replace(/_.+$/, '')] // rough fallback, usually 0 for vitamins
+      ing => ing[flatKey] || 0 // Use the flat key directly from original response
     );
     if (val > 0) response[flatKey] = +(val.toFixed(2));
   });
@@ -815,7 +815,7 @@ function processVisionResponse(visionResponse) {
   Object.entries(mineralsMap).forEach(([nestedKey, flatKey]) => {
     const val = sumNested(
       ing => ing.minerals ? ing.minerals[nestedKey] : 0,
-      ing => ing[nestedKey.replace(/_.+$/, '')]
+      ing => ing[flatKey] || 0 // Use the flat key directly from original response
     );
     if (val > 0) response[flatKey] = +(val.toFixed(2));
   });
@@ -832,11 +832,7 @@ function processVisionResponse(visionResponse) {
   Object.entries(otherMap).forEach(([nestedKey, flatKey]) => {
     const val = sumNested(
       ing => ing.other ? ing.other[nestedKey] : 0,
-      ing => {
-        // Map nested key back to flat (e.g., fiber_g -> fiber)
-        const flat = nestedKey.replace(/_(g|mg)$/,'');
-        return ing[flat];
-      }
+      ing => ing[flatKey] || 0 // Use the flat key directly from original response
     );
     if (val > 0) response[flatKey] = +(val.toFixed(2));
   });
