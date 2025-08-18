@@ -101,6 +101,62 @@ function getJobStatus(jobId) {
   }
 }
 
+// ===== JSON REPAIR HELPERS (no fallbacks, formatting only) =====
+function extractBalancedJson(text) {
+  if (!text || typeof text !== 'string') return null;
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let quote = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const prev = i > 0 ? text[i - 1] : '';
+    if (inString) {
+      if (ch === quote && prev !== '\\') {
+        inString = false;
+        quote = '';
+      }
+      continue;
+    }
+    if (ch === '"' || ch === '\'') {
+      inString = true;
+      quote = ch;
+      continue;
+    }
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
+function repairJsonFormat(raw) {
+  if (!raw || typeof raw !== 'string') return raw;
+  let s = raw.trim();
+  // Strip markdown fences
+  s = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+  // Extract main JSON object if extra prose surrounds it
+  const embedded = extractBalancedJson(s);
+  if (embedded) s = embedded;
+  // Normalize smart quotes
+  s = s.replace(/[“”]/g, '"').replace(/[‘’]/g, '\'');
+  // Quote unquoted property names: key: value -> "key": value
+  s = s.replace(/([,{\n\r\t\s])([A-Za-z_][A-Za-z0-9_]*)(\s*):/g, '$1"$2"$3:');
+  // Convert single-quoted strings to double-quoted
+  s = s.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+  // Remove trailing commas
+  s = s.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+  // Collapse duplicate commas
+  s = s.replace(/,\s*,/g, ',');
+  return s;
+}
+
 // Convert flat nutrient structure from OpenAI to nested structure expected by app
 function convertFlatNutrientsToNested(ingredients) {
   return ingredients.map(ingredient => {
@@ -1337,12 +1393,9 @@ Rules:
          console.log('🔥 JSON parse failed - attempting repair:', parseError.message);
          
          // ROBUST JSON REPAIR SYSTEM
-         let repairedContent = content.trim();
+         let repairedContent = repairJsonFormat(content);
          
-         // Remove markdown code blocks if present
-         repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-         
-         // Fix unterminated strings by finding the last complete object
+         // Additional fix: unterminated strings by finding the last complete object
          if (parseError.message.includes('Unterminated string')) {
            console.log('🔧 Attempting to fix unterminated string...');
            
@@ -1382,17 +1435,11 @@ Rules:
            }
          }
          
-         // Fix common JSON issues
+         // Final tidy pass for commas/whitespace
          repairedContent = repairedContent
-           .replace(/,\s*}/g, '}')     // Remove trailing commas before }
-           .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
-           .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
-           .replace(/:\s*,/g, ': null,')       // Fix missing values
-           .replace(/,\s*,/g, ',')             // Fix double commas
-           .replace(/"\s*$/g, '": null')       // Fix trailing quotes
-           .replace(/,\s*$/g, '')              // Fix trailing commas
-           .replace(/\}\s*$/g, '}')            // Clean up trailing whitespace
-           .replace(/\]\s*$/g, ']');           // Clean up trailing whitespace
+           .replace(/,\s*}/g, '}')
+           .replace(/,\s*]/g, ']')
+           .replace(/,\s*,/g, ',');
          
          // Try to parse the repaired JSON
          try {
