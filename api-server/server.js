@@ -415,17 +415,37 @@ function getRealUSDANutrients(foodName, carbs, protein, fat) {
     nutrients.fiber = 6.7; nutrients.omega_3 = 111;
   }
   
-  // ENHANCED Generic estimates for unmatched foods - ENSURE ALL FOODS GET NUTRIENTS
-  else if (foodName.includes('fruit') || foodName.includes('berry')) {
-    nutrients.vitamin_C = Math.max(carbs * 3, 15);
-    nutrients.vitamin_A = Math.max(carbs * 2, 8);
-    nutrients.potassium = Math.max(carbs * 12, 120);
-    nutrients.fiber = Math.max(carbs * 0.4, 2);
-    nutrients.sugar = Math.max(carbs * 0.8, 6);
-    nutrients.calcium = Math.max(carbs * 1.5, 10);
-    nutrients.iron = Math.max(carbs * 0.05, 0.3);
-    nutrients.magnesium = Math.max(carbs * 1, 8);
-  }
+     // SWEETS & DESSERTS - CRITICAL FIX
+   else if (foodName.includes('doughnut') || foodName.includes('donut')) {
+     nutrients.sugar = Math.max(carbs * 0.6, 15); // Doughnuts are high in sugar
+     nutrients.saturated_fats = Math.max(fat * 0.4, 3); // Doughnuts have saturated fats
+     nutrients.cholesterol = Math.max(fat * 2, 20); // From eggs/butter
+     nutrients.fiber = Math.max(carbs * 0.05, 0.5); // Very low fiber
+     // No significant vitamins/minerals in doughnuts
+   }
+   else if (foodName.includes('cake') || foodName.includes('cookie') || foodName.includes('pastry')) {
+     nutrients.sugar = Math.max(carbs * 0.5, 12);
+     nutrients.saturated_fats = Math.max(fat * 0.3, 2);
+     nutrients.cholesterol = Math.max(fat * 1.5, 15);
+     nutrients.fiber = Math.max(carbs * 0.03, 0.3);
+   }
+   else if (foodName.includes('chocolate') || foodName.includes('candy')) {
+     nutrients.sugar = Math.max(carbs * 0.7, 20);
+     nutrients.saturated_fats = Math.max(fat * 0.5, 4);
+     nutrients.cholesterol = Math.max(fat * 1, 10);
+     nutrients.fiber = Math.max(carbs * 0.02, 0.2);
+   }
+   // ENHANCED Generic estimates for unmatched foods - ENSURE ALL FOODS GET NUTRIENTS
+   else if (foodName.includes('fruit') || foodName.includes('berry')) {
+     nutrients.vitamin_C = Math.max(carbs * 3, 15);
+     nutrients.vitamin_A = Math.max(carbs * 2, 8);
+     nutrients.potassium = Math.max(carbs * 12, 120);
+     nutrients.fiber = Math.max(carbs * 0.4, 2);
+     nutrients.sugar = Math.max(carbs * 0.8, 6);
+     nutrients.calcium = Math.max(carbs * 1.5, 10);
+     nutrients.iron = Math.max(carbs * 0.05, 0.3);
+     nutrients.magnesium = Math.max(carbs * 1, 8);
+   }
   else if (foodName.includes('vegetable') || foodName.includes('green') || foodName.includes('salad')) {
     nutrients.vitamin_A = Math.max(carbs * 8, 25);
     nutrients.vitamin_C = Math.max(carbs * 4, 20);
@@ -455,20 +475,31 @@ function getRealUSDANutrients(foodName, carbs, protein, fat) {
     nutrients.potassium = Math.max(protein * 15, 280);
     nutrients.iron = Math.max(protein * 0.3, 0.8);
   }
-  else {
-    // FALLBACK for ANY unrecognized food - ensure it gets SOME nutrients
-    nutrients.vitamin_C = Math.max(carbs * 1.5, 5);
-    nutrients.vitamin_A = Math.max(carbs * 1, 3);
-    nutrients.calcium = Math.max(carbs * 2 + protein * 3, 15);
-    nutrients.iron = Math.max(protein * 0.3 + carbs * 0.1, 0.5);
-    nutrients.magnesium = Math.max(carbs * 1.5 + protein * 1, 10);
-    nutrients.potassium = Math.max(carbs * 8 + protein * 5, 100);
-    nutrients.phosphorus = Math.max(protein * 6 + carbs * 2, 50);
-    nutrients.zinc = Math.max(protein * 0.2, 0.5);
-    nutrients.fiber = Math.max(carbs * 0.2, 1);
-    nutrients.vitamin_B3 = Math.max(protein * 0.8, 2);
-    nutrients.vitamin_B6 = Math.max(protein * 0.1, 0.1);
-  }
+     else {
+     // FALLBACK for ANY unrecognized food - ensure it gets SOME nutrients
+     // BUT DON'T GIVE RANDOM VITAMIN C TO EVERYTHING!
+     nutrients.calcium = Math.max(carbs * 2 + protein * 3, 15);
+     nutrients.iron = Math.max(protein * 0.3 + carbs * 0.1, 0.5);
+     nutrients.magnesium = Math.max(carbs * 1.5 + protein * 1, 10);
+     nutrients.potassium = Math.max(carbs * 8 + protein * 5, 100);
+     nutrients.phosphorus = Math.max(protein * 6 + carbs * 2, 50);
+     nutrients.zinc = Math.max(protein * 0.2, 0.5);
+     nutrients.fiber = Math.max(carbs * 0.2, 1);
+     nutrients.vitamin_B3 = Math.max(protein * 0.8, 2);
+     nutrients.vitamin_B6 = Math.max(protein * 0.1, 0.1);
+     
+     // Only give vitamin C to foods that might actually have it
+     if (foodName.includes('citrus') || foodName.includes('orange') || foodName.includes('lemon') || 
+         foodName.includes('lime') || foodName.includes('grapefruit') || foodName.includes('tangerine')) {
+       nutrients.vitamin_C = Math.max(carbs * 3, 30);
+     }
+     
+     // Only give vitamin A to foods that might actually have it
+     if (foodName.includes('carrot') || foodName.includes('sweet potato') || foodName.includes('pumpkin') ||
+         foodName.includes('spinach') || foodName.includes('kale') || foodName.includes('collard')) {
+       nutrients.vitamin_A = Math.max(carbs * 5, 20);
+     }
+   }
   
   console.log(`🔬 Generated ${Object.keys(nutrients).filter(k => nutrients[k] > 0).length} nutrients for ${foodName}`);
   return nutrients;
