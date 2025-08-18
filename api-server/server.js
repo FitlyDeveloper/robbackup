@@ -896,7 +896,8 @@ function processVisionResponse(visionResponse) {
       ing => ing.vitamins ? ing.vitamins[nestedKey] : 0,
       ing => ing[flatKey] || 0 // Use the flat key directly from original response
     );
-    if (val > 0) response[flatKey] = +(val.toFixed(2));
+    // ALWAYS include ALL vitamins, even if 0 (required for nutrition.dart)
+    response[flatKey] = +(val.toFixed(2));
   });
 
   // Minerals (15)
@@ -922,7 +923,8 @@ function processVisionResponse(visionResponse) {
       ing => ing.minerals ? ing.minerals[nestedKey] : 0,
       ing => ing[flatKey] || 0 // Use the flat key directly from original response
     );
-    if (val > 0) response[flatKey] = +(val.toFixed(2));
+    // ALWAYS include ALL minerals, even if 0 (required for nutrition.dart)
+    response[flatKey] = +(val.toFixed(2));
   });
 
   // Other (6)
@@ -939,7 +941,8 @@ function processVisionResponse(visionResponse) {
       ing => ing.other ? ing.other[nestedKey] : 0,
       ing => ing[flatKey] || 0 // Use the flat key directly from original response
     );
-    if (val > 0) response[flatKey] = +(val.toFixed(2));
+    // ALWAYS include ALL other nutrients, even if 0 (required for nutrition.dart)
+    response[flatKey] = +(val.toFixed(2));
   });
 
   // Also include ingredient_nutrients array for detailed per-ingredient nutrition
