@@ -232,19 +232,54 @@ function expandToFullNutrients(simpleResponse) {
   const expandedIngredients = simpleResponse.ingredients.map(ingredient => {
     const name = ingredient.name.toLowerCase();
     
-    // Start with OpenAI's provided values
+    // Start with OpenAI's provided values - PRESERVE ALL MICRONUTRIENTS
     const expanded = {
       name: ingredient.name,
       weight_g: ingredient.weight_g || 100,
       calories: ingredient.calories || 100,
       protein_g: ingredient.protein_g || 0,
       fat_g: ingredient.fat_g || 0,
-      carbs_g: ingredient.carbs_g || 0
+      carbs_g: ingredient.carbs_g || 0,
+      // CRITICAL: Pass through ALL micronutrients from OpenAI
+      vitamin_a: ingredient.vitamin_a || 0,
+      vitamin_c: ingredient.vitamin_c || 0,
+      vitamin_d: ingredient.vitamin_d || 0,
+      vitamin_e: ingredient.vitamin_e || 0,
+      vitamin_k: ingredient.vitamin_k || 0,
+      vitamin_b1: ingredient.vitamin_b1 || 0,
+      vitamin_b2: ingredient.vitamin_b2 || 0,
+      vitamin_b3: ingredient.vitamin_b3 || 0,
+      vitamin_b5: ingredient.vitamin_b5 || 0,
+      vitamin_b6: ingredient.vitamin_b6 || 0,
+      vitamin_b7: ingredient.vitamin_b7 || 0,
+      vitamin_b9: ingredient.vitamin_b9 || 0,
+      vitamin_b12: ingredient.vitamin_b12 || 0,
+      calcium: ingredient.calcium || 0,
+      chloride: ingredient.chloride || 0,
+      chromium: ingredient.chromium || 0,
+      copper: ingredient.copper || 0,
+      fluoride: ingredient.fluoride || 0,
+      iodine: ingredient.iodine || 0,
+      iron: ingredient.iron || 0,
+      magnesium: ingredient.magnesium || 0,
+      manganese: ingredient.manganese || 0,
+      molybdenum: ingredient.molybdenum || 0,
+      phosphorus: ingredient.phosphorus || 0,
+      potassium: ingredient.potassium || 0,
+      selenium: ingredient.selenium || 0,
+      sodium: ingredient.sodium || 0,
+      zinc: ingredient.zinc || 0,
+      fiber: ingredient.fiber || 0,
+      cholesterol: ingredient.cholesterol || 0,
+      sugar: ingredient.sugar || 0,
+      saturated_fats: ingredient.saturated_fats || 0,
+      omega_3: ingredient.omega_3 || 0,
+      omega_6: ingredient.omega_6 || 0
     };
     
     // NO SCALING - Keep original values from API server
     const actualWeight = expanded.weight_g;
-    console.log(`🔬 Keeping original API values for ${ingredient.name} (${actualWeight}g)`);
+    console.log(`🔬 Keeping original API values for ${ingredient.name} (${actualWeight}g) with micronutrients`);
     
     console.log(`✅ Expanded ${ingredient.name} (${actualWeight}g) with accurate nutrition data`);
     return expanded;
