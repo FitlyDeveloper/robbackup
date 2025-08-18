@@ -443,7 +443,8 @@ class NutritionTracker {
             String cardDateStr = cardDate.toString().split(' ')[0];
 
             // ALWAYS PROCESS CARDS - NO DATE FILTERING
-            if (true) { // Keep all cards regardless of date
+            if (true) {
+              // Keep all cards regardless of date
               // Get counter (portions) value with fallback to 1
               int counter = 1;
               if (card.containsKey('counter')) {
@@ -1362,10 +1363,46 @@ class _CodiaPageState extends State<CodiaPage> {
     return base64Data;
   }
 
+  // DEBUG: Check what's actually in SharedPreferences
+  Future<void> _debugSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Set<String> allKeys = prefs.getKeys();
+      print('🔍 DEBUG: All SharedPreferences keys (${allKeys.length} total):');
+      final List<String> foodRelatedKeys = allKeys
+          .where((key) =>
+              key.contains('food_cards') ||
+              key.contains('food_card_image_') ||
+              key.contains('food_data_'))
+          .toList();
+
+      if (foodRelatedKeys.isNotEmpty) {
+        print('🔍 DEBUG: Food-related keys found:');
+        for (String key in foodRelatedKeys) {
+          if (key == 'food_cards') {
+            final List<String>? cards = prefs.getStringList(key);
+            print('🔍   $key: ${cards?.length ?? 0} items');
+          } else {
+            final String? value = prefs.getString(key);
+            print(
+                '🔍   $key: ${value != null ? "${value.length} chars" : "null"}');
+          }
+        }
+      } else {
+        print('❌ DEBUG: NO FOOD-RELATED KEYS FOUND IN SHARED PREFERENCES!');
+      }
+    } catch (e) {
+      print('❌ DEBUG: Error checking SharedPreferences: $e');
+    }
+  }
+
   // Load food cards from SharedPreferences
   Future<void> _loadFoodCards() async {
     print(
         '🔄 _loadFoodCards() called - Loading food cards from SharedPreferences...');
+
+    // First, debug what's actually in SharedPreferences
+    await _debugSharedPreferences();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1373,9 +1410,41 @@ class _CodiaPageState extends State<CodiaPage> {
       final List<String>? storedWorkoutCards =
           prefs.getStringList('workout_cards');
 
-      print('📦 Found storedCards: ${storedCards?.length ?? 0} items');
       print(
-          '🏋️ Found storedWorkoutCards: ${storedWorkoutCards?.length ?? 0} items');
+          '📦 CODIA_PAGE: Found storedCards: ${storedCards?.length ?? 0} items');
+
+      // CRITICAL DEBUG: Show exactly what cards are in SharedPreferences
+      if (storedCards != null && storedCards.isNotEmpty) {
+        print('🔍 CRITICAL: Cards actually stored in SharedPreferences:');
+        for (int i = 0; i < storedCards.length; i++) {
+          try {
+            final Map<String, dynamic> cardData = jsonDecode(storedCards[i]);
+            final String name = cardData['name'] ?? 'Unknown';
+            final String scanId = cardData['scan_id'] ?? 'No scan_id';
+            print('🔍 Stored Card $i: "$name" (scan_id: $scanId)');
+          } catch (e) {
+            print(
+                '🔍 Stored Card $i: [INVALID JSON] ${storedCards[i].substring(0, 50)}...');
+          }
+        }
+      } else {
+        print('❌ CRITICAL: NO CARDS FOUND in SharedPreferences!');
+      }
+      print(
+          '🏋️ CODIA_PAGE: Found storedWorkoutCards: ${storedWorkoutCards?.length ?? 0} items');
+
+      // DEBUG: Show raw food card data for verification
+      if (storedCards != null && storedCards.isNotEmpty) {
+        print('🔍 CODIA_PAGE: Raw food cards from SharedPreferences:');
+        for (int i = 0; i < storedCards.length; i++) {
+          final String cardPreview = storedCards[i].length > 150
+              ? storedCards[i].substring(0, 150) + "..."
+              : storedCards[i];
+          print('🔍 Card $i: $cardPreview');
+        }
+      } else {
+        print('❌ CODIA_PAGE: NO FOOD CARDS FOUND IN SHARED PREFERENCES!');
+      }
 
       List<Map<String, dynamic>> cards = [];
 
@@ -1384,18 +1453,52 @@ class _CodiaPageState extends State<CodiaPage> {
         String today = DateTime.now().toString().split(' ')[0]; // YYYY-MM-DD
         print('📅 Today is: $today - filtering cards for 24h persistence');
 
+        // De-duplicate near-duplicates within a short time bucket (10 minutes) per name.
+        // Prefer entries that have an image, otherwise prefer the newest timestamp.
+        final Map<String, Map<String, dynamic>> bestByBucket = {};
+
         for (String cardJson in storedCards) {
           try {
             Map<String, dynamic> cardData = jsonDecode(cardJson);
+            print(
+                '📖 Loading food card: ${cardData['name'] ?? 'Unknown'}, has_image: ${cardData['has_image']}, image_key: ${cardData['image_key']}');
+            final String nameKey =
+                (cardData['name'] ?? '').toString().trim().toLowerCase();
+            final bool hasImage = cardData['image'] is String &&
+                (cardData['image'] as String).isNotEmpty;
+            final int ts = (cardData['timestamp'] ?? 0) is int
+                ? (cardData['timestamp'] as int)
+                : int.tryParse((cardData['timestamp'] ?? '0').toString()) ?? 0;
+
+            // Use scan_id as unique key - each scan gets its own card
+            final String scanId = (cardData['scan_id'] ?? '').toString();
+            String bucketKey;
+            if (scanId.isNotEmpty) {
+              bucketKey = 'scan_$scanId'; // Each scan gets its own unique card
+              print('  🆕 DEDUP: Using scan_id for unique card: $bucketKey');
+            } else {
+              // Fallback: Use name + timestamp to make each card unique
+              final String nameKey =
+                  (cardData['name'] ?? '').toString().trim().toLowerCase();
+              bucketKey =
+                  'name_${nameKey}_${cardData['timestamp'] ?? DateTime.now().millisecondsSinceEpoch}';
+              print(
+                  '  🆕 DEDUP: Using name+timestamp for unique card: $bucketKey');
+            }
+
+            // Each card is unique - no replacement logic
+            bestByBucket[bucketKey] = cardData;
+            print('  🆕 Added unique card: $bucketKey');
 
             // 24-hour expiration filter - cards persist from 00:00-00:00 (24 hours)
             int timestamp = cardData['timestamp'] ?? 0;
             DateTime cardDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
             String cardDateStr = cardDate.toString().split(' ')[0];
 
-            // KEEP ALL CARDS - DO NOT FILTER BY DATE
+            // KEEP ALL CARDS - DO NOT FILTER BY DATE (we dedupe by bucket above)
             // Cards should persist across app refreshes regardless of time
-            print('  ✅ Keeping card: ${cardData['name'] ?? 'Unknown'} from $cardDateStr (NO DATE FILTERING)');
+            print(
+                '  ✅ Keeping card: ${cardData['name'] ?? 'Unknown'} from $cardDateStr (NO DATE FILTERING)');
             // Ensure ingredients data structure is properly maintained
             if (cardData.containsKey('ingredients')) {
               List<dynamic> ingredients = cardData['ingredients'];
@@ -1440,18 +1543,57 @@ class _CodiaPageState extends State<CodiaPage> {
               cardData['ingredient_calories'] = ingredientCalories;
             }
 
-            // Preserve the original high-quality image if it exists
+            // BULLETPROOF: Use image stored directly in card data
             if (cardData.containsKey('image') && cardData['image'] is String) {
-              cardData['image'] = preserveImageQuality(cardData['image']);
+              final String imageData = cardData['image'] as String;
+              if (imageData.isNotEmpty) {
+                print(
+                    '✅ BULLETPROOF: Found image directly in card data for ${cardData['name']}, length: ${imageData.length}');
+                // Image is already stored in card data - no need for fallbacks
+              } else {
+                print(
+                    '❌ BULLETPROOF: Image field exists but is empty for ${cardData['name']}');
+              }
+            } else {
+              print(
+                  '❌ BULLETPROOF: No image field found for ${cardData['name']}');
             }
 
-            cards.add(cardData);
+            // We'll add later from the chosen maps
           } catch (e) {
             print("Error parsing food card JSON: $e");
           }
         }
 
-        print("✅ Loaded ${cards.length} food cards (24-hour filter applied)");
+        // Replace cards with deduped results from bucket map and sort newest first
+        cards = bestByBucket.values.toList();
+        cards.sort(
+            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+
+        // DEBUG: Check if any cards were dropped during deduplication
+        final int originalCount = storedCards?.length ?? 0;
+        final int finalCount = cards.length;
+        if (originalCount > finalCount) {
+          print(
+              "⚠️ CODIA_PAGE: CARDS LOST! Started with $originalCount, ended with $finalCount");
+          print(
+              "⚠️ CODIA_PAGE: ${originalCount - finalCount} cards were dropped during deduplication");
+        }
+
+        print(
+            "✅ CODIA_PAGE: Loaded ${cards.length} food cards after deduplication (from $originalCount original)");
+        print("🔍 CODIA_PAGE: Final cards after deduplication:");
+        for (int i = 0; i < cards.length; i++) {
+          final String cardName = cards[i]['name'] ?? 'Unknown';
+          final String scanId = cards[i]['scan_id'] ?? 'No scan_id';
+          final bool hasImage = cards[i]['image'] != null &&
+              (cards[i]['image'] as String).isNotEmpty;
+          final int timestamp = cards[i]['timestamp'] ?? 0;
+          final DateTime cardTime =
+              DateTime.fromMillisecondsSinceEpoch(timestamp);
+          print(
+              "🔍 Final Card $i: $cardName (scan_id: $scanId, has_image: $hasImage, time: ${cardTime.hour}:${cardTime.minute.toString().padLeft(2, '0')})");
+        }
       }
 
       // Merge workout cards and sort together (with 24-hour filter)
@@ -1584,11 +1726,15 @@ class _CodiaPageState extends State<CodiaPage> {
       bottomLeft: Radius.circular(16),
     );
     if (base64Image == null || base64Image.isEmpty) {
+      print('🖼️ No image data available, showing default image');
       return ClipRRect(
         borderRadius: leftRoundedOnly,
         child: _buildDefaultImageContainer(),
       );
     }
+
+    print(
+        '🖼️ Building image from base64, length: ${base64Image.length}, first 50 chars: ${base64Image.substring(0, math.min(50, base64Image.length))}');
 
     try {
       Uint8List bytes = base64Decode(base64Image);

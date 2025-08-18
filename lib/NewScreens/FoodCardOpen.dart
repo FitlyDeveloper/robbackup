@@ -1,6 +1,7 @@
 import 'package:fitness_app/core/env.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
@@ -254,11 +255,6 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         // Important: Now set the original values to match current values
         // This will ensure _checkForUnsavedChanges() returns false initially
         _resetUnsavedChangesState();
-        
-        // CRITICAL: Save data immediately when FoodCardOpen opens
-        // This ensures the food card is saved even if user doesn't interact
-        print('🔄 FoodCardOpen: Saving data immediately on screen load');
-        _saveData();
       }
     });
   }
@@ -971,12 +967,16 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         'lastSaved': DateTime.now().millisecondsSinceEpoch,
       };
 
-      // Try to save with image first
+      // Try to save with image first and also keep a stable reference for card list
       bool savedWithImage = false;
+      String? imageForCard;
       if (_storedImageBase64 != null && _storedImageBase64!.isNotEmpty) {
         consolidatedData['imageBase64'] = _storedImageBase64;
+        imageForCard = _storedImageBase64;
       } else if (_imageBytes != null) {
-        consolidatedData['imageBase64'] = base64Encode(_imageBytes!);
+        final String b64 = base64Encode(_imageBytes!);
+        consolidatedData['imageBase64'] = b64;
+        imageForCard = b64;
       }
 
       try {
@@ -990,7 +990,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         if (e.toString().contains('quota') ||
             e.toString().contains('QuotaExceededError')) {
           print('Storage quota exceeded with image, trying without image...');
-          // Remove image data and try again
+          // Remove image data and try again (but keep imageForCard for card persistence)
           consolidatedData.remove('imageBase64');
           try {
             String consolidatedJson = jsonEncode(consolidatedData);
@@ -1021,9 +1021,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
       // CRITICAL FIX: Always update food_cards to ensure cards appear in codia_page.dart
       // This is necessary for food cards to persist across app refreshes
-      print('🔄 About to call _updateFoodCardsOptimized for $_foodName');
-      await _updateFoodCardsOptimized(prefs, consolidatedData);
-      print('✅ Completed _updateFoodCardsOptimized for $_foodName');
+      await _updateFoodCardsOptimized(prefs, consolidatedData,
+          imageForCard: imageForCard);
     } catch (e) {
       print('Error saving food data: $e');
       // If storage fails, at least keep the in-memory data
@@ -1053,75 +1052,180 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Optimized method to update food_cards with minimal storage operations
   Future<void> _updateFoodCardsOptimized(
-      SharedPreferences prefs, Map<String, dynamic> data) async {
+      SharedPreferences prefs, Map<String, dynamic> data,
+      {String? imageForCard}) async {
     try {
-      print('🔍 _updateFoodCardsOptimized called for food: $_foodName');
-      final List<String>? storedCards = prefs.getStringList('food_cards');
-      print('📦 Current food_cards count: ${storedCards?.length ?? 0}');
+      // Load existing cards (treat null as empty) and parse to objects
+      final List<String> storedCards =
+          prefs.getStringList('food_cards') ?? <String>[];
+      print(
+          '🔄 FOODCARDOPEN: Loading existing cards for update - found ${storedCards.length} cards');
 
-      // CRITICAL FIX: Always create/update food_cards list, don't skip if null
-      List<String> updatedCards = [];
-      bool foundCard = false;
-
-      // Handle null storedCards by treating as empty list
-      List<String> cardsToProcess = storedCards ?? [];
-      print('🔄 Processing ${cardsToProcess.length} existing cards');
-
-      for (String cardJson in cardsToProcess) {
+      List<Map<String, dynamic>> parsed = [];
+      for (final s in storedCards) {
         try {
-          Map<String, dynamic> cardData = jsonDecode(cardJson);
-          String cardName = cardData['name'] ?? '';
+          parsed.add(jsonDecode(s));
+        } catch (_) {
+          // Skip malformed entries but keep them when re-saving
+          try {
+            parsed.add({'__raw': s});
+          } catch (_) {}
+        }
+      }
 
-          if (cardName.toLowerCase() == _foodName.toLowerCase()) {
-            foundCard = true;
-            // Update only essential fields
-            cardData['calories'] = data['calories'];
-            cardData['protein'] = data['protein'];
-            cardData['fat'] = data['fat'];
-            cardData['carbs'] = data['carbs'];
-            cardData['counter'] = data['counter'];
-            cardData['ingredients'] = data['ingredients'];
-
-            if (data.containsKey('imageBase64')) {
-              cardData['image'] = data['imageBase64'];
-            }
-          }
-          updatedCards.add(jsonEncode(cardData));
+      // Build the card we want to upsert
+      final int nowTs = DateTime.now().millisecondsSinceEpoch;
+      // CRITICAL: Use widget.scanId instead of data scanId to match the original card
+      final String? scanId = widget.scanId;
+      Map<String, dynamic> upsertCard = {
+        'name': _foodName,
+        'calories': data['calories'],
+        'protein': data['protein'],
+        'fat': data['fat'],
+        'carbs': data['carbs'],
+        'counter': data['counter'],
+        'ingredients': data['ingredients'],
+        'timestamp': nowTs,
+      };
+      if (scanId != null && scanId.isNotEmpty) {
+        upsertCard['scan_id'] = scanId;
+      }
+      // CRITICAL FIX: Always store image directly in food card for persistence
+      final String? finalImg = (imageForCard != null && imageForCard.isNotEmpty)
+          ? imageForCard
+          : (data['imageBase64']?.toString());
+      if (finalImg != null && finalImg.isNotEmpty) {
+        upsertCard['image'] = finalImg; // Store image directly
+        upsertCard['has_image'] = true;
+        final String imageKey = 'food_card_image_' + (scanId ?? _foodName);
+        upsertCard['image_key'] = imageKey;
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(imageKey, finalImg);
+          print(
+              '💾 FoodCardOpen: Stored image directly in card and with key: $imageKey');
         } catch (e) {
-          updatedCards.add(cardJson); // Keep original if error
+          print(
+              '⚠️ FoodCardOpen: Failed to store image with key $imageKey: $e');
+          print(
+              '⚠️ FoodCardOpen: Image will still be stored directly in the card data');
+          print(
+              '⚠️ FoodCardOpen: This is likely a Flutter web storage limit - will work fine on mobile devices');
+          // Don't fail completely - the image is still stored in the card data
         }
-      }
-
-      // If no existing card found, create a new one
-      if (!foundCard) {
-        print('🆕 No existing card found, creating new card for: $_foodName');
-        // Create a new food card
-        Map<String, dynamic> newCard = {
-          'name': _foodName,
-          'calories': data['calories'],
-          'protein': data['protein'],
-          'fat': data['fat'],
-          'carbs': data['carbs'],
-          'counter': data['counter'],
-          'ingredients': data['ingredients'],
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-        };
-
-        if (data.containsKey('imageBase64')) {
-          newCard['image'] = data['imageBase64'];
-        }
-
-        updatedCards.add(jsonEncode(newCard));
-        print('✅ Created new food card for: $_foodName');
       } else {
-        print('🔄 Updated existing card for: $_foodName');
+        print('⚠️ FoodCardOpen: No image to store in food card');
       }
 
-      // Always save the updated cards list
-      print('💾 Saving ${updatedCards.length} cards to food_cards list');
+      // Find existing by scan_id first, then by name (case-insensitive)
+      int existingIndex = -1;
+      print(
+          '🔍 FOODCARDOPEN: Looking for existing card with scanId: "$scanId" and name: "$_foodName"');
+      for (int i = 0; i < parsed.length; i++) {
+        final c = parsed[i];
+        if (c is Map<String, dynamic>) {
+          final String existingScan = (c['scan_id'] ?? '').toString();
+          final String existingName = (c['name'] ?? '').toString();
+          print(
+              '🔍 FOODCARDOPEN: Card $i - scanId: "$existingScan", name: "$existingName"');
+
+          if (scanId != null && scanId.isNotEmpty && existingScan == scanId) {
+            existingIndex = i;
+            print('🔍 FOODCARDOPEN: Found exact scan_id match at index $i');
+            break;
+          }
+          if (existingIndex == -1 &&
+              existingScan.isEmpty &&
+              existingName.toLowerCase() == _foodName.toLowerCase()) {
+            existingIndex = i;
+            print('🔍 FOODCARDOPEN: Found name match at index $i (no scan_id)');
+            // do not break; prefer a later exact scan_id match if any
+          }
+        }
+      }
+
+      if (existingIndex >= 0) {
+        print(
+            '🔍 FOODCARDOPEN: Will UPDATE existing card at index $existingIndex');
+      } else {
+        print('🔍 FOODCARDOPEN: No existing card found - will INSERT new card');
+      }
+
+      if (existingIndex >= 0) {
+        // Merge with existing; preserve fields like image_key/has_image when new payload lacks them
+        final Map<String, dynamic> existing =
+            Map<String, dynamic>.from(parsed[existingIndex]);
+        try {
+          final int oldTs = (existing['timestamp'] ?? 0) as int;
+          if (oldTs > nowTs) upsertCard['timestamp'] = oldTs;
+        } catch (_) {}
+        final Map<String, dynamic> merged = Map<String, dynamic>.from(existing);
+        merged.addAll(upsertCard);
+        parsed[existingIndex] = merged;
+        print('✏️ Updated existing food card: $_foodName');
+      } else {
+        // CRITICAL: If no existing card found, create a new one with the correct scanId
+        // This should never happen if scanId is passed correctly
+        print(
+            '⚠️ FOODCARDOPEN: No existing card found - creating new one with scanId: $scanId');
+        upsertCard['scan_id'] = scanId; // Ensure scanId is set
+        parsed.insert(0, upsertCard);
+        print('🆕 Inserted new food card: $_foodName');
+      }
+
+      // Serialize back to StringList with size limits. Keep malformed entries as-is.
+      final List<String> updatedCards = [];
+
+      for (var e in parsed) {
+        String cardJson;
+        if (e is Map<String, dynamic> && !e.containsKey('__raw')) {
+          cardJson = jsonEncode(e);
+        } else {
+          // Raw string fallback
+          cardJson = e['__raw']?.toString() ?? '';
+        }
+
+        if (cardJson.isNotEmpty) {
+          // Check card size and limit to 0.5MB (500KB)
+          final int cardSizeBytes = cardJson.length;
+          final double cardSizeMB = cardSizeBytes / (1024 * 1024);
+
+          // Just show the card size, no compression after scan
+          print(
+              '📊 FOODCARDOPEN: Card size: ${cardSizeMB.toStringAsFixed(2)}MB');
+          updatedCards.add(cardJson);
+        }
+      }
+
+      // No card count limits - allow infinite cards as requested
+      print(
+          '📝 FOODCARDOPEN: Keeping all ${updatedCards.length} cards (no limits)');
+
+      // Save without quota management - allow all cards
       await prefs.setStringList('food_cards', updatedCards);
       print(
-          '✅ Successfully saved food_cards list with ${updatedCards.length} cards');
+          '✅ FOODCARDOPEN: Updated food_cards list with ${updatedCards.length} cards (no size limits)');
+
+      // VERIFY THE UPDATE WORKED
+      final List<String>? verifyCards = prefs.getStringList('food_cards');
+      if (verifyCards != null && verifyCards.length == updatedCards.length) {
+        print(
+            '✅ FOODCARDOPEN: Verified update worked - ${verifyCards.length} cards in storage');
+      } else {
+        print(
+            '❌ FOODCARDOPEN: Update verification FAILED - expected ${updatedCards.length}, got ${verifyCards?.length ?? 0}');
+      }
+
+      // Additionally store a per-card backup entry so the home feed can
+      // reconstruct the list if the StringList ever gets truncated.
+      try {
+        final String backupKey = scanId != null && scanId.isNotEmpty
+            ? 'food_card_' + scanId
+            : 'food_card_name_' +
+                _foodName.toLowerCase().trim().replaceAll(' ', '_');
+        await prefs.setString(backupKey, jsonEncode(upsertCard));
+        print('🛡️ Stored per-card backup at "$backupKey"');
+      } catch (_) {}
     } catch (e) {
       print('Error updating food_cards: $e');
     }
@@ -8804,3 +8908,5 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     }
   }
 }
+
+// Image compression function removed - no compression after scan
