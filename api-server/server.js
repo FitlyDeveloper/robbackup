@@ -379,55 +379,93 @@ Rules:
           } catch (parseError) {
             console.error(`JSON parse error for job ${jobId}:`, parseError.message);
             console.log('Raw OpenAI response length:', content.length);
-            console.log('Raw OpenAI response preview (first 500 chars):', content.substring(0, 500));
-            console.log('Raw OpenAI response preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)));
             
-            // Try to find and fix common JSON issues
-            let cleanedContent = content.trim();
+            // ROBUST JSON REPAIR SYSTEM FOR JOBS
+            let repairedContent = content.trim();
             
             // Remove markdown code blocks if present
-            cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
             
-            // Remove any leading/trailing whitespace
-            cleanedContent = cleanedContent.trim();
+            // Fix unterminated strings by finding the last complete object
+            if (parseError.message.includes('Unterminated string')) {
+              console.log('🔧 Attempting to fix unterminated string...');
+              
+              // Find the last complete ingredient object
+              const lastCompleteMatch = repairedContent.match(/\{[^}]*"name"[^}]*\}/g);
+              if (lastCompleteMatch) {
+                const lastComplete = lastCompleteMatch[lastCompleteMatch.length - 1];
+                const lastIndex = repairedContent.lastIndexOf(lastComplete);
+                
+                // Truncate to the last complete ingredient and close the JSON properly
+                repairedContent = repairedContent.substring(0, lastIndex + lastComplete.length);
+                
+                // Close the ingredients array and main object
+                if (repairedContent.includes('"ingredients": [')) {
+                  repairedContent += '\n  ]\n}';
+                }
+              }
+            }
+            
+            // Fix unexpected end of JSON by completing the structure
+            if (parseError.message.includes('Unexpected end of JSON input')) {
+              console.log('🔧 Attempting to fix unexpected end of JSON...');
+              
+              // Find the last complete ingredient
+              const ingredientsMatches = repairedContent.match(/\{[^}]*"name"[^}]*\}/g);
+              if (ingredientsMatches && ingredientsMatches.length > 0) {
+                const lastIngredient = ingredientsMatches[ingredientsMatches.length - 1];
+                const lastIndex = repairedContent.lastIndexOf(lastIngredient);
+                
+                // Complete the JSON structure
+                repairedContent = repairedContent.substring(0, lastIndex + lastIngredient.length);
+                
+                // Add missing closing brackets
+                if (repairedContent.includes('"ingredients": [')) {
+                  repairedContent += '\n  ]\n}';
+                }
+              }
+            }
             
             // Fix common JSON issues
-            cleanedContent = cleanedContent
+            repairedContent = repairedContent
               .replace(/,\s*}/g, '}')     // Remove trailing commas before }
               .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
               .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
               .replace(/:\s*,/g, ': null,')       // Fix missing values
-              .replace(/,\s*,/g, ',');            // Fix double commas
+              .replace(/,\s*,/g, ',')             // Fix double commas
+              .replace(/"\s*$/g, '": null')       // Fix trailing quotes
+              .replace(/,\s*$/g, '')              // Fix trailing commas
+              .replace(/\}\s*$/g, '}')            // Clean up trailing whitespace
+              .replace(/\]\s*$/g, ']');           // Clean up trailing whitespace
             
-            // Try to parse the cleaned response
-            if (cleanedContent !== content) {
-              try {
-                console.log('Attempting to parse cleaned JSON...');
-                const jsonResponse = JSON.parse(cleanedContent);
-                console.log('Cleaned JSON parsed successfully!');
+            // Try to parse the repaired JSON
+            try {
+              console.log('🔧 Attempting to parse repaired JSON...');
+              const jsonResponse = JSON.parse(repairedContent);
+              
+              if (jsonResponse.ingredients && Array.isArray(jsonResponse.ingredients) && jsonResponse.ingredients.length > 0) {
+                console.log('✅ JSON repair successful!');
                 
-                if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
-                  // Expand simple response to full nutrient profile using real nutritional knowledge
-                  const expandedResponse = expandToFullNutrients(jsonResponse);
-                  const finalResponse = processVisionResponse(expandedResponse);
-                  
-                  await updateJobStatus(jobId, {
-                    status: 'completed',
-                    progress: 100,
-                    message: 'Analysis complete (cleaned JSON)',
-                    completedAt: Date.now(),
-                    result: finalResponse
-                  });
-                  
-                  console.log(`Job ${jobId} marked completed (cleaned JSON) at ${new Date().toISOString()}`);
-                  return; // Exit early on success
-                }
-              } catch (cleanError) {
-                console.log('JSON clean attempt failed:', cleanError.message);
+                // Expand simple response to full nutrient profile using real nutritional knowledge
+                const expandedResponse = expandToFullNutrients(jsonResponse);
+                const finalResponse = processVisionResponse(expandedResponse);
+                
+                await updateJobStatus(jobId, {
+                  status: 'completed',
+                  progress: 100,
+                  message: 'Analysis complete (repaired JSON)',
+                  completedAt: Date.now(),
+                  result: finalResponse
+                });
+                
+                console.log(`Job ${jobId} marked completed (repaired JSON) at ${new Date().toISOString()}`);
+                return; // Exit early on success
               }
+            } catch (repairError) {
+              console.log('🔧 JSON repair failed:', repairError.message);
             }
             
-            // Save the cleaned response for debugging without logging to console
+            // If all repair attempts failed, save error
             await updateJobStatus(jobId, {
               status: 'failed',
               progress: 100,
@@ -1243,54 +1281,155 @@ Rules:
       
       console.log('🔥 OpenAI response received, length:', content.length);
       
-      try {
-        // Try to parse the response
-        const jsonResponse = JSON.parse(content);
-        
-        if (!jsonResponse.ingredients || !Array.isArray(jsonResponse.ingredients) || jsonResponse.ingredients.length === 0) {
-          console.log('🔥 No valid ingredients in response - FAILING');
-          return res.status(500).json({
-            success: false,
-            error: 'No food ingredients detected in the image'
-          });
-        }
+             try {
+         // Try to parse the response
+         const jsonResponse = JSON.parse(content);
+         
+         if (!jsonResponse.ingredients || !Array.isArray(jsonResponse.ingredients) || jsonResponse.ingredients.length === 0) {
+           console.log('🔥 No valid ingredients in response - FAILING');
+           return res.status(500).json({
+             success: false,
+             error: 'No food ingredients detected in the image'
+           });
+         }
 
-        console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
-        
-        // Expand simple response to full nutrient profile using real nutritional knowledge
-        const expandedResponse = expandToFullNutrients(jsonResponse);
-        const finalResponse = processVisionResponse(expandedResponse);
-        
-        // Cache lightning/ultra-fast responses for instant future access
-        if (lightning_fast || ultra_fast) {
-          const imageHash = require('crypto').createHash('md5').update(image.substring(0, 1500)).digest('hex');
-          
-          // Manage cache size
-          if (responseCache.size >= CACHE_MAX_SIZE) {
-            const firstKey = responseCache.keys().next().value;
-            responseCache.delete(firstKey);
-          }
-          
-          responseCache.set(imageHash, {
-            data: finalResponse,
-            timestamp: Date.now(),
-            mode: lightning_fast ? 'lightning' : 'ultra_fast'
-          });
-          
-          console.log(lightning_fast ? '⚡⚡⚡ LIGHTNING response cached!' : '⚡⚡ Response cached for ultra-fast future access');
-        }
-        
-        return res.json({
-          success: true,
-          data: finalResponse
-        });
-      } catch (parseError) {
-        console.log('🔥 JSON parse failed - FAILING:', parseError.message);
-        return res.status(500).json({
-          success: false,
-          error: 'OpenAI generated invalid JSON that could not be repaired'
-        });
-      }
+         console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
+         
+         // Expand simple response to full nutrient profile using real nutritional knowledge
+         const expandedResponse = expandToFullNutrients(jsonResponse);
+         const finalResponse = processVisionResponse(expandedResponse);
+         
+         // Cache lightning/ultra-fast responses for instant future access
+         if (lightning_fast || ultra_fast) {
+           const imageHash = require('crypto').createHash('md5').update(image.substring(0, 1500)).digest('hex');
+           
+           // Manage cache size
+           if (responseCache.size >= CACHE_MAX_SIZE) {
+             const firstKey = responseCache.keys().next().value;
+             responseCache.delete(firstKey);
+           }
+           
+           responseCache.set(imageHash, {
+             data: finalResponse,
+             timestamp: Date.now(),
+             mode: lightning_fast ? 'lightning' : 'ultra_fast'
+           });
+           
+           console.log(lightning_fast ? '⚡⚡⚡ LIGHTNING response cached!' : '⚡⚡ Response cached for ultra-fast future access');
+         }
+         
+         return res.json({
+           success: true,
+           data: finalResponse
+         });
+       } catch (parseError) {
+         console.log('🔥 JSON parse failed - attempting repair:', parseError.message);
+         
+         // ROBUST JSON REPAIR SYSTEM
+         let repairedContent = content.trim();
+         
+         // Remove markdown code blocks if present
+         repairedContent = repairedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+         
+         // Fix unterminated strings by finding the last complete object
+         if (parseError.message.includes('Unterminated string')) {
+           console.log('🔧 Attempting to fix unterminated string...');
+           
+           // Find the last complete ingredient object
+           const lastCompleteMatch = repairedContent.match(/\{[^}]*"name"[^}]*\}/g);
+           if (lastCompleteMatch) {
+             const lastComplete = lastCompleteMatch[lastCompleteMatch.length - 1];
+             const lastIndex = repairedContent.lastIndexOf(lastComplete);
+             
+             // Truncate to the last complete ingredient and close the JSON properly
+             repairedContent = repairedContent.substring(0, lastIndex + lastComplete.length);
+             
+             // Close the ingredients array and main object
+             if (repairedContent.includes('"ingredients": [')) {
+               repairedContent += '\n  ]\n}';
+             }
+           }
+         }
+         
+         // Fix unexpected end of JSON by completing the structure
+         if (parseError.message.includes('Unexpected end of JSON input')) {
+           console.log('🔧 Attempting to fix unexpected end of JSON...');
+           
+           // Find the last complete ingredient
+           const ingredientsMatches = repairedContent.match(/\{[^}]*"name"[^}]*\}/g);
+           if (ingredientsMatches && ingredientsMatches.length > 0) {
+             const lastIngredient = ingredientsMatches[ingredientsMatches.length - 1];
+             const lastIndex = repairedContent.lastIndexOf(lastIngredient);
+             
+             // Complete the JSON structure
+             repairedContent = repairedContent.substring(0, lastIndex + lastIngredient.length);
+             
+             // Add missing closing brackets
+             if (repairedContent.includes('"ingredients": [')) {
+               repairedContent += '\n  ]\n}';
+             }
+           }
+         }
+         
+         // Fix common JSON issues
+         repairedContent = repairedContent
+           .replace(/,\s*}/g, '}')     // Remove trailing commas before }
+           .replace(/,\s*]/g, ']')     // Remove trailing commas before ]
+           .replace(/"\s*:\s*,/g, '": null,')  // Fix empty values
+           .replace(/:\s*,/g, ': null,')       // Fix missing values
+           .replace(/,\s*,/g, ',')             // Fix double commas
+           .replace(/"\s*$/g, '": null')       // Fix trailing quotes
+           .replace(/,\s*$/g, '')              // Fix trailing commas
+           .replace(/\}\s*$/g, '}')            // Clean up trailing whitespace
+           .replace(/\]\s*$/g, ']');           // Clean up trailing whitespace
+         
+         // Try to parse the repaired JSON
+         try {
+           console.log('🔧 Attempting to parse repaired JSON...');
+           const jsonResponse = JSON.parse(repairedContent);
+           
+           if (jsonResponse.ingredients && Array.isArray(jsonResponse.ingredients) && jsonResponse.ingredients.length > 0) {
+             console.log('✅ JSON repair successful!');
+             
+             // Expand simple response to full nutrient profile using real nutritional knowledge
+             const expandedResponse = expandToFullNutrients(jsonResponse);
+             const finalResponse = processVisionResponse(expandedResponse);
+             
+             // Cache lightning/ultra-fast responses for instant future access
+             if (lightning_fast || ultra_fast) {
+               const imageHash = require('crypto').createHash('md5').update(image.substring(0, 1500)).digest('hex');
+               
+               // Manage cache size
+               if (responseCache.size >= CACHE_MAX_SIZE) {
+                 const firstKey = responseCache.keys().next().value;
+                 responseCache.delete(firstKey);
+               }
+               
+               responseCache.set(imageHash, {
+                 data: finalResponse,
+                 timestamp: Date.now(),
+                 mode: lightning_fast ? 'lightning' : 'ultra_fast'
+               });
+               
+               console.log(lightning_fast ? '⚡⚡⚡ LIGHTNING response cached!' : '⚡⚡ Response cached for ultra-fast future access');
+             }
+             
+             return res.json({
+               success: true,
+               data: finalResponse
+             });
+           }
+         } catch (repairError) {
+           console.log('🔧 JSON repair failed:', repairError.message);
+         }
+         
+         // If all repair attempts failed, return error
+         console.log('🔥 All JSON repair attempts failed - FAILING');
+         return res.status(500).json({
+           success: false,
+           error: 'OpenAI generated invalid JSON that could not be repaired'
+         });
+       }
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log('🔥 OpenAI call aborted due to timeout');
