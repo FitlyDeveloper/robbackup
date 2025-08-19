@@ -6,6 +6,35 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// DEDICATED NUTRITION PROMPT FOR NUTRITION.DART
+const NUTRITION_PROMPT = `You are GPT-5 Thinking. Input is a screenshot of a meal with ingredient tiles (name + grams + kcal). Output: STRICT JSON with vitamins, minerals, and "other" nutrients.
+
+Use FDA DVs (Vitamins: A 900 mcg; C 90 mg; D 20 mcg; E 15 mg; K 120 mcg; B1 1.2 mg; B2 1.3 mg; B3 16 mg; B5 5 mg; B6 1.3 mg; B7 30 mcg; B9 400 mcg; B12 2.4 mcg.  
+Minerals: Ca 1300 mg; Cl 2300 mg; Cr 35 mcg; Cu 900 mcg; F 4 mg; I 150 mcg; Fe 18 mg; Mg 420 mg; Mn 2.3 mg; Mo 45 mcg; P 1250 mg; K 4700 mg; Se 55 mcg; Na 2300 mg; Zn 11 mg.  
+Other: Fiber 28 g; Cholesterol 300 mg; Sugar 50 g; SatFat 20 g; Omega3 1600 mg; Omega6 17 g.)
+
+SCHEMA:
+{
+  "ingredients":[{"name":"","grams":0}],
+  "totals":{
+    "vitamins":{...},
+    "minerals":{...},
+    "other":{...},
+    "macros":{...}
+  },
+  "dv_pct":{...},
+  "notes":[],
+  "assumptions":[],
+  "warnings":[]
+}
+
+RULES:
+- Parse ingredient weights from the screenshot.  
+- Map to cooked/raw defaults (meats cooked, produce raw).  
+- Never return prose, only JSON.  
+- Non-zero fiber/sugar if bread/produce present.  
+- Sodium/cholesterol realistic for salami/dairy/meats.`;
+
 console.log('Starting SIMPLE server for micronutrients...');
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
 
@@ -216,9 +245,11 @@ app.post('/api/analyze-food', async (req, res) => {
     }
 
     console.log('🔥 Analyzing food image...');
+    console.log('📱 Request source:', req.body.source || 'unknown');
 
-    // PROCESS-DRIVEN PROMPT WITH TOTALS
-    const systemPrompt = `You are a gourmet chef and nutrition analyst. Analyze the food image and return ONLY valid JSON following this process:
+    // CHOOSE PROMPT BASED ON SOURCE
+    const isNutritionRequest = req.body.source === "nutrition.dart";
+    const systemPrompt = isNutritionRequest ? NUTRITION_PROMPT : `You are a gourmet chef and nutrition analyst. Analyze the food image and return ONLY valid JSON following this process:
 1) Identify ALL visible, distinct ingredients and estimate their portion sizes in grams (weight_g).
 2) For EACH ingredient, lookup realistic micronutrient values using reliable sources (USDA or equivalent) and express them in the REQUIRED UNITS below. Include macros per ingredient too.
 3) Compute meal TOTALS by summing nutrients across ingredients using the SAME UNITS.
@@ -393,6 +424,27 @@ MICRONUTRIENT REQUIREMENTS:
 
 RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutrition per 100g" and use the real values you find.`;
 
+    // PREPARE USER CONTENT BASED ON SOURCE
+    const userContent = isNutritionRequest ? [
+      { 
+        type: "text", 
+        text: "Analyze meal screenshot and return JSON only." 
+      },
+      { 
+        type: "image_url", 
+        image_url: { url: image } 
+      }
+    ] : [
+      { 
+        type: "text", 
+        text: "Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. Use actual USDA nutritional values. Pay special attention to the 'Other' category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) - these MUST be accurate and realistic. Some micronutrients may be zero if the food naturally contains none."
+      },
+      { 
+        type: "image_url", 
+        image_url: { url: image } 
+      }
+    ];
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -401,8 +453,8 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.1,
-        response_format: { type: "json_object" },
+        temperature: isNutritionRequest ? 0.2 : 0.1,
+        response_format: isNutritionRequest ? { type: "json_object" } : { type: "json_object" },
         messages: [
           {
             role: "system",
@@ -410,19 +462,10 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
           },
           {
             role: "user",
-            content: [
-                                            { 
-                  type: "text", 
-                  text: "Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. Use actual USDA nutritional values. Pay special attention to the 'Other' category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) - these MUST be accurate and realistic. Some micronutrients may be zero if the food naturally contains none."
-                },
-              { 
-                type: "image_url", 
-                image_url: { url: image }
-              }
-            ]
+            content: userContent
           }
         ],
-                 max_tokens: 3000
+        max_tokens: 3000
       })
     });
 
@@ -455,10 +498,13 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
         });
       }
 
-      console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
-      if (jsonResponse.units_used) {
-        console.log('📏 Units audit:', JSON.stringify(jsonResponse.units_used));
-      }
+             console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
+       if (jsonResponse.units_used) {
+         console.log('📏 Units audit:', JSON.stringify(jsonResponse.units_used));
+       }
+       if (isNutritionRequest) {
+         console.log('🎯 Nutrition.dart request - using specialized prompt');
+       }
       
       // PASS THROUGH THE INGREDIENT LIST
       const ingredients = jsonResponse.ingredients.map(ing => ({
