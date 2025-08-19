@@ -593,6 +593,8 @@ class _SnapFoodState extends State<SnapFood> {
 
   // Validate API response to prevent mock data
   bool _validateApiResponse(Map<String, dynamic> response) {
+    debugPrint('🔍 Validating API response with keys: ${response.keys.toList()}');
+    
     // Check if response has required fields
     if (!response.containsKey('meal_name') &&
         !response.containsKey('food_name') &&
@@ -607,6 +609,16 @@ class _SnapFoodState extends State<SnapFood> {
       if (calories == 0 || calories > 5000) {
         debugPrint('❌ API response has suspicious calories: $calories');
         return false;
+      }
+    } else if (response.containsKey('macros') && response['macros'] is Map) {
+      // Check calories in macros structure
+      final macros = response['macros'] as Map<String, dynamic>;
+      if (macros.containsKey('calories_kcal')) {
+        int calories = int.tryParse(macros['calories_kcal'].toString()) ?? 0;
+        if (calories == 0 || calories > 5000) {
+          debugPrint('❌ API response has suspicious calories in macros: $calories');
+          return false;
+        }
       }
     }
 
@@ -623,9 +635,6 @@ class _SnapFoodState extends State<SnapFood> {
         response['food_name']?.toString() ??
         response['name']?.toString() ??
         '';
-
-    // REMOVED: Overly strict validation that was rejecting valid food names
-    // The API is working correctly and returning real data
 
     debugPrint('✅ API response validation passed');
     return true;
