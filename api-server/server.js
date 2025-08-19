@@ -7,33 +7,131 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // DEDICATED NUTRITION PROMPT FOR NUTRITION.DART
-const NUTRITION_PROMPT = `You are GPT-5 Thinking. Input is a screenshot of a meal with ingredient tiles (name + grams + kcal). Output: STRICT JSON with vitamins, minerals, and "other" nutrients.
+const NUTRITION_PROMPT = `You are a nutrition data analyst. Your task is to analyze food images and return STRICT JSON with accurate micronutrient values sourced ONLY from verified nutritional databases.
 
-Use FDA DVs (Vitamins: A 900 mcg; C 90 mg; D 20 mcg; E 15 mg; K 120 mcg; B1 1.2 mg; B2 1.3 mg; B3 16 mg; B5 5 mg; B6 1.3 mg; B7 30 mcg; B9 400 mcg; B12 2.4 mcg.  
-Minerals: Ca 1300 mg; Cl 2300 mg; Cr 35 mcg; Cu 900 mcg; F 4 mg; I 150 mcg; Fe 18 mg; Mg 420 mg; Mn 2.3 mg; Mo 45 mcg; P 1250 mg; K 4700 mg; Se 55 mcg; Na 2300 mg; Zn 11 mg.  
-Other: Fiber 28 g; Cholesterol 300 mg; Sugar 50 g; SatFat 20 g; Omega3 1600 mg; Omega6 17 g.)
+CRITICAL REQUIREMENTS:
+1. ALL micronutrient values MUST come from USDA/FDC (FoodData Central) or equivalent verified databases
+2. NO hallucination, estimation, or guessing of values
+3. Scale values based on exact ingredient weights (e.g., 100g spaghetti, 60g bread, 30g salami)
+4. If a micronutrient is not available in the database, set it to 0
+5. Never output inflated values (e.g., 100% DV Vitamin A for foods without it)
+6. Sodium, cholesterol, vitamins, and minerals must stay within realistic food composition ranges
+
+FDA DVs for reference:
+Vitamins: A 900 mcg; C 90 mg; D 20 mcg; E 15 mg; K 120 mcg; B1 1.2 mg; B2 1.3 mg; B3 16 mg; B5 5 mg; B6 1.3 mg; B7 30 mcg; B9 400 mcg; B12 2.4 mcg
+Minerals: Ca 1300 mg; Cl 2300 mg; Cr 35 mcg; Cu 900 mcg; F 4 mg; I 150 mcg; Fe 18 mg; Mg 420 mg; Mn 2.3 mg; Mo 45 mcg; P 1250 mg; K 4700 mg; Se 55 mcg; Na 2300 mg; Zn 11 mg
+Other: Fiber 28 g; Cholesterol 300 mg; Sugar 50 g; SatFat 20 g; Omega3 1600 mg; Omega6 17 g
+
+PROCESS:
+1. Identify each ingredient and its weight from the image
+2. Look up each ingredient in USDA/FDC database for per-100g values
+3. Calculate: (database_value × ingredient_weight) ÷ 100
+4. Sum all ingredients for meal totals
+5. Return JSON in the exact format below
 
 SCHEMA:
 {
-  "ingredients":[{"name":"","grams":0}],
-  "totals":{
-    "vitamins":{...},
-    "minerals":{...},
-    "other":{...},
-    "macros":{...}
-  },
-  "dv_pct":{...},
-  "notes":[],
-  "assumptions":[],
-  "warnings":[]
+  "meal_name": "Dish Name",
+  "ingredients": [
+    {
+      "name": "Ingredient Name",
+      "weight_g": 100,
+      "calories": 0,
+      "protein_g": 0,
+      "fat_g": 0,
+      "carbs_g": 0,
+      "vitamin_a": 0,
+      "vitamin_c": 0,
+      "vitamin_d": 0,
+      "vitamin_e": 0,
+      "vitamin_k": 0,
+      "vitamin_b1": 0,
+      "vitamin_b2": 0,
+      "vitamin_b3": 0,
+      "vitamin_b5": 0,
+      "vitamin_b6": 0,
+      "vitamin_b7": 0,
+      "vitamin_b9": 0,
+      "vitamin_b12": 0,
+      "calcium": 0,
+      "chloride": 0,
+      "chromium": 0,
+      "copper": 0,
+      "fluoride": 0,
+      "iodine": 0,
+      "iron": 0,
+      "magnesium": 0,
+      "manganese": 0,
+      "molybdenum": 0,
+      "phosphorus": 0,
+      "potassium": 0,
+      "selenium": 0,
+      "sodium": 0,
+      "zinc": 0,
+      "fiber": 0,
+      "cholesterol": 0,
+      "sugar": 0,
+      "saturated_fats": 0,
+      "omega_3": 0,
+      "omega_6": 0
+    }
+  ],
+  "totals": {
+    "calories": 0,
+    "protein_g": 0,
+    "fat_g": 0,
+    "carbs_g": 0,
+    "vitamin_a": 0,
+    "vitamin_c": 0,
+    "vitamin_d": 0,
+    "vitamin_e": 0,
+    "vitamin_k": 0,
+    "vitamin_b1": 0,
+    "vitamin_b2": 0,
+    "vitamin_b3": 0,
+    "vitamin_b5": 0,
+    "vitamin_b6": 0,
+    "vitamin_b7": 0,
+    "vitamin_b9": 0,
+    "vitamin_b12": 0,
+    "calcium": 0,
+    "chloride": 0,
+    "chromium": 0,
+    "copper": 0,
+    "fluoride": 0,
+    "iodine": 0,
+    "iron": 0,
+    "magnesium": 0,
+    "manganese": 0,
+    "molybdenum": 0,
+    "phosphorus": 0,
+    "potassium": 0,
+    "selenium": 0,
+    "sodium": 0,
+    "zinc": 0,
+    "fiber": 0,
+    "cholesterol": 0,
+    "sugar": 0,
+    "saturated_fats": 0,
+    "omega_3": 0,
+    "omega_6": 0
+  }
 }
 
-RULES:
-- Parse ingredient weights from the screenshot.  
-- Map to cooked/raw defaults (meats cooked, produce raw).  
-- Never return prose, only JSON.  
-- Non-zero fiber/sugar if bread/produce present.  
-- Sodium/cholesterol realistic for salami/dairy/meats.`;
+UNITS:
+- Vitamins: mg (except A, D, B7, B9, B12, K in mcg)
+- Minerals: mg (except Cr, Cu, I, Mo, Se in mcg)
+- Other: fiber (g), cholesterol (mg), sugar (g), saturated_fats (g), omega_3 (mg), omega_6 (g)
+
+VALIDATION RULES:
+- If ingredient not in database, set all its micronutrients to 0
+- Never exceed realistic food composition limits
+- Sodium: typically 0-2000mg per 100g (except processed foods)
+- Cholesterol: 0-300mg per 100g (except eggs/dairy)
+- Fiber: 0-15g per 100g (except supplements)
+- Sugar: 0-50g per 100g (except pure sugar/honey)
+
+Return ONLY valid JSON. No prose, no explanations.`;
 
 console.log('Starting SIMPLE server for micronutrients...');
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
