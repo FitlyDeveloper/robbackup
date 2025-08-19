@@ -224,6 +224,18 @@ app.post('/api/analyze-food', async (req, res) => {
 3) Compute meal TOTALS by summing nutrients across ingredients using the SAME UNITS.
 4) Return the JSON exactly in the schema shown. No extra keys, no text outside JSON.
 
+CRITICAL: You MUST look up actual nutritional data from reliable sources (USDA, nutrition databases) for each ingredient. DO NOT estimate or guess values. Use real data only.
+
+For example:
+- If you see chicken, look up "chicken breast nutrition per 100g" and use those exact values
+- If you see rice, look up "white rice nutrition per 100g" and use those exact values  
+- If you see tomatoes, look up "tomato nutrition per 100g" and use those exact values
+- If you see bread, look up "whole wheat bread nutrition per 100g" and use those exact values
+
+Then multiply by the actual portion size you estimated (weight_g/100) to get the ingredient's contribution.
+
+This is NOT optional - you MUST research real nutritional data for accuracy.
+
 FOOD NAMING: CRITICAL - Use ONLY dish names, NEVER list ingredients. Think like a restaurant menu.
 
 EXAMPLES OF CORRECT NAMES:
@@ -261,6 +273,14 @@ UNITS: All micronutrients must use these units:
 - Vitamins: mg (except vitamin_a in mcg, vitamin_d in mcg, vitamin_b7 in mcg, vitamin_b9 in mcg, vitamin_b12 in mcg, vitamin_k in mcg)
 - Minerals: mg (except chromium in mcg, copper in mcg, fluoride in mg, iodine in mcg, manganese in mg, molybdenum in mcg, selenium in mcg, zinc in mg)
 - Other: fiber (g), cholesterol (mg), sugar (g), saturated_fats (g), omega_3 (mg), omega_6 (g)
+
+EXAMPLE RESEARCH PROCESS:
+For a meal with chicken and rice:
+1. Look up "chicken breast raw nutrition per 100g" → get real values
+2. Look up "white rice cooked nutrition per 100g" → get real values  
+3. Estimate portions (e.g., 150g chicken, 100g rice)
+4. Calculate: chicken values × 1.5 + rice values × 1.0 = totals
+5. Return the exact calculated totals in the JSON
 
 UNIT ENFORCEMENT:
 - Return raw numeric values ONLY (no unit suffixes inside numbers).
@@ -358,14 +378,18 @@ Include an additional object "units_used" that maps each nutrient key to the exa
   }
 }
 
-CRITICAL: Use realistic USDA values. Return zero only when the food naturally contains none. Valid JSON only.
+CRITICAL: You MUST research and use REAL nutritional data from reliable sources. DO NOT estimate, guess, or use placeholder values. Every number must come from actual nutritional research.
+
+VALID JSON ONLY. Return zero only when the food naturally contains none.
 
 MICRONUTRIENT REQUIREMENTS:
-- Use realistic USDA nutritional database values
-- "Other" category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) MUST be accurate
-- Analyze the actual food in the image and provide realistic values
+- You MUST look up REAL nutritional data from USDA or equivalent reliable sources
+- "Other" category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) MUST be researched and accurate
+- Every nutrient value must come from actual nutritional research, not estimation
 - Some micronutrients may be zero if the food naturally contains none (e.g., vitamin D in most plant foods)
-- Focus on providing accurate values for nutrients that are actually present in the food`;
+- Focus on providing accurate values for nutrients that are actually present in the food
+
+RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutrition per 100g" and use the real values you find.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
