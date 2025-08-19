@@ -246,6 +246,12 @@ NEVER USE INGREDIENT LISTS AS THE MEAL NAME!
 
 INGREDIENT NAMING: Use short, simple ingredient names.
 
+INGREDIENT DETECTION:
+- Detect the primary visible ingredients in the image (1-4 items). Do not exceed 5.
+- Each ingredient must be a real food item visible in the image (e.g., "Chicken", "Bread", "Yogurt sauce").
+- Avoid utensils/containers and avoid generic words like "filling" when a specific food is evident.
+- Provide realistic weight_g for each ingredient and include macros per ingredient.
+
 UNITS: All micronutrients should be in these units:
 - Vitamins: mg (except vitamin_a in mcg, vitamin_d in mcg, vitamin_b7 in mcg, vitamin_b9 in mcg, vitamin_b12 in mcg, vitamin_k in mcg)
 - Minerals: mg (except chromium in mcg, copper in mcg, fluoride in mg, iodine in mcg, manganese in mg, molybdenum in mcg, selenium in mcg, zinc in mg)
@@ -255,6 +261,8 @@ UNIT ENFORCEMENT:
 - Return raw numeric values ONLY (no unit suffixes inside numbers).
 - Use the exact units above. Especially: omega_3 must be in mg and omega_6 must be in g. Copper must be in mcg.
 - If your internal estimate is in a different unit, convert it so the returned number matches the required unit.
+
+Include an additional object "units_used" that maps each nutrient key to the exact unit string you used (e.g., { "vitamin_b12": "mcg", "omega_3": "mg", "omega_6": "g" }). Do not add units in the numeric fields, only in this map.
 
 {
   "meal_name": "Gourmet Food Name",
@@ -304,7 +312,7 @@ UNIT ENFORCEMENT:
   ]
 }
 
-CRITICAL: Use realistic USDA values. NO zeros. Valid JSON only.
+CRITICAL: Use realistic USDA values. Return zero only when the food naturally contains none. Valid JSON only.
 
 MICRONUTRIENT REQUIREMENTS:
 - Use realistic USDA nutritional database values
@@ -370,6 +378,9 @@ MICRONUTRIENT REQUIREMENTS:
       }
 
       console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
+      if (jsonResponse.units_used) {
+        console.log('📏 Units audit:', JSON.stringify(jsonResponse.units_used));
+      }
       
       // SIMPLE PROCESSING - JUST PASS THROUGH THE DATA
       const ingredients = jsonResponse.ingredients.map(ing => ({
@@ -435,7 +446,8 @@ MICRONUTRIENT REQUIREMENTS:
         sugar: firstIngredient.sugar || 0,
         saturated_fats: firstIngredient.saturated_fats || 0,
         omega_3: firstIngredient.omega_3 || 0,
-        omega_6: firstIngredient.omega_6 || 0
+        omega_6: firstIngredient.omega_6 || 0,
+        units_used: jsonResponse.units_used || null
       };
 
       console.log('✅ Response prepared with micronutrients');
@@ -524,7 +536,8 @@ MICRONUTRIENT REQUIREMENTS:
             sugar: firstIngredient.sugar || 0,
             saturated_fats: firstIngredient.saturated_fats || 0,
             omega_3: firstIngredient.omega_3 || 0,
-            omega_6: firstIngredient.omega_6 || 0
+            omega_6: firstIngredient.omega_6 || 0,
+            units_used: jsonResponse.units_used || null
           };
 
           return res.json({
