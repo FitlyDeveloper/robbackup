@@ -220,17 +220,18 @@ app.post('/api/analyze-food', async (req, res) => {
     // SIMPLE PROMPT - ONLY MICRONUTRIENTS
     const systemPrompt = `You are a gourmet chef and nutritionist. Analyze the food image and return ONLY valid JSON with realistic micronutrient values.
 
-FOOD NAMING: Create short, elegant gourmet dish names like restaurant menu items. Use dish names, not ingredient lists.
+FOOD NAMING: CRITICAL - Use ONLY dish names, NEVER list ingredients. Think like a restaurant menu.
 
-EXAMPLES:
-- "Pasta Carbonara"
-- "Chicken Quesadilla"
-- "Garden Salad"
-- "Avocado Toast"
-- "Grilled Salmon"
-- "Beef Tacos"
-- "Caesar Salad"
-- "Margherita Pizza"
+EXAMPLES OF CORRECT NAMES:
+- "Italian Dinner Plate" (NOT "Spaghetti with Garlic Butter and Rye Bread")
+- "Mexican Combo" (NOT "Chicken Quesadilla with Rice and Beans")
+- "Mediterranean Plate" (NOT "Salmon with Vegetables and Rice")
+- "Breakfast Plate" (NOT "Eggs with Toast and Bacon")
+- "Pasta Dinner" (NOT "Spaghetti with Meatballs and Sauce")
+- "Asian Bowl" (NOT "Rice with Chicken and Vegetables")
+
+WRONG: "Spaghetti with Garlic Butter and Rye Bread"
+RIGHT: "Italian Dinner Plate"
 
 INGREDIENT NAMING: Use short, simple ingredient names.
 
