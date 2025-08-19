@@ -305,9 +305,7 @@ MICRONUTRIENT REQUIREMENTS:
 - ALL micronutrients MUST have realistic values (NO zeros)
 - Use actual USDA nutritional database values
 - "Other" category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) MUST be accurate
-- Example: A meal with dumplings should have fiber=2-4g, cholesterol=20-50mg, sugar=3-8g, saturated_fats=2-6g
-- Example: A meal with tomatoes should have vitamin_c=15-25mg, fiber=2-4g
-- Example: A meal with sour cream should have cholesterol=30-60mg, saturated_fats=3-8g
+- Analyze the actual food in the image and provide realistic values
 
 DO NOT RETURN ZEROS FOR ANY MICRONUTRIENT!`;
 
