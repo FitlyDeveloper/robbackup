@@ -344,7 +344,21 @@ Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients
   ]
 }
 
-CRITICAL: Provide realistic values for ALL nutrients based on the actual foods you see. Each ingredient MUST have ALL 34 micronutrients with non-zero values where appropriate.`;
+CRITICAL REQUIREMENTS:
+1. Provide realistic nutritional values for ALL 34 micronutrients listed above
+2. DO NOT use zero values unless the food genuinely contains none of that nutrient
+3. Use actual nutritional data - apricots have vitamin A, vitamin C, potassium, etc.
+4. Every ingredient must include ALL 34 micronutrient fields with realistic values
+5. Base values on standard USDA nutritional data for the foods you identify
+
+EXAMPLE: For 100g apricots, realistic values would be:
+- vitamin_a: 1926 (apricots are high in vitamin A)
+- vitamin_c: 10 (moderate vitamin C)
+- potassium: 259 (good source)
+- iron: 0.4 (small amount)
+- calcium: 13 (small amount)
+
+Return complete nutritional profiles, not placeholder zeros.`;
 
     let finalResponse = null;
     
@@ -377,7 +391,7 @@ CRITICAL: Provide realistic values for ALL nutrients based on the actual foods y
               {
                 role: "user",
                 content: [
-                                     { type: "text", text: "Analyze this food image and identify every ingredient you can see. Estimate the actual serving size of each item based on what you observe in the image. Provide COMPLETE nutritional analysis including ALL vitamins, minerals, and other nutrients for each ingredient." },
+                                     { type: "text", text: "CRITICAL: Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. DO NOT return zeros - use actual USDA nutritional values. For example, if you see apricots, vitamin_a should be ~1926, vitamin_c should be ~10, potassium should be ~259, etc. Provide accurate nutrition for every single micronutrient field." },
                   { type: "image_url", image_url: { url: processedImage } }
                 ]
               }
@@ -1245,7 +1259,21 @@ Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients
   ]
 }
 
-CRITICAL: Provide realistic values for ALL nutrients based on the actual foods you see. Each ingredient MUST have ALL 34 micronutrients with non-zero values where appropriate.`;
+CRITICAL REQUIREMENTS:
+1. Provide realistic nutritional values for ALL 34 micronutrients listed above
+2. DO NOT use zero values unless the food genuinely contains none of that nutrient
+3. Use actual nutritional data - apricots have vitamin A, vitamin C, potassium, etc.
+4. Every ingredient must include ALL 34 micronutrient fields with realistic values
+5. Base values on standard USDA nutritional data for the foods you identify
+
+EXAMPLE: For 100g apricots, realistic values would be:
+- vitamin_a: 1926 (apricots are high in vitamin A)
+- vitamin_c: 10 (moderate vitamin C)
+- potassium: 259 (good source)
+- iron: 0.4 (small amount)
+- calcium: 13 (small amount)
+
+Return complete nutritional profiles, not placeholder zeros.`;
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
@@ -1277,7 +1305,7 @@ CRITICAL: Provide realistic values for ALL nutrients based on the actual foods y
                 { 
                   type: "text", 
                   text: lightning_fast ? 
-                     "VISUAL ANALYSIS: Look at colors, textures, shapes. Orange cubes = sweet potato. White creamy = yogurt/sauce. Meat pieces = chicken/beef by texture. Reddish fermented vegetables = kimchi. Be PRECISE about what you observe visually, don't assume based on typical combinations. Provide ACCURATE values for ALL 34 nutrients including vitamins, minerals, and other nutrients." :
+                     "CRITICAL: Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. DO NOT return zeros - use actual USDA nutritional values. For example, if you see apricots, vitamin_a should be ~1926, vitamin_c should be ~10, potassium should be ~259, etc. Provide accurate nutrition for every single micronutrient field." :
                     (ultra_fast ? 
                        "Analyze visual characteristics: colors, textures, shapes. Identify by what you see, not what you expect. Include COMPLETE nutrient analysis for all identified foods including ALL vitamins, minerals, and other nutrients." :
                       (fast_mode ? 
