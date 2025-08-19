@@ -7,7 +7,8 @@ const {
   sumTotals, 
   toDvPct, 
   convertToNutritionFormat, 
-  getPer100DB 
+  getPer100DB,
+  validateResults
 } = require('./nutrition.js');
 
 const app = express();
@@ -543,22 +544,41 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
           }
         }
         
-        // Calculate totals using proper math
-        const totals = sumTotals(extractedIngredients, per100DB);
-        const dvPct = toDvPct(totals, DV);
-        
-        // Convert to nutrition.dart format
-        const nutritionData = convertToNutritionFormat(totals);
-        
-        // TEMP: verify numbers
-        console.table(extractedIngredients.map(i => ({
-          name: i.name, 
-          g: i.grams,
-          Fe_mg: ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Fe_mg ?? 0),
-          P_mg: ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.P_mg ?? 0),
-          Na_mg: ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Na_mg ?? 0)
-        })));
-        console.log('TOTALS', totals, 'DV%', dvPct);
+                 // Calculate totals using proper math
+         const totals = sumTotals(extractedIngredients, per100DB);
+         const dvPct = toDvPct(totals, DV);
+         
+         // Validate results for sanity
+         const warnings = validateResults(totals, extractedIngredients);
+         if (warnings.length > 0) {
+           console.log('🔍 Validation warnings:', warnings);
+         }
+         
+         // Convert to nutrition.dart format
+         const nutritionData = convertToNutritionFormat(totals);
+         
+         // Detailed verification logging
+         console.log('🧮 CALCULATION VERIFICATION:');
+         console.table(extractedIngredients.map(i => ({
+           name: i.name, 
+           grams: i.grams,
+           factor: ((i.grams || 0) / 100).toFixed(2),
+           'Vit A (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.A_mcg ?? 0),
+           'Vit C (mg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.C_mg ?? 0),
+           'Vit K (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.K_mcg ?? 0),
+           'B12 (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.B12_mcg ?? 0),
+           'Fe (mg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Fe_mg ?? 0),
+           'Na (mg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Na_mg ?? 0)
+         })));
+         
+         console.log('📊 FINAL TOTALS:', {
+           'Vit A': `${totals.vitamins.A_mcg} mcg (${dvPct.vitamins.A_mcg}% DV)`,
+           'Vit C': `${totals.vitamins.C_mg} mg (${dvPct.vitamins.C_mg}% DV)`,
+           'Vit K': `${totals.vitamins.K_mcg} mcg (${dvPct.vitamins.K_mcg}% DV)`,
+           'B12': `${totals.vitamins.B12_mcg} mcg (${dvPct.vitamins.B12_mcg}% DV)`,
+           'Iron': `${totals.minerals.Fe_mg} mg (${dvPct.minerals.Fe_mg}% DV)`,
+           'Sodium': `${totals.minerals.Na_mg} mg (${dvPct.minerals.Na_mg}% DV)`
+         });
         
         response = {
           meal_name: jsonResponse.meal_name || "Food",

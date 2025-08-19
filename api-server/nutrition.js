@@ -41,10 +41,14 @@ function sumTotals(ingredients, per100DB) {
   const totals = makeZeroTotals();
   
   for (const ing of ingredients) {
-    const ref = per100DB[ing.key]; 
-    if (!ref) continue;
+    const ref = per100DB[ing.name]; 
+    if (!ref) {
+      console.log(`❌ No DB entry for: ${ing.name}`);
+      continue;
+    }
     
     const factor = (ing.grams || 0) / 100;
+    console.log(`📊 ${ing.name}: ${ing.grams}g × factor ${factor}`);
     
     // Sum vitamins
     for (const k of Object.keys(totals.vitamins)) {
@@ -199,14 +203,31 @@ function convertToNutritionFormat(internalData) {
   };
 }
 
-// Simple USDA database lookup (simplified for now)
+// USDA/FDC database lookup (per 100g values)
 function getPer100DB(ingredientName) {
   const db = {
+    // Test case ingredients
     'chicken breast': {
       vitamins: { A_mcg: 6, C_mg: 0, D_mcg: 0, E_mg: 0.2, K_mcg: 0, B1_mg: 0.1, B2_mg: 0.1, B3_mg: 13.7, B5_mg: 1.0, B6_mg: 0.6, B7_mcg: 0.1, B9_mcg: 4, B12_mcg: 0.3 },
       minerals: { Ca_mg: 15, Cl_mg: 77, Cr_mcg: 0, Cu_mcg: 0.1, F_mg: 0, I_mcg: 7, Fe_mg: 1.0, Mg_mg: 29, Mn_mg: 0.0, Mo_mcg: 0, P_mg: 228, K_mg: 256, Se_mcg: 27.6, Na_mg: 74, Zn_mg: 1.0 },
       other: { fiber_g: 0, cholesterol_mg: 85, sugar_g: 0, satfat_g: 1.1, omega3_mg: 30, omega6_g: 0.5 }
     },
+    'sweet potato': {
+      vitamins: { A_mcg: 709, C_mg: 2.4, D_mcg: 0, E_mg: 0.3, K_mcg: 1.8, B1_mg: 0.1, B2_mg: 0.1, B3_mg: 0.6, B5_mg: 0.8, B6_mg: 0.2, B7_mcg: 0, B9_mcg: 11, B12_mcg: 0 },
+      minerals: { Ca_mg: 30, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0.1, F_mg: 0, I_mcg: 0, Fe_mg: 0.6, Mg_mg: 25, Mn_mg: 0.3, Mo_mcg: 0, P_mg: 47, K_mg: 337, Se_mcg: 0.6, Na_mg: 55, Zn_mg: 0.3 },
+      other: { fiber_g: 3.0, cholesterol_mg: 0, sugar_g: 4.2, satfat_g: 0, omega3_mg: 0, omega6_g: 0 }
+    },
+    'greek yogurt': {
+      vitamins: { A_mcg: 27, C_mg: 0.8, D_mcg: 0.1, E_mg: 0.1, K_mcg: 0.2, B1_mg: 0.1, B2_mg: 0.2, B3_mg: 0.2, B5_mg: 0.6, B6_mg: 0.1, B7_mcg: 0, B9_mcg: 12, B12_mcg: 0.5 },
+      minerals: { Ca_mg: 115, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0, F_mg: 0, I_mcg: 0, Fe_mg: 0.1, Mg_mg: 11, Mn_mg: 0, Mo_mcg: 0, P_mg: 135, K_mg: 141, Se_mcg: 9.7, Na_mg: 36, Zn_mg: 0.5 },
+      other: { fiber_g: 0, cholesterol_mg: 13, sugar_g: 3.2, satfat_g: 0.4, omega3_mg: 0, omega6_g: 0 }
+    },
+    'kimchi': {
+      vitamins: { A_mcg: 49, C_mg: 21.0, D_mcg: 0, E_mg: 0.1, K_mcg: 43.6, B1_mg: 0.1, B2_mg: 0.2, B3_mg: 1.1, B5_mg: 0.2, B6_mg: 0.2, B7_mcg: 0, B9_mcg: 43, B12_mcg: 0 },
+      minerals: { Ca_mg: 33, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0.1, F_mg: 0, I_mcg: 0, Fe_mg: 2.5, Mg_mg: 14, Mn_mg: 0.2, Mo_mcg: 0, P_mg: 24, K_mg: 151, Se_mcg: 0.5, Na_mg: 498, Zn_mg: 0.2 },
+      other: { fiber_g: 1.6, cholesterol_mg: 0, sugar_g: 1.1, satfat_g: 0, omega3_mg: 0, omega6_g: 0 }
+    },
+    // Additional common ingredients
     'white rice': {
       vitamins: { A_mcg: 0, C_mg: 0, D_mcg: 0, E_mg: 0.1, K_mcg: 0, B1_mg: 0.1, B2_mg: 0.0, B3_mg: 1.6, B5_mg: 0.4, B6_mg: 0.1, B7_mcg: 0, B9_mcg: 8, B12_mcg: 0 },
       minerals: { Ca_mg: 28, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0.2, F_mg: 0, I_mcg: 0, Fe_mg: 0.8, Mg_mg: 25, Mn_mg: 1.1, Mo_mcg: 0, P_mg: 115, K_mg: 115, Se_mcg: 15.1, Na_mg: 5, Zn_mg: 1.2 },
@@ -224,12 +245,60 @@ function getPer100DB(ingredientName) {
     }
   };
   
-  // Simple key matching (case insensitive)
+  // Smart key matching (case insensitive, partial matches)
   const key = Object.keys(db).find(k => 
-    ingredientName.toLowerCase().includes(k.toLowerCase())
+    ingredientName.toLowerCase().includes(k.toLowerCase()) ||
+    k.toLowerCase().includes(ingredientName.toLowerCase())
   );
   
   return key ? db[key] : null;
+}
+
+// Sanity checks to reject hallucinations
+function validateResults(totals, ingredients) {
+  const warnings = [];
+  
+  // Check Vitamin A (should be < 2000 mcg unless orange tubers/leafy greens present)
+  const hasOrangeTubers = ingredients.some(ing => 
+    ing.name.toLowerCase().includes('sweet potato') || 
+    ing.name.toLowerCase().includes('carrot') ||
+    ing.name.toLowerCase().includes('pumpkin')
+  );
+  const hasLeafyGreens = ingredients.some(ing => 
+    ing.name.toLowerCase().includes('spinach') || 
+    ing.name.toLowerCase().includes('kale') ||
+    ing.name.toLowerCase().includes('lettuce')
+  );
+  
+  if (totals.vitamins.A_mcg > 2000 && !hasOrangeTubers && !hasLeafyGreens) {
+    warnings.push(`⚠️ Vitamin A (${totals.vitamins.A_mcg} mcg) seems high without orange tubers/leafy greens`);
+  }
+  
+  // Check Vitamin C for kimchi (should be ≥10 mg per 50g)
+  const kimchiIngredient = ingredients.find(ing => ing.name.toLowerCase().includes('kimchi'));
+  if (kimchiIngredient && totals.vitamins.C_mg < 5) {
+    warnings.push(`⚠️ Vitamin C (${totals.vitamins.C_mg} mg) seems low for kimchi`);
+  }
+  
+  // Check Vitamin K for kimchi (should be in tens of µg)
+  if (kimchiIngredient && totals.vitamins.K_mcg < 10) {
+    warnings.push(`⚠️ Vitamin K (${totals.vitamins.K_mcg} mcg) seems low for kimchi`);
+  }
+  
+  // Check B12 (should be reasonable for animal products)
+  const hasAnimalProducts = ingredients.some(ing => 
+    ing.name.toLowerCase().includes('chicken') || 
+    ing.name.toLowerCase().includes('beef') ||
+    ing.name.toLowerCase().includes('fish') ||
+    ing.name.toLowerCase().includes('yogurt') ||
+    ing.name.toLowerCase().includes('milk')
+  );
+  
+  if (hasAnimalProducts && totals.vitamins.B12_mcg > 5) {
+    warnings.push(`⚠️ Vitamin B12 (${totals.vitamins.B12_mcg} mcg) seems very high`);
+  }
+  
+  return warnings;
 }
 
 // CommonJS exports
@@ -241,5 +310,6 @@ module.exports = {
   roundTotals,
   convertToInternalFormat,
   convertToNutritionFormat,
-  getPer100DB
+  getPer100DB,
+  validateResults
 };
