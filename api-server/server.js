@@ -139,11 +139,11 @@ function ultraRepairJson(content) {
   
   // Extract meal name if possible
   const mealNameMatch = repaired.match(/"meal_name":\s*"([^"]+)"/);
-  const mealName = mealNameMatch ? mealNameMatch[1] : "Gourmet Dish";
+  const mealName = mealNameMatch ? mealNameMatch[1] : "Dish";
   
   // Extract any ingredient names
   const nameMatches = repaired.match(/"name":\s*"([^"]+)"/g);
-  const ingredientNames = nameMatches ? nameMatches.map(m => m.match(/"name":\s*"([^"]+)"/)[1]) : ["Fresh Ingredient"];
+  const ingredientNames = nameMatches ? nameMatches.map(m => m.match(/"name":\s*"([^"]+)"/)[1]) : ["Ingredient"];
   
   // Create minimal valid JSON
   const minimalJson = {
@@ -220,13 +220,19 @@ app.post('/api/analyze-food', async (req, res) => {
     // SIMPLE PROMPT - ONLY MICRONUTRIENTS
     const systemPrompt = `You are a gourmet chef and nutritionist. Analyze the food image and return ONLY valid JSON with realistic micronutrient values.
 
-FOOD NAMING: Create elegant, descriptive gourmet names that sound like they belong in a high-end restaurant menu. Use descriptive adjectives, cooking methods, and ingredient combinations.
+FOOD NAMING: Create short, elegant gourmet dish names like restaurant menu items. Use dish names, not ingredient lists.
 
 EXAMPLES:
-- "Herb-Roasted Mediterranean Chicken with Rosemary Potatoes"
-- "Pan-Seared Atlantic Salmon with Lemon Butter Sauce"
-- "Fresh Garden Salad with Balsamic Vinaigrette"
-- "Artisan Sourdough Toast with Avocado and Microgreens"
+- "Pasta Carbonara"
+- "Chicken Quesadilla"
+- "Garden Salad"
+- "Avocado Toast"
+- "Grilled Salmon"
+- "Beef Tacos"
+- "Caesar Salad"
+- "Margherita Pizza"
+
+INGREDIENT NAMING: Use short, simple ingredient names.
 
 UNITS: All micronutrients should be in these units:
 - Vitamins: mg (except vitamin_a in mcg, vitamin_d in mcg, vitamin_b7 in mcg, vitamin_b9 in mcg, vitamin_b12 in mcg, vitamin_k in mcg)
