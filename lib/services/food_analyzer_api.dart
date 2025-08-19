@@ -72,13 +72,7 @@ class FoodAnalyzerApi {
               'Accept-Encoding': 'gzip, deflate',
             },
             body: jsonEncode({
-              'image': dataUri,
-              'detail_level': 'high', // Keep high quality
-              'include_ingredient_macros': true,
-              'return_ingredient_nutrition': true,
-              'include_additional_nutrition': true,
-              'include_vitamins_minerals': true,
-              'fast_mode': true, // New flag for faster processing
+              'imageBase64': dataUri,
             }),
           )
           .timeout(const Duration(seconds: 90)); // Reduced from 180s
@@ -92,19 +86,14 @@ class FoodAnalyzerApi {
       // Parse the response
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
-      // Check for API-level errors
-      if (responseData['success'] != true) {
-        throw Exception('API error: ${responseData['error']}');
-      }
-
       // Log response details (reduced logging for speed)
       if (kDebugMode) {
-        final data = responseData['data'] as Map<String, dynamic>;
-        print('✅ API response received with ${data.keys.length} data keys');
+        print('✅ API response received with ${responseData.keys.length} keys');
+        print('📊 Response keys: ${responseData.keys.toList()}');
       }
 
-      // Return the data
-      return responseData['data'];
+      // Return the data directly (new FDC API format)
+      return responseData;
     } catch (e) {
       print('❌ Error analyzing food image: $e');
       rethrow;
@@ -276,8 +265,8 @@ class FoodAnalyzerApi {
               'lightning_fast': true, // NEW: Lightning mode
             }),
           )
-          .timeout(const Duration(
-              seconds: 60)); // Increased to 60s for Render.com
+          .timeout(
+              const Duration(seconds: 60)); // Increased to 60s for Render.com
 
       if (response.statusCode != 200) {
         throw Exception('Lightning API failed: ${response.statusCode}');
