@@ -419,13 +419,13 @@ class _SnapFoodState extends State<SnapFood> {
       print('📊 Analysis data keys: ${analysisData.keys.toList()}');
 
       // Handle new FDC API response format
-      if (analysisData.containsKey('food_name') && 
-          analysisData.containsKey('macros') && 
+      if (analysisData.containsKey('food_name') &&
+          analysisData.containsKey('macros') &&
           analysisData.containsKey('ingredients')) {
         
         String foodName = analysisData['food_name'] ?? 'Analyzed Food';
         List<dynamic> ingredients = analysisData['ingredients'] ?? [];
-        
+
         if (ingredients.isEmpty) {
           throw Exception('Invalid or empty ingredients in analysis data');
         }
@@ -444,32 +444,44 @@ class _SnapFoodState extends State<SnapFood> {
 
         // Convert to the format expected by _saveFoodCardData
         Map<String, dynamic> correctedMicronutrients = {};
-        
-        // Process vitamins
+
+        // Process vitamins - extract the actual values
         vitamins.forEach((key, value) {
           if (value is Map && value.containsKey('value')) {
             String nutrientValue = value['value']?.toString() ?? "0";
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = nutrientValue;
+            // Extract just the numeric part before the unit
+            String numericValue = nutrientValue.split(' ')[0];
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = numericValue;
+            print('💊 Extracted vitamin $key: $numericValue');
           }
         });
 
-        // Process minerals
+        // Process minerals - extract the actual values
         minerals.forEach((key, value) {
           if (value is Map && value.containsKey('value')) {
             String nutrientValue = value['value']?.toString() ?? "0";
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = nutrientValue;
+            // Extract just the numeric part before the unit
+            String numericValue = nutrientValue.split(' ')[0];
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = numericValue;
+            print('💊 Extracted mineral $key: $numericValue');
           }
         });
 
-        // Process other nutrients
+        // Process other nutrients - extract the actual values
         other.forEach((key, value) {
           if (value is Map && value.containsKey('value')) {
             String nutrientValue = value['value']?.toString() ?? "0";
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = nutrientValue;
+            // Extract just the numeric part before the unit
+            String numericValue = nutrientValue.split(' ')[0];
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = numericValue;
+            print('💊 Extracted other $key: $numericValue');
           }
         });
 
-        // Process ingredients list
+        print('📊 Total micronutrients extracted: ${correctedMicronutrients.length}');
+        print('📊 Micronutrient keys: ${correctedMicronutrients.keys.toList()}');
+
+        // Process ingredients list with actual nutrition data
         List<Map<String, dynamic>> ingredientsList = [];
         if (ingredients is List) {
           for (int i = 0; i < ingredients.length; i++) {
@@ -504,7 +516,7 @@ class _SnapFoodState extends State<SnapFood> {
           ingredientsList,
           "5/10", // Default health score
           scanId,
-          correctedMicronutrients,
+          correctedMicronutrients, // Pass the extracted micronutrients
         );
 
         print('✅ Analysis results processed successfully');
@@ -823,10 +835,15 @@ class _SnapFoodState extends State<SnapFood> {
     // Don't store display image separately - it's already in the card data
 
     // SAVE SCAN DATA TO NUTRITION MANAGER PERMANENTLY
-    // Temporarily disabled to fix infinite loop
-    // if (finalMicronutrients.isNotEmpty) {
-    //   await _saveScanDataToNutritionManager(finalScanId, finalMicronutrients);
-    // }
+    // Save nutrition data with guard to prevent infinite loops
+    if (finalMicronutrients.isNotEmpty) {
+      try {
+        await _saveScanDataToNutritionManager(finalScanId, finalMicronutrients);
+        print('✅ Nutrition data saved to manager successfully');
+      } catch (e) {
+        print('⚠️ Nutrition data save failed (non-critical): $e');
+      }
+    }
 
     // After saving, navigate to FoodCardOpen
     if (mounted) {
