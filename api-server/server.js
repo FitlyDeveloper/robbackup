@@ -292,68 +292,59 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
                                               // COMPREHENSIVE prompt - request ALL 34 micronutrients tracked on nutrition.dart screen
-        const systemPrompt = `You are a professional nutritionist and food analyst. Give this dish an APPETIZING RESTAURANT NAME, then identify ingredients with COMPLETE nutritional information including ALL vitamins, minerals, and other nutrients.
+        const systemPrompt = `You are a professional nutritionist analyzing food images. Identify ingredients and provide COMPLETE nutritional information.
 
-Estimate the actual serving size of each item based on what you observe in the image.
-
-Return ONLY valid JSON with COMPLETE nutrition data including ALL 34 micronutrients:
+Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients:
 
 {
-  "meal_name": "GOURMET RESTAURANT NAME (like 'Mediterranean Chicken Bowl' or 'Artisan Beef Sandwich')",
+  "meal_name": "descriptive meal name",
   "ingredients": [
     {
-      "name": "specific food item",
-      "weight_g": 150,
-      "calories": 75,
-      "protein_g": 3,
-      "fat_g": 1.5,
-      "carbs_g": 15,
-      "vitamin_a": 450,
-      "vitamin_c": 12,
-      "vitamin_d": 2,
-      "vitamin_e": 1.5,
-      "vitamin_k": 8,
-      "vitamin_b1": 0.08,
-      "vitamin_b2": 0.12,
-      "vitamin_b3": 1.8,
-      "vitamin_b5": 0.6,
-      "vitamin_b6": 0.15,
-      "vitamin_b7": 3,
-      "vitamin_b9": 25,
-      "vitamin_b12": 0.3,
-      "calcium": 45,
-      "chloride": 120,
-      "chromium": 2,
-      "copper": 0.15,
-      "fluoride": 0.8,
-      "iodine": 8,
-      "iron": 1.2,
-      "magnesium": 35,
-      "manganese": 0.4,
-      "molybdenum": 5,
-      "phosphorus": 65,
-      "potassium": 280,
-      "selenium": 2.5,
-      "sodium": 85,
-      "zinc": 0.8,
-      "fiber": 2.5,
-      "cholesterol": 15,
-      "sugar": 8,
-      "saturated_fats": 0.6,
-      "omega_3": 120,
-      "omega_6": 1.8
+      "name": "ingredient name",
+      "weight_g": 100,
+      "calories": 80,
+      "protein_g": 5,
+      "fat_g": 2,
+      "carbs_g": 12,
+      "vitamin_a": 250,
+      "vitamin_c": 8,
+      "vitamin_d": 1,
+      "vitamin_e": 0.8,
+      "vitamin_k": 5,
+      "vitamin_b1": 0.05,
+      "vitamin_b2": 0.08,
+      "vitamin_b3": 1.2,
+      "vitamin_b5": 0.4,
+      "vitamin_b6": 0.1,
+      "vitamin_b7": 2,
+      "vitamin_b9": 15,
+      "vitamin_b12": 0.2,
+      "calcium": 30,
+      "chloride": 80,
+      "chromium": 1,
+      "copper": 0.1,
+      "fluoride": 0.5,
+      "iodine": 5,
+      "iron": 0.8,
+      "magnesium": 25,
+      "manganese": 0.3,
+      "molybdenum": 3,
+      "phosphorus": 40,
+      "potassium": 180,
+      "selenium": 1.5,
+      "sodium": 50,
+      "zinc": 0.5,
+      "fiber": 1.8,
+      "cholesterol": 10,
+      "sugar": 5,
+      "saturated_fats": 0.4,
+      "omega_3": 80,
+      "omega_6": 1.2
     }
   ]
 }
 
-Rules:
-1. Identify ALL food items visible in the image
-2. Estimate weight_g based on the actual portion size you see
-3. Use specific food names
-4. Break down complex dishes into components
-5. Include all visible ingredients, garnishes, and components
-6. Provide ACCURATE values for ALL 34 nutrients listed above
-7. NO extra text outside JSON structure`;
+CRITICAL: Provide realistic values for ALL nutrients based on the actual foods you see. Each ingredient MUST have ALL 34 micronutrients with non-zero values where appropriate.`;
 
     let finalResponse = null;
     
@@ -1202,81 +1193,59 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
                                          // COMPREHENSIVE prompt - request ALL 34 micronutrients tracked on nutrition.dart screen
-         const systemPrompt = `You are a professional nutritionist and food analyst. ANALYZE THE VISUAL DETAILS CAREFULLY and provide COMPLETE nutritional information including ALL vitamins, minerals, and other nutrients:
+         const systemPrompt = `You are a professional nutritionist analyzing food images. Identify ingredients and provide COMPLETE nutritional information.
 
-VISUAL ANALYSIS CHECKLIST:
-- Orange/golden cubes = likely sweet potato or regular potato
-- White creamy substance = likely yogurt, cream, or sauce
-- Meat pieces = identify by texture and color (chicken, beef, etc.)
-- Fermented vegetables = kimchi, sauerkraut (often reddish/orange with cabbage texture)
-- White chunks = could be cheese, tofu, or other protein
-- Look at TEXTURES, COLORS, and SHAPES - don't guess based on assumptions
-
-CRITICAL RULES:
-- Identify by VISUAL CHARACTERISTICS, not assumptions
-- Sweet potato = orange/golden cubes with smooth texture
-- Greek yogurt = white, creamy, smooth consistency  
-- Kimchi = fermented cabbage, often reddish/orange color
-- Chicken = white/light meat pieces with fibrous texture
-
-Return ONLY valid JSON with COMPLETE nutrition data including ALL 34 micronutrients:
+Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients:
 
 {
-  "meal_name": "ACCURATE DESCRIPTIVE NAME based on what you see",
+  "meal_name": "descriptive meal name",
   "ingredients": [
     {
-      "name": "ONLY ingredients you can clearly see",
-      "weight_g": 150,
-      "calories": 75,
-      "protein_g": 3,
-      "fat_g": 1.5,
-      "carbs_g": 15,
-      "vitamin_a": 450,
-      "vitamin_c": 12,
-      "vitamin_d": 2,
-      "vitamin_e": 1.5,
-      "vitamin_k": 8,
-      "vitamin_b1": 0.08,
-      "vitamin_b2": 0.12,
-      "vitamin_b3": 1.8,
-      "vitamin_b5": 0.6,
-      "vitamin_b6": 0.15,
-      "vitamin_b7": 3,
-      "vitamin_b9": 25,
-      "vitamin_b12": 0.3,
-      "calcium": 45,
-      "chloride": 120,
-      "chromium": 2,
-      "copper": 0.15,
-      "fluoride": 0.8,
-      "iodine": 8,
-      "iron": 1.2,
-      "magnesium": 35,
-      "manganese": 0.4,
-      "molybdenum": 5,
-      "phosphorus": 65,
-      "potassium": 280,
-      "selenium": 2.5,
-      "sodium": 85,
-      "zinc": 0.8,
-      "fiber": 2.5,
-      "cholesterol": 15,
-      "sugar": 8,
-      "saturated_fats": 0.6,
-      "omega_3": 120,
-      "omega_6": 1.8
+      "name": "ingredient name",
+      "weight_g": 100,
+      "calories": 80,
+      "protein_g": 5,
+      "fat_g": 2,
+      "carbs_g": 12,
+      "vitamin_a": 250,
+      "vitamin_c": 8,
+      "vitamin_d": 1,
+      "vitamin_e": 0.8,
+      "vitamin_k": 5,
+      "vitamin_b1": 0.05,
+      "vitamin_b2": 0.08,
+      "vitamin_b3": 1.2,
+      "vitamin_b5": 0.4,
+      "vitamin_b6": 0.1,
+      "vitamin_b7": 2,
+      "vitamin_b9": 15,
+      "vitamin_b12": 0.2,
+      "calcium": 30,
+      "chloride": 80,
+      "chromium": 1,
+      "copper": 0.1,
+      "fluoride": 0.5,
+      "iodine": 5,
+      "iron": 0.8,
+      "magnesium": 25,
+      "manganese": 0.3,
+      "molybdenum": 3,
+      "phosphorus": 40,
+      "potassium": 180,
+      "selenium": 1.5,
+      "sodium": 50,
+      "zinc": 0.5,
+      "fiber": 1.8,
+      "cholesterol": 10,
+      "sugar": 5,
+      "saturated_fats": 0.4,
+      "omega_3": 80,
+      "omega_6": 1.2
     }
   ]
 }
 
-Rules:
-1. Identify ALL food items visible in the image
-2. Estimate weight_g based on the actual portion size you see
-3. Use specific food names
-4. Break down complex dishes into components
-5. Include all visible ingredients, garnishes, and components
-6. Provide ACCURATE values for ALL 34 nutrients listed above
-7. NO extra text outside JSON structure`;
+CRITICAL: Provide realistic values for ALL nutrients based on the actual foods you see. Each ingredient MUST have ALL 34 micronutrients with non-zero values where appropriate.`;
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
