@@ -35,7 +35,10 @@ console.log('FDC API Key present:', process.env.FDC_API_KEY ? 'Yes' : 'No');
 runFDCTest();
 
 app.use(cors());
-app.use(express.json());
+
+// BEFORE any routes - increase body limits for base64 JSON payloads
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -176,6 +179,72 @@ app.post('/analyze-nutrition-v2', upload.single('image'), async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error processing nutrition analysis (v2):', error);
+    res.status(500).json({ error: 'Failed to analyze nutrition', details: error.message });
+  }
+});
+
+// New endpoint that accepts either imageUrl or imageBase64
+app.post('/api/analyze-food', async (req, res) => {
+  try {
+    const { imageUrl, imageBase64, source } = req.body || {};
+    
+    if (!imageUrl && !imageBase64) {
+      return res.status(400).json({ error: "Provide imageUrl or imageBase64" });
+    }
+
+    let base64Image;
+    
+    if (imageBase64) {
+      // Use provided base64 image
+      base64Image = imageBase64;
+      console.log('📸 Processing base64 image (size:', Math.round(imageBase64.length / 1024), 'KB)');
+    } else if (imageUrl) {
+      // Fetch image from URL
+      console.log('📸 Processing image URL:', imageUrl);
+      try {
+        const response = await fetch(imageUrl);
+        if (!response.ok) {
+          return res.status(400).json({ error: 'Failed to fetch image from URL' });
+        }
+        const imageBuffer = await response.arrayBuffer();
+        base64Image = Buffer.from(imageBuffer).toString('base64');
+      } catch (error) {
+        return res.status(400).json({ error: 'Failed to fetch image from URL', details: error.message });
+      }
+    }
+
+    // Extract ingredients using OpenAI Vision (ONLY name and grams)
+    const ingredients = await extractIngredientsFromImage(base64Image);
+    
+    if (!ingredients || ingredients.length === 0) {
+      return res.status(400).json({ error: 'No ingredients detected in image' });
+    }
+
+    console.log('🔍 Extracted ingredients:', ingredients);
+
+    // Calculate nutrition using FDC
+    const totals = await calculateTotalsFromFDC(ingredients);
+    const dvPct = calculateDVPct(totals);
+
+    // Return new API format
+    const response = {
+      ingredients: ingredients,
+      macros: {
+        calories_kcal: totals.calories_kcal,
+        protein_g: totals.protein_g,
+        fat_g: totals.fat_g,
+        carbs_g: totals.carbs_g
+      },
+      vitamins: totals.vitamins,
+      minerals: totals.minerals,
+      other: totals.other,
+      dv_pct: dvPct
+    };
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error processing nutrition analysis:', error);
     res.status(500).json({ error: 'Failed to analyze nutrition', details: error.message });
   }
 });
