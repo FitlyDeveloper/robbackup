@@ -415,170 +415,105 @@ class _SnapFoodState extends State<SnapFood> {
   void _displayAnalysisResults(
       Map<String, dynamic> analysisData, String scanId) {
     try {
-      // Track if we've already handled navigation
-      // navigation handled in push
+      print('🎯 Displaying analysis results for scanId: $scanId');
+      print('📊 Analysis data keys: ${analysisData.keys.toList()}');
 
-      // Require the expected format strictly
-      if (analysisData.containsKey('meal_name')) {
-        String mealName = analysisData['meal_name'];
+      // Handle new FDC API response format
+      if (analysisData.containsKey('food_name') && 
+          analysisData.containsKey('macros') && 
+          analysisData.containsKey('ingredients')) {
+        
+        String foodName = analysisData['food_name'] ?? 'Analyzed Food';
         List<dynamic> ingredients = analysisData['ingredients'] ?? [];
+        
         if (ingredients.isEmpty) {
           throw Exception('Invalid or empty ingredients in analysis data');
         }
 
-        // PRESERVE PRECISION: Use string extraction to avoid rounding
-        String calories =
-            _extractNumericValue(analysisData['calories']?.toString() ?? "0");
-        String protein =
-            _extractNumericValue(analysisData['protein']?.toString() ?? "0");
-        String fat =
-            _extractNumericValue(analysisData['fat']?.toString() ?? "0");
-        String carbs =
-            _extractNumericValue(analysisData['carbs']?.toString() ?? "0");
+        // Extract macros from the new format
+        Map<String, dynamic> macros = analysisData['macros'] ?? {};
+        String calories = macros['calories_kcal']?.toString() ?? "0";
+        String protein = macros['protein_g']?.toString() ?? "0";
+        String fat = macros['fat_g']?.toString() ?? "0";
+        String carbs = macros['carbs_g']?.toString() ?? "0";
 
-        // Only convert to double for calculations, keep strings for display
-        // parsed values used only for validation below
-        String healthScore = analysisData['health_score']?.toString() ?? "5/10";
+        // Extract vitamins and minerals from the new format
+        Map<String, dynamic> vitamins = analysisData['vitamins'] ?? {};
+        Map<String, dynamic> minerals = analysisData['minerals'] ?? {};
+        Map<String, dynamic> other = analysisData['other'] ?? {};
 
-        // EXTRACT ALL 34 MICRONUTRIENTS FROM OPENAI RESPONSE
-        Map<String, dynamic> allMicronutrients = {};
-
-        // Extract vitamins (13 nutrients)
-        allMicronutrients['vitamin_a'] =
-            _extractNumericValue(analysisData['vitamin_a']?.toString() ?? "0");
-        allMicronutrients['vitamin_c'] =
-            _extractNumericValue(analysisData['vitamin_c']?.toString() ?? "0");
-        allMicronutrients['vitamin_d'] =
-            _extractNumericValue(analysisData['vitamin_d']?.toString() ?? "0");
-        allMicronutrients['vitamin_e'] =
-            _extractNumericValue(analysisData['vitamin_e']?.toString() ?? "0");
-        allMicronutrients['vitamin_k'] =
-            _extractNumericValue(analysisData['vitamin_k']?.toString() ?? "0");
-        allMicronutrients['vitamin_b1'] =
-            _extractNumericValue(analysisData['vitamin_b1']?.toString() ?? "0");
-        allMicronutrients['vitamin_b2'] =
-            _extractNumericValue(analysisData['vitamin_b2']?.toString() ?? "0");
-        allMicronutrients['vitamin_b3'] =
-            _extractNumericValue(analysisData['vitamin_b3']?.toString() ?? "0");
-        allMicronutrients['vitamin_b5'] =
-            _extractNumericValue(analysisData['vitamin_b5']?.toString() ?? "0");
-        allMicronutrients['vitamin_b6'] =
-            _extractNumericValue(analysisData['vitamin_b6']?.toString() ?? "0");
-        allMicronutrients['vitamin_b7'] =
-            _extractNumericValue(analysisData['vitamin_b7']?.toString() ?? "0");
-        allMicronutrients['vitamin_b9'] =
-            _extractNumericValue(analysisData['vitamin_b9']?.toString() ?? "0");
-        allMicronutrients['vitamin_b12'] = _extractNumericValue(
-            analysisData['vitamin_b12']?.toString() ?? "0");
-
-        // Extract minerals (15 nutrients)
-        allMicronutrients['calcium'] =
-            _extractNumericValue(analysisData['calcium']?.toString() ?? "0");
-        allMicronutrients['chloride'] =
-            _extractNumericValue(analysisData['chloride']?.toString() ?? "0");
-        allMicronutrients['chromium'] =
-            _extractNumericValue(analysisData['chromium']?.toString() ?? "0");
-        allMicronutrients['copper'] =
-            _extractNumericValue(analysisData['copper']?.toString() ?? "0");
-        allMicronutrients['fluoride'] =
-            _extractNumericValue(analysisData['fluoride']?.toString() ?? "0");
-        allMicronutrients['iodine'] =
-            _extractNumericValue(analysisData['iodine']?.toString() ?? "0");
-        allMicronutrients['iron'] =
-            _extractNumericValue(analysisData['iron']?.toString() ?? "0");
-        allMicronutrients['magnesium'] =
-            _extractNumericValue(analysisData['magnesium']?.toString() ?? "0");
-        allMicronutrients['manganese'] =
-            _extractNumericValue(analysisData['manganese']?.toString() ?? "0");
-        allMicronutrients['molybdenum'] =
-            _extractNumericValue(analysisData['molybdenum']?.toString() ?? "0");
-        allMicronutrients['phosphorus'] =
-            _extractNumericValue(analysisData['phosphorus']?.toString() ?? "0");
-        allMicronutrients['potassium'] =
-            _extractNumericValue(analysisData['potassium']?.toString() ?? "0");
-        allMicronutrients['selenium'] =
-            _extractNumericValue(analysisData['selenium']?.toString() ?? "0");
-        allMicronutrients['sodium'] =
-            _extractNumericValue(analysisData['sodium']?.toString() ?? "0");
-        allMicronutrients['zinc'] =
-            _extractNumericValue(analysisData['zinc']?.toString() ?? "0");
-
-        // Extract other nutrients (6 nutrients)
-        allMicronutrients['fiber'] =
-            _extractNumericValue(analysisData['fiber']?.toString() ?? "0");
-        allMicronutrients['cholesterol'] = _extractNumericValue(
-            analysisData['cholesterol']?.toString() ?? "0");
-        allMicronutrients['sugar'] =
-            _extractNumericValue(analysisData['sugar']?.toString() ?? "0");
-        allMicronutrients['saturated_fats'] = _extractNumericValue(
-            analysisData['saturated_fats']?.toString() ?? "0");
-        allMicronutrients['omega_3'] =
-            _extractNumericValue(analysisData['omega_3']?.toString() ?? "0");
-        allMicronutrients['omega_6'] =
-            _extractNumericValue(analysisData['omega_6']?.toString() ?? "0");
-
-        // Process micronutrients from OpenAI response
+        // Convert to the format expected by _saveFoodCardData
         Map<String, dynamic> correctedMicronutrients = {};
-        allMicronutrients.forEach((key, value) {
-          // OpenAI should now provide values in correct units, so use them directly
-          correctedMicronutrients[key] = value.toString();
+        
+        // Process vitamins
+        vitamins.forEach((key, value) {
+          if (value is Map && value.containsKey('value')) {
+            String nutrientValue = value['value']?.toString() ?? "0";
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = nutrientValue;
+          }
         });
-        // no terminal output
 
-        // Save the data
+        // Process minerals
+        minerals.forEach((key, value) {
+          if (value is Map && value.containsKey('value')) {
+            String nutrientValue = value['value']?.toString() ?? "0";
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = nutrientValue;
+          }
+        });
+
+        // Process other nutrients
+        other.forEach((key, value) {
+          if (value is Map && value.containsKey('value')) {
+            String nutrientValue = value['value']?.toString() ?? "0";
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = nutrientValue;
+          }
+        });
+
+        // Process ingredients list
         List<Map<String, dynamic>> ingredientsList = [];
-
-        // Expect ingredients as objects with nutrition data
-        if (analysisData['ingredients'] is List) {
-          List<dynamic> ingredientsFromAPI = analysisData['ingredients'];
-
-          for (int i = 0; i < ingredientsFromAPI.length; i++) {
-            var ingredientData = ingredientsFromAPI[i];
-
+        if (ingredients is List) {
+          for (int i = 0; i < ingredients.length; i++) {
+            var ingredientData = ingredients[i];
             if (ingredientData is Map<String, dynamic>) {
-              // Extract nutrition data directly from the ingredient object
               Map<String, dynamic> processedIngredient = {
-                'name':
-                    ingredientData['name']?.toString() ?? 'Unknown Ingredient',
-                'amount': ingredientData['amount']?.toString() ?? '100g',
-                'calories':
-                    _extractIngredientValue(ingredientData['calories'], 0),
-                'protein': _extractIngredientValueAsDouble(
-                    ingredientData['protein'], 0.0),
-                'fat':
-                    _extractIngredientValueAsDouble(ingredientData['fat'], 0.0),
-                'carbs': _extractIngredientValueAsDouble(
-                    ingredientData['carbs'], 0.0),
+                'name': ingredientData['name']?.toString() ?? 'Unknown Ingredient',
+                'amount': ingredientData['grams']?.toString() ?? '100g',
+                'calories': "0", // Will be calculated from macros
+                'protein': 0.0,
+                'fat': 0.0,
+                'carbs': 0.0,
               };
-
               ingredientsList.add(processedIngredient);
-            } else {
-              throw Exception('Invalid ingredient data format');
             }
           }
-        } else {
-          throw Exception('Invalid ingredients format');
         }
 
-        // Pass the scanId to _saveFoodCardData - this ensures consistent ID usage
+        // Create ingredients string for display
+        String ingredientsString = ingredients
+            .map((ing) => ing['name']?.toString() ?? 'Unknown')
+            .join(", ");
+
+        // Save the data with the new format
         _saveFoodCardData(
-          mealName,
-          ingredients.join(", "),
+          foodName,
+          ingredientsString,
           calories,
           protein,
           fat,
           carbs,
           ingredientsList,
-          healthScore,
-          scanId, // Pass the scanId parameter
-          correctedMicronutrients, // Pass unit-corrected micronutrients
+          "5/10", // Default health score
+          scanId,
+          correctedMicronutrients,
         );
 
-        // navigation complete
+        print('✅ Analysis results processed successfully');
+        
       } else {
-        throw Exception('Unexpected analysis format');
+        throw Exception('Unexpected analysis format - missing required fields');
       }
     } catch (e) {
+      print('❌ Error in _displayAnalysisResults: $e');
       // On any error, show error and return
       if (mounted) {
         _showCustomDialog('Analysis Error',
@@ -593,8 +528,9 @@ class _SnapFoodState extends State<SnapFood> {
 
   // Validate API response to prevent mock data
   bool _validateApiResponse(Map<String, dynamic> response) {
-    debugPrint('🔍 Validating API response with keys: ${response.keys.toList()}');
-    
+    debugPrint(
+        '🔍 Validating API response with keys: ${response.keys.toList()}');
+
     // Check if response has required fields
     if (!response.containsKey('meal_name') &&
         !response.containsKey('food_name') &&
@@ -616,7 +552,8 @@ class _SnapFoodState extends State<SnapFood> {
       if (macros.containsKey('calories_kcal')) {
         int calories = int.tryParse(macros['calories_kcal'].toString()) ?? 0;
         if (calories == 0 || calories > 5000) {
-          debugPrint('❌ API response has suspicious calories in macros: $calories');
+          debugPrint(
+              '❌ API response has suspicious calories in macros: $calories');
           return false;
         }
       }
@@ -886,9 +823,10 @@ class _SnapFoodState extends State<SnapFood> {
     // Don't store display image separately - it's already in the card data
 
     // SAVE SCAN DATA TO NUTRITION MANAGER PERMANENTLY
-    if (finalMicronutrients.isNotEmpty) {
-      await _saveScanDataToNutritionManager(finalScanId, finalMicronutrients);
-    }
+    // Temporarily disabled to fix infinite loop
+    // if (finalMicronutrients.isNotEmpty) {
+    //   await _saveScanDataToNutritionManager(finalScanId, finalMicronutrients);
+    // }
 
     // After saving, navigate to FoodCardOpen
     if (mounted) {
