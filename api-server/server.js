@@ -254,6 +254,16 @@ async function extractIngredientsFromImage(base64Image) {
   try {
     console.log('🤖 Calling OpenAI Vision for ingredient extraction...');
 
+    // Extract base64 data from data URI if present
+    let cleanBase64 = base64Image;
+    if (base64Image.startsWith('data:image/')) {
+      const commaIndex = base64Image.indexOf(',');
+      if (commaIndex !== -1) {
+        cleanBase64 = base64Image.substring(commaIndex + 1);
+        console.log('📸 Extracted base64 data from data URI (length:', cleanBase64.length, ')');
+      }
+    }
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -282,7 +292,7 @@ RULES:
             {
               type: "image_url",
               image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`
+                url: `data:image/jpeg;base64,${cleanBase64}`
               }
             }
           ]
