@@ -880,7 +880,7 @@ function processVisionResponse(visionResponse) {
     return sum;
   };
 
-  // Vitamins (13)
+  // Vitamins (13) - Extract directly from converted ingredients
   const vitaminsMap = {
     vitamin_A_mcg: 'vitamin_a',
     vitamin_C_mg: 'vitamin_c',
@@ -897,15 +897,17 @@ function processVisionResponse(visionResponse) {
     vitamin_B12_mcg: 'vitamin_b12'
   };
   Object.entries(vitaminsMap).forEach(([nestedKey, flatKey]) => {
-    const val = sumNested(
-      ing => ing.vitamins ? ing.vitamins[nestedKey] : 0,
-      ing => ing[flatKey] || 0 // Use the flat key directly from original response
-    );
+    // Extract directly from converted ingredients (which have the nested structure)
+    const val = convertedIngredients.reduce((sum, ing) => {
+      const nestedValue = ing.vitamins ? ing.vitamins[nestedKey] : 0;
+      const flatValue = ing[flatKey] || 0;
+      return sum + (nestedValue || flatValue || 0);
+    }, 0);
     // ALWAYS include ALL vitamins, even if 0 (required for nutrition.dart)
     response[flatKey] = +(val.toFixed(2));
   });
 
-  // Minerals (15)
+  // Minerals (15) - Extract directly from converted ingredients
   const mineralsMap = {
     calcium_mg: 'calcium',
     chloride_mg: 'chloride',
@@ -924,15 +926,17 @@ function processVisionResponse(visionResponse) {
     zinc_mg: 'zinc'
   };
   Object.entries(mineralsMap).forEach(([nestedKey, flatKey]) => {
-    const val = sumNested(
-      ing => ing.minerals ? ing.minerals[nestedKey] : 0,
-      ing => ing[flatKey] || 0 // Use the flat key directly from original response
-    );
+    // Extract directly from converted ingredients (which have the nested structure)
+    const val = convertedIngredients.reduce((sum, ing) => {
+      const nestedValue = ing.minerals ? ing.minerals[nestedKey] : 0;
+      const flatValue = ing[flatKey] || 0;
+      return sum + (nestedValue || flatValue || 0);
+    }, 0);
     // ALWAYS include ALL minerals, even if 0 (required for nutrition.dart)
     response[flatKey] = +(val.toFixed(2));
   });
 
-  // Other (6)
+  // Other (6) - Extract directly from converted ingredients
   const otherMap = {
     fiber_g: 'fiber',
     cholesterol_mg: 'cholesterol',
@@ -942,10 +946,12 @@ function processVisionResponse(visionResponse) {
     omega_6_g: 'omega_6'
   };
   Object.entries(otherMap).forEach(([nestedKey, flatKey]) => {
-    const val = sumNested(
-      ing => ing.other ? ing.other[nestedKey] : 0,
-      ing => ing[flatKey] || 0 // Use the flat key directly from original response
-    );
+    // Extract directly from converted ingredients (which have the nested structure)
+    const val = convertedIngredients.reduce((sum, ing) => {
+      const nestedValue = ing.other ? ing.other[nestedKey] : 0;
+      const flatValue = ing[flatKey] || 0;
+      return sum + (nestedValue || flatValue || 0);
+    }, 0);
     // ALWAYS include ALL other nutrients, even if 0 (required for nutrition.dart)
     response[flatKey] = +(val.toFixed(2));
   });
