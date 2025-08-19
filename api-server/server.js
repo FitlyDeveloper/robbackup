@@ -1,794 +1,293 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
-const { 
-  DV, 
-  sumTotals, 
-  toDvPct, 
-  convertToNutritionFormat, 
-  getPer100DB,
-  validateResults,
-  runTestCases
+const multer = require('multer');
+const OpenAI = require('openai');
+const fs = require('fs');
+const path = require('path');
+
+const {
+  DV,
+  makeZeroTotals,
+  calculateTotalsFromFDC,
+  calculateDVPct,
+  roundTotals,
+  convertToNutritionFormat,
+  runFDCTest
 } = require('./nutrition.js');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const port = process.env.PORT || 3000;
 
-// DEDICATED NUTRITION PROMPT FOR NUTRITION.DART
-const NUTRITION_PROMPT = `You are a food ingredient extractor. Analyze the food image and extract ONLY ingredient names and weights.
+// Configure OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
-CRITICAL: Return ONLY this JSON format:
-{
-  "ingredients": [
-    {
-      "name": "ingredient name",
-      "grams": weight_in_grams
-    }
-  ]
-}
+// Configure multer for file uploads
+const upload = multer({ dest: 'uploads/' });
 
-DO NOT calculate nutrients. DO NOT add totals. ONLY extract ingredients and their weights from the image.
-
-Examples:
-- "chicken breast" (not "chicken")
-- "white rice" (not "rice") 
-- "tomato" (not "tomatoes")
-- "bread" (not "toast")
-
-Return JSON only. No prose, no explanations.`;
-
-console.log('Starting SIMPLE server for micronutrients...');
+console.log('Starting FDC-based nutrition server...');
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
+console.log('FDC API Key present:', process.env.FDC_API_KEY ? 'Yes' : 'No');
 
-// Run test cases on startup
-runTestCases();
+// Run FDC test on startup
+runFDCTest();
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json());
 
-// Simple health check
-app.get('/', (req, res) => {
-  res.json({ status: 'operational' });
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// AGGRESSIVE JSON repair function
-function repairJsonFormat(raw) {
-  if (!raw || typeof raw !== 'string') return raw;
-  let s = raw.trim();
-  
-  // Strip markdown fences
-  s = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-  
-  // Normalize smart quotes
-  s = s.replace(/[""]/g, '"').replace(/['']/g, '\'');
-  
-  // AGGRESSIVE: Quote ALL unquoted property names (multiple patterns)
-  s = s.replace(/([,{\n\r\t\s])([A-Za-z_][A-Za-z0-9_]*)(\s*):/g, '$1"$2"$3:');
-  s = s.replace(/(\n\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):/g, '$1"$2"$3:');
-  s = s.replace(/^([A-Za-z_][A-Za-z0-9_]*)(\s*):/gm, '"$1"$2:');
-  
-  // Fix property names that might be at start of line
-  s = s.replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*):/gm, '$1"$2"$3:');
-  
-  // Convert single-quoted strings to double-quoted
-  s = s.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
-  
-  // Remove trailing commas
-  s = s.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-  
-  // Collapse duplicate commas
-  s = s.replace(/,\s*,/g, ',');
-  
-  // Fix any remaining unquoted keys (last resort)
-  s = s.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*):/g, '$1"$2"$3:');
-  
-  return s;
-}
-
-// ULTRA-AGGRESSIVE JSON repair for malformed responses
-function ultraRepairJson(content) {
-  console.log('🔧 ULTRA-AGGRESSIVE JSON repair starting...');
-  
-  // First try basic repair
-  let repaired = repairJsonFormat(content);
-  
+// Main nutrition analysis endpoint
+app.post('/analyze-nutrition', upload.single('image'), async (req, res) => {
   try {
-    JSON.parse(repaired);
-    console.log('✅ Basic repair successful');
-    return repaired;
-  } catch (error) {
-    console.log('🔧 Basic repair failed, trying aggressive fixes...');
-  }
-  
-  // AGGRESSIVE FIX 1: Find last complete ingredient and truncate
-  const ingredientMatches = repaired.match(/\{[^}]*"name"[^}]*\}/g);
-  if (ingredientMatches && ingredientMatches.length > 0) {
-    const lastIngredient = ingredientMatches[ingredientMatches.length - 1];
-    const lastIndex = repaired.lastIndexOf(lastIngredient);
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    console.log('📸 Processing image:', req.file.originalname);
+
+    // Read the image file
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = imageBuffer.toString('base64');
+
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+
+    // Extract ingredients using OpenAI Vision (ONLY name and grams)
+    const ingredients = await extractIngredientsFromImage(base64Image);
     
-    if (lastIndex > 0) {
-      console.log('🔧 Truncating to last complete ingredient...');
-      repaired = repaired.substring(0, lastIndex + lastIngredient.length);
-      
-      // Complete the JSON structure
-      if (repaired.includes('"ingredients": [')) {
-        repaired += '\n  ]\n}';
-      }
-      
-      try {
-        JSON.parse(repaired);
-        console.log('✅ Truncation repair successful');
-        return repaired;
-      } catch (error) {
-        console.log('🔧 Truncation repair failed');
-      }
-    }
-  }
-  
-  // AGGRESSIVE FIX 2: Find last complete property and truncate
-  const propertyMatches = repaired.match(/"([^"]+)":\s*[^,}\]]+/g);
-  if (propertyMatches && propertyMatches.length > 0) {
-    const lastProperty = propertyMatches[propertyMatches.length - 1];
-    const lastIndex = repaired.lastIndexOf(lastProperty);
-    
-    if (lastIndex > 0) {
-      console.log('🔧 Truncating to last complete property...');
-      repaired = repaired.substring(0, lastIndex + lastProperty.length);
-      
-      // Find the containing object and close it
-      let braceCount = 0;
-      let startIndex = -1;
-      for (let i = lastIndex; i >= 0; i--) {
-        if (repaired[i] === '}') braceCount++;
-        if (repaired[i] === '{') {
-          braceCount--;
-          if (braceCount === 0) {
-            startIndex = i;
-            break;
-          }
-        }
-      }
-      
-      if (startIndex > 0) {
-        repaired = repaired.substring(0, startIndex) + '}';
-        
-        // Complete the ingredients array and main object
-        if (repaired.includes('"ingredients": [')) {
-          repaired += '\n  ]\n}';
-        }
-        
-        try {
-          JSON.parse(repaired);
-          console.log('✅ Property truncation repair successful');
-          return repaired;
-        } catch (error) {
-          console.log('🔧 Property truncation repair failed');
-        }
-      }
-    }
-  }
-  
-  // AGGRESSIVE FIX 3: Create minimal valid JSON from what we can extract
-  console.log('🔧 Creating minimal valid JSON...');
-  
-  // Extract meal name if possible
-  const mealNameMatch = repaired.match(/"meal_name":\s*"([^"]+)"/);
-  const mealName = mealNameMatch ? mealNameMatch[1] : "Dinner Meal";
-  
-  // Extract any ingredient names
-  const nameMatches = repaired.match(/"name":\s*"([^"]+)"/g);
-  const ingredientNames = nameMatches ? nameMatches.map(m => m.match(/"name":\s*"([^"]+)"/)[1]) : ["Ingredient"];
-  
-  // Create minimal valid JSON
-  const minimalJson = {
-    meal_name: mealName,
-    ingredients: ingredientNames.map(name => ({
-      name: name,
-      weight_g: 100,
-      calories: 80,
-      protein_g: 5,
-      fat_g: 2,
-      carbs_g: 12,
-             vitamin_a: 0,
-       vitamin_c: 0,
-       vitamin_d: 0,
-       vitamin_e: 0,
-       vitamin_k: 0,
-       vitamin_b1: 0,
-       vitamin_b2: 0,
-       vitamin_b3: 0,
-       vitamin_b5: 0,
-       vitamin_b6: 0,
-       vitamin_b7: 0,
-       vitamin_b9: 0,
-       vitamin_b12: 0,
-       calcium: 0,
-       chloride: 0,
-       chromium: 0,
-       copper: 0,
-       fluoride: 0,
-       iodine: 0,
-       iron: 0,
-       magnesium: 0,
-       manganese: 0,
-       molybdenum: 0,
-       phosphorus: 0,
-       potassium: 0,
-       selenium: 0,
-       sodium: 0,
-       zinc: 0,
-       fiber: 0,
-       cholesterol: 0,
-       sugar: 0,
-       saturated_fats: 0,
-       omega_3: 0,
-       omega_6: 0
-    }))
-  };
-  
-  console.log('✅ Minimal JSON created successfully');
-  return JSON.stringify(minimalJson);
-}
-
-// SIMPLIFIED FOOD ANALYSIS - ONLY MICRONUTRIENTS
-app.post('/api/analyze-food', async (req, res) => {
-  try {
-    const { image } = req.body;
-    
-    if (!image) {
-      return res.status(400).json({
-        success: false,
-        error: 'Image required'
-      });
+    if (!ingredients || ingredients.length === 0) {
+      return res.status(400).json({ error: 'No ingredients detected in image' });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: 'OpenAI API key not configured'
-      });
+    console.log('🔍 Extracted ingredients:', ingredients);
+
+    // Calculate nutrition using FDC
+    const totals = await calculateTotalsFromFDC(ingredients);
+    const dvPct = calculateDVPct(totals);
+
+    // Format response for nutrition.dart
+    const nutritionData = convertToNutritionFormat(totals, dvPct);
+
+    // Create ingredients list for nutrition.dart
+    const ingredientsList = ingredients.map(ing => ({
+      name: ing.name,
+      weight_g: ing.grams || 100,
+      amount: `${ing.grams || 100}g`,
+      protein: ((ing.grams || 0) / 100) * (totals.protein_g / ingredients.length), // Approximate per ingredient
+      fat: ((ing.grams || 0) / 100) * (totals.fat_g / ingredients.length),
+      carbs: ((ing.grams || 0) / 100) * (totals.carbs_g / ingredients.length)
+    }));
+
+    // Detailed verification logging
+    console.log('\n📊 INGREDIENT BREAKDOWN:');
+    for (const i of ingredients) {
+      console.log(`${i.name}: ${i.grams}g`);
     }
 
-    console.log('🔥 Analyzing food image...');
-    console.log('📱 Request source:', req.body.source || 'unknown');
-
-    // CHOOSE PROMPT BASED ON SOURCE
-    const isNutritionRequest = req.body.source === "nutrition.dart";
-    const systemPrompt = isNutritionRequest ? NUTRITION_PROMPT : `You are a gourmet chef and nutrition analyst. Analyze the food image and return ONLY valid JSON following this process:
-1) Identify ALL visible, distinct ingredients and estimate their portion sizes in grams (weight_g).
-2) For EACH ingredient, lookup realistic micronutrient values using reliable sources (USDA or equivalent) and express them in the REQUIRED UNITS below. Include macros per ingredient too.
-3) Compute meal TOTALS by summing nutrients across ingredients using the SAME UNITS.
-4) Return the JSON exactly in the schema shown. No extra keys, no text outside JSON.
-
-CRITICAL: You MUST look up actual nutritional data from reliable sources (USDA, nutrition databases) for each ingredient. DO NOT estimate or guess values. Use real data only.
-
-For example:
-- If you see chicken, look up "chicken breast nutrition per 100g" and use those exact values
-- If you see rice, look up "white rice nutrition per 100g" and use those exact values  
-- If you see tomatoes, look up "tomato nutrition per 100g" and use those exact values
-- If you see bread, look up "whole wheat bread nutrition per 100g" and use those exact values
-
-Then multiply by the actual portion size you estimated (weight_g/100) to get the ingredient's contribution.
-
-This is NOT optional - you MUST research real nutritional data for accuracy.
-
-FOOD NAMING: CRITICAL - Use ONLY dish names, NEVER list ingredients. Think like a restaurant menu.
-
-EXAMPLES OF CORRECT NAMES:
-- "Italian Dinner Plate" (NOT "Spaghetti with Garlic Butter and Rye Bread")
-- "Mexican Combo" (NOT "Chicken Quesadilla with Rice and Beans")
-- "Mediterranean Plate" (NOT "Salmon with Vegetables and Rice")
-- "Breakfast Plate" (NOT "Eggs with Toast and Bacon")
-- "Pasta Dinner" (NOT "Spaghetti with Meatballs and Sauce")
-- "Asian Bowl" (NOT "Rice with Chicken and Vegetables")
-- "Eastern European Plate" (NOT "Dumplings with Tomatoes and Sour Cream")
-- "Russian Dinner" (NOT "Pierogi with Sour Cream")
-- "Polish Plate" (NOT "Dumplings and Vegetables")
-
-WRONG: "Dumplings with Tomatoes and Sour Cream"
-RIGHT: "Eastern European Plate"
-
-IF YOU CANNOT DETERMINE A SPECIFIC DISH NAME, USE TIME-BASED NAMES:
-- "Breakfast Meal" (for morning foods)
-- "Lunch Meal" (for midday foods)
-- "Dinner Meal" (for evening foods)
-- "Snack" (for small portions)
-
-NEVER USE INGREDIENT LISTS AS THE MEAL NAME!
-
-INGREDIENT NAMING: Use short, simple ingredient names.
-
-INGREDIENT DETECTION:
-- Detect ALL visible, distinct ingredients in the image. No hard cap.
-- Include small components like sauces, dressings, herbs, leafy greens, seeds, nuts, cheese shavings (e.g., parmesan), and garnishes if visible.
-- Each ingredient must be a real food item visible in the image (e.g., "Chicken", "Bread", "Yogurt sauce").
-- Avoid utensils/containers and avoid generic words like "filling" when a specific food is evident.
-- Provide realistic weight_g for each ingredient and include macros per ingredient.
-
-UNITS: All micronutrients must use these units:
-- Vitamins: mg (except vitamin_a in mcg, vitamin_d in mcg, vitamin_b7 in mcg, vitamin_b9 in mcg, vitamin_b12 in mcg, vitamin_k in mcg)
-- Minerals: mg (except chromium in mcg, copper in mcg, fluoride in mg, iodine in mcg, manganese in mg, molybdenum in mcg, selenium in mcg, zinc in mg)
-- Other: fiber (g), cholesterol (mg), sugar (g), saturated_fats (g), omega_3 (mg), omega_6 (g)
-
-EXAMPLE RESEARCH PROCESS:
-For a meal with chicken and rice:
-1. Look up "chicken breast raw nutrition per 100g" → get real values
-2. Look up "white rice cooked nutrition per 100g" → get real values  
-3. Estimate portions (e.g., 150g chicken, 100g rice)
-4. Calculate: chicken values × 1.5 + rice values × 1.0 = totals
-5. Return the exact calculated totals in the JSON
-
-UNIT ENFORCEMENT:
-- Return raw numeric values ONLY (no unit suffixes inside numbers).
-- Use the exact units above. Especially: omega_3 must be in mg and omega_6 must be in g. Copper must be in mcg.
-- If your internal estimate is in a different unit, convert it so the returned number matches the required unit.
-
-Include an additional object "units_used" that maps each nutrient key to the exact unit string you used (e.g., { "vitamin_b12": "mcg", "omega_3": "mg", "omega_6": "g" }). Do not add units in the numeric fields, only in this map.
-
-{
-  "meal_name": "Gourmet Food Name",
-  "ingredients": [
-    {
-      "name": "Ingredient Name",
-      "weight_g": 100,
-      "calories": 80,
-      "protein_g": 5,
-      "fat_g": 2,
-      "carbs_g": 12,
-      "vitamin_a": 0,
-      "vitamin_c": 0,
-      "vitamin_d": 0,
-      "vitamin_e": 0,
-      "vitamin_k": 0,
-      "vitamin_b1": 0,
-      "vitamin_b2": 0,
-      "vitamin_b3": 0,
-      "vitamin_b5": 0,
-      "vitamin_b6": 0,
-      "vitamin_b7": 0,
-      "vitamin_b9": 0,
-      "vitamin_b12": 0,
-      "calcium": 0,
-      "chloride": 0,
-      "chromium": 0,
-      "copper": 0,
-      "fluoride": 0,
-      "iodine": 0,
-      "iron": 0,
-      "magnesium": 0,
-      "manganese": 0,
-      "molybdenum": 0,
-      "phosphorus": 0,
-      "potassium": 0,
-      "selenium": 0,
-      "sodium": 0,
-      "zinc": 0,
-      "fiber": 0,
-      "cholesterol": 0,
-      "sugar": 0,
-      "saturated_fats": 0,
-      "omega_3": 0,
-      "omega_6": 0
-    }
-  ]
-  ,
-  "totals": {
-    "calories": 0,
-    "protein_g": 0,
-    "fat_g": 0,
-    "carbs_g": 0,
-    "vitamin_a": 0,
-    "vitamin_c": 0,
-    "vitamin_d": 0,
-    "vitamin_e": 0,
-    "vitamin_k": 0,
-    "vitamin_b1": 0,
-    "vitamin_b2": 0,
-    "vitamin_b3": 0,
-    "vitamin_b5": 0,
-    "vitamin_b6": 0,
-    "vitamin_b7": 0,
-    "vitamin_b9": 0,
-    "vitamin_b12": 0,
-    "calcium": 0,
-    "chloride": 0,
-    "chromium": 0,
-    "copper": 0,
-    "fluoride": 0,
-    "iodine": 0,
-    "iron": 0,
-    "magnesium": 0,
-    "manganese": 0,
-    "molybdenum": 0,
-    "phosphorus": 0,
-    "potassium": 0,
-    "selenium": 0,
-    "sodium": 0,
-    "zinc": 0,
-    "fiber": 0,
-    "cholesterol": 0,
-    "sugar": 0,
-    "saturated_fats": 0,
-    "omega_3": 0,
-    "omega_6": 0
-  }
-}
-
-CRITICAL: You MUST research and use REAL nutritional data from reliable sources. DO NOT estimate, guess, or use placeholder values. Every number must come from actual nutritional research.
-
-IMPORTANT: You MUST complete the entire JSON response. Do not truncate or leave incomplete data. The response must be valid JSON that can be parsed.
-
-VALID JSON ONLY. Return zero only when the food naturally contains none.
-
-MICRONUTRIENT REQUIREMENTS:
-- You MUST look up REAL nutritional data from USDA or equivalent reliable sources
-- "Other" category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) MUST be researched and accurate
-- Every nutrient value must come from actual nutritional research, not estimation
-- Some micronutrients may be zero if the food naturally contains none (e.g., vitamin D in most plant foods)
-- Focus on providing accurate values for nutrients that are actually present in the food
-
-RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutrition per 100g" and use the real values you find.`;
-
-    // PREPARE USER CONTENT BASED ON SOURCE
-    const userContent = isNutritionRequest ? [
-      { 
-        type: "text", 
-        text: "Analyze meal screenshot and return JSON only." 
-      },
-      { 
-        type: "image_url", 
-        image_url: { url: image } 
-      }
-    ] : [
-      { 
-        type: "text", 
-        text: "Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. Use actual USDA nutritional values. Pay special attention to the 'Other' category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) - these MUST be accurate and realistic. Some micronutrients may be zero if the food naturally contains none."
-      },
-      { 
-        type: "image_url", 
-        image_url: { url: image } 
-      }
-    ];
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: isNutritionRequest ? 0.2 : 0.1,
-        response_format: isNutritionRequest ? { type: "json_object" } : { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt
-          },
-          {
-            role: "user",
-            content: userContent
-          }
-        ],
-        max_tokens: 3000
-      })
+    console.log('\n📊 FINAL TOTALS:');
+    console.log('Macros:', {
+      'Calories': `${totals.calories_kcal} kcal`,
+      'Protein': `${totals.protein_g} g`,
+      'Fat': `${totals.fat_g} g`,
+      'Carbs': `${totals.carbs_g} g`
+    });
+    console.log('Key Vitamins:', {
+      'Vit A': `${totals.vitamins.A_mcg} mcg (${dvPct.vitamins.A_mcg}% DV)`,
+      'Vit C': `${totals.vitamins.C_mg} mg (${dvPct.vitamins.C_mg}% DV)`,
+      'Vit K': `${totals.vitamins.K_mcg} mcg (${dvPct.vitamins.K_mcg}% DV)`,
+      'B12': `${totals.vitamins.B12_mcg} mcg (${dvPct.vitamins.B12_mcg}% DV)`
+    });
+    console.log('Key Minerals:', {
+      'Iron': `${totals.minerals.Fe_mg} mg (${dvPct.minerals.Fe_mg}% DV)`,
+      'Sodium': `${totals.minerals.Na_mg} mg (${dvPct.minerals.Na_mg}% DV)`,
+      'Calcium': `${totals.minerals.Ca_mg} mg (${dvPct.minerals.Ca_mg}% DV)`
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(500).json({
-        success: false,
-        error: `OpenAI API error: ${response.status}`
-      });
+    // Return nutrition.dart format
+    const response = {
+      meal_name: "Food",
+      ingredients: ingredientsList,
+      calories: nutritionData.calories,
+      protein: nutritionData.protein,
+      fat: nutritionData.fat,
+      carbs: nutritionData.carbs,
+      ...nutritionData
+    };
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error processing nutrition analysis:', error);
+    res.status(500).json({ error: 'Failed to analyze nutrition', details: error.message });
+  }
+});
+
+// New endpoint for the updated API format
+app.post('/analyze-nutrition-v2', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
     }
 
-    const responseData = await response.json();
-    const content = responseData.choices[0].message.content.trim();
+    console.log('📸 Processing image (v2):', req.file.originalname);
+
+    // Read the image file
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = imageBuffer.toString('base64');
+
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+
+    // Extract ingredients using OpenAI Vision (ONLY name and grams)
+    const ingredients = await extractIngredientsFromImage(base64Image);
     
-         console.log('🔥 OpenAI response received, length:', content.length);
-     if (content.length < 20) {
-       console.log('⚠️ Suspiciously short response content:', content);
-     }
-     if (content.length > 2000) {
-       console.log('✅ Response length looks good for complete data');
-     }
-    
+    if (!ingredients || ingredients.length === 0) {
+      return res.status(400).json({ error: 'No ingredients detected in image' });
+    }
+
+    console.log('🔍 Extracted ingredients:', ingredients);
+
+    // Calculate nutrition using FDC
+    const totals = await calculateTotalsFromFDC(ingredients);
+    const dvPct = calculateDVPct(totals);
+
+    // Return new API format
+    const response = {
+      ingredients: ingredients,
+      macros: {
+        calories_kcal: totals.calories_kcal,
+        protein_g: totals.protein_g,
+        fat_g: totals.fat_g,
+        carbs_g: totals.carbs_g
+      },
+      vitamins: totals.vitamins,
+      minerals: totals.minerals,
+      other: totals.other,
+      dv_pct: dvPct
+    };
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error processing nutrition analysis (v2):', error);
+    res.status(500).json({ error: 'Failed to analyze nutrition', details: error.message });
+  }
+});
+
+// Extract ingredients from image using OpenAI Vision
+async function extractIngredientsFromImage(base64Image) {
+  try {
+    console.log('🤖 Calling OpenAI Vision for ingredient extraction...');
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a food ingredient extractor. Your ONLY job is to identify ingredients and their weights from food images.
+
+RULES:
+- Extract ONLY ingredient names and weights in grams
+- Do NOT calculate any nutrients, calories, or nutrition facts
+- Do NOT provide any nutritional analysis
+- Output ONLY valid JSON in this exact format: {"ingredients": [{"name": "Ingredient Name", "grams": weight_in_grams}]}
+- If you can't determine the weight, estimate based on typical serving sizes
+- Be specific with ingredient names (e.g., "chicken breast" not just "chicken")
+- If multiple ingredients are visible, list them all
+- If no ingredients are visible, return {"ingredients": []}`
+
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Extract the ingredients and their weights from this food image. Return ONLY the JSON with ingredients array."
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
+            }
+          ]
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 500
+    });
+
+    const content = response.choices[0].message.content;
+    console.log('🤖 OpenAI response:', content);
+
+    // Parse JSON response
+    let jsonResponse;
     try {
-      const jsonResponse = JSON.parse(content);
-      
-      if (!jsonResponse.ingredients || !Array.isArray(jsonResponse.ingredients) || jsonResponse.ingredients.length === 0) {
-        return res.status(500).json({
-          success: false,
-          error: 'No food ingredients detected'
-        });
-      }
-
-             console.log('🔥 Valid ingredients found:', jsonResponse.ingredients.length);
-       if (jsonResponse.units_used) {
-         console.log('📏 Units audit:', JSON.stringify(jsonResponse.units_used));
-       }
-       if (isNutritionRequest) {
-         console.log('🎯 Nutrition.dart request - using specialized prompt');
-       }
-      
-      // PASS THROUGH THE INGREDIENT LIST
-      const ingredients = jsonResponse.ingredients.map(ing => ({
-        name: ing.name,
-        weight_g: ing.weight_g || 100,
-        calories: ing.calories || 0,
-        protein_g: ing.protein_g || 0,
-        fat_g: ing.fat_g || 0,
-        carbs_g: ing.carbs_g || 0,
-        amount: `${ing.weight_g || 100}g`,
-        protein: ing.protein_g || 0,
-        fat: ing.fat_g || 0,
-        carbs: ing.carbs_g || 0
-      }));
-
-      // NUTRITION.DART: Use server-side calculation instead of LLM math
-      let response;
-      
-      if (isNutritionRequest) {
-        console.log('🎯 Nutrition.dart request - using server-side calculation');
-        
-        // Extract ingredients from LLM response
-        const extractedIngredients = jsonResponse.ingredients || [];
-        console.log('📋 Extracted ingredients:', extractedIngredients);
-        
-        // Build per100DB lookup
-        const per100DB = {};
-        for (const ing of extractedIngredients) {
-          const dbEntry = getPer100DB(ing.name);
-          if (dbEntry) {
-            per100DB[ing.name] = dbEntry;
-            console.log(`✅ Found DB entry for: ${ing.name}`);
-          } else {
-            console.log(`❌ No DB entry for: ${ing.name}`);
-          }
-        }
-        
-                 // Calculate totals using proper math
-         const totals = sumTotals(extractedIngredients, per100DB);
-         const dvPct = toDvPct(totals, DV);
-         
-         // Validate results for sanity
-         const warnings = validateResults(totals, extractedIngredients);
-         if (warnings.length > 0) {
-           console.log('🔍 Validation warnings:', warnings);
-         }
-         
-         // Convert to nutrition.dart format
-         const nutritionData = convertToNutritionFormat(totals);
-         
-         // Detailed verification logging
-         console.log('🧮 CALCULATION VERIFICATION:');
-         console.table(extractedIngredients.map(i => ({
-           name: i.name, 
-           grams: i.grams,
-           factor: ((i.grams || 0) / 100).toFixed(2),
-           'Calories': ((i.grams || 0) / 100) * (per100DB[i.name]?.calories ?? 0),
-           'Protein (g)': ((i.grams || 0) / 100) * (per100DB[i.name]?.protein_g ?? 0),
-           'Fat (g)': ((i.grams || 0) / 100) * (per100DB[i.name]?.fat_g ?? 0),
-           'Carbs (g)': ((i.grams || 0) / 100) * (per100DB[i.name]?.carbs_g ?? 0),
-           'Vit A (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.A_mcg ?? 0),
-           'Vit C (mg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.C_mg ?? 0),
-           'Vit K (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.K_mcg ?? 0),
-           'B12 (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.B12_mcg ?? 0),
-           'Fe (mg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Fe_mg ?? 0),
-           'Na (mg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Na_mg ?? 0)
-         })));
-         
-         console.log('📊 FINAL TOTALS:', {
-           'Calories': `${totals.calories} kcal`,
-           'Protein': `${totals.protein_g} g`,
-           'Fat': `${totals.fat_g} g`,
-           'Carbs': `${totals.carbs_g} g`,
-           'Vit A': `${totals.vitamins.A_mcg} mcg (${dvPct.vitamins.A_mcg}% DV)`,
-           'Vit C': `${totals.vitamins.C_mg} mg (${dvPct.vitamins.C_mg}% DV)`,
-           'Vit K': `${totals.vitamins.K_mcg} mcg (${dvPct.vitamins.K_mcg}% DV)`,
-           'B12': `${totals.vitamins.B12_mcg} mcg (${dvPct.vitamins.B12_mcg}% DV)`,
-           'Iron': `${totals.minerals.Fe_mg} mg (${dvPct.minerals.Fe_mg}% DV)`,
-           'Sodium': `${totals.minerals.Na_mg} mg (${dvPct.minerals.Na_mg}% DV)`
-         });
-        
-        response = {
-          meal_name: jsonResponse.meal_name || "Food",
-          ingredients: extractedIngredients.map(ing => ({
-            name: ing.name,
-            weight_g: ing.grams || 100,
-            amount: `${ing.grams || 100}g`,
-            protein: ((ing.grams || 0) / 100) * (per100DB[ing.name]?.protein_g ?? 0),
-            fat: ((ing.grams || 0) / 100) * (per100DB[ing.name]?.fat_g ?? 0),
-            carbs: ((ing.grams || 0) / 100) * (per100DB[ing.name]?.carbs_g ?? 0)
-          })),
-          calories: nutritionData.calories,
-          protein: nutritionData.protein,
-          fat: nutritionData.fat,
-          carbs: nutritionData.carbs,
-          ...nutritionData
-        };
-      } else {
-        // Regular request: use existing logic
-        const totals = jsonResponse.totals || {};
-        
-        // DEBUG: Log the actual values being returned
-        console.log('🔍 Raw totals from OpenAI:', {
-          omega_3: totals.omega_3,
-          omega_6: totals.omega_6,
-          vitamin_b12: totals.vitamin_b12,
-          iron: totals.iron,
-          sodium: totals.sodium,
-          cholesterol: totals.cholesterol
-        });
-        
-        response = {
-          meal_name: jsonResponse.meal_name || "Food",
-          ingredients: ingredients,
-          calories: totals.calories ?? 0,
-          protein: totals.protein_g ?? 0,
-          fat: totals.fat_g ?? 0,
-          carbs: totals.carbs_g ?? 0,
-          // MICRONUTRIENTS - TOTALS FROM OPENAI
-          vitamin_a: totals.vitamin_a ?? 0,
-          vitamin_c: totals.vitamin_c ?? 0,
-          vitamin_d: totals.vitamin_d ?? 0,
-          vitamin_e: totals.vitamin_e ?? 0,
-          vitamin_k: totals.vitamin_k ?? 0,
-          vitamin_b1: totals.vitamin_b1 ?? 0,
-          vitamin_b2: totals.vitamin_b2 ?? 0,
-          vitamin_b3: totals.vitamin_b3 ?? 0,
-          vitamin_b5: totals.vitamin_b5 ?? 0,
-          vitamin_b6: totals.vitamin_b6 ?? 0,
-          vitamin_b7: totals.vitamin_b7 ?? 0,
-          vitamin_b9: totals.vitamin_b9 ?? 0,
-          vitamin_b12: totals.vitamin_b12 ?? 0,
-          calcium: totals.calcium ?? 0,
-          chloride: totals.chloride ?? 0,
-          chromium: totals.chromium ?? 0,
-          copper: totals.copper ?? 0,
-          fluoride: totals.fluoride ?? 0,
-          iodine: totals.iodine ?? 0,
-          iron: totals.iron ?? 0,
-          magnesium: totals.magnesium ?? 0,
-          manganese: totals.manganese ?? 0,
-          molybdenum: totals.molybdenum ?? 0,
-          phosphorus: totals.phosphorus ?? 0,
-          potassium: totals.potassium ?? 0,
-          selenium: totals.selenium ?? 0,
-          sodium: totals.sodium ?? 0,
-          zinc: totals.zinc ?? 0,
-          fiber: totals.fiber ?? 0,
-          cholesterol: totals.cholesterol ?? 0,
-          sugar: totals.sugar ?? 0,
-          saturated_fats: totals.saturated_fats ?? 0,
-          omega_3: totals.omega_3 ?? 0,
-          omega_6: totals.omega_6 ?? 0,
-          units_used: jsonResponse.units_used || null
-        };
-      }
-
-             console.log('✅ Response prepared with micronutrients');
-       console.log('Sample micronutrients:', {
-         vitamin_a: response.vitamin_a,
-         vitamin_c: response.vitamin_c,
-         iron: response.iron,
-         potassium: response.potassium
-       });
-       console.log('📊 Macros check:', {
-         calories: response.calories,
-         protein: response.protein,
-         fat: response.fat,
-         carbs: response.carbs
-       });
-
-      return res.json({
-        success: true,
-        data: response
-      });
-
+      jsonResponse = JSON.parse(content);
     } catch (parseError) {
-      console.log('🔥 JSON parse failed:', parseError.message);
-      console.log('🧾 Raw content snippet:', content.slice(0, 400));
-      
-      // ULTRA-AGGRESSIVE JSON REPAIR
-      let repairedContent = ultraRepairJson(content);
-      
-      try {
-        const jsonResponse = JSON.parse(repairedContent);
-        
-        if (jsonResponse.ingredients && jsonResponse.ingredients.length > 0) {
-          console.log('✅ Ultra-aggressive repair successful!');
-          
-          // Same processing as above
-          const ingredients = jsonResponse.ingredients.map(ing => ({
-            name: ing.name,
-            weight_g: ing.weight_g || 100,
-            calories: ing.calories || 0,
-            protein_g: ing.protein_g || 0,
-            fat_g: ing.fat_g || 0,
-            carbs_g: ing.carbs_g || 0,
-            amount: `${ing.weight_g || 100}g`,
-            protein: ing.protein_g || 0,
-            fat: ing.fat_g || 0,
-            carbs: ing.carbs_g || 0
-          }));
-
-          const totalCalories = ingredients.reduce((sum, ing) => sum + (ing.calories || 0), 0);
-          const totalProtein = ingredients.reduce((sum, ing) => sum + (ing.protein_g || 0), 0);
-          const totalFat = ingredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0);
-          const totalCarbs = ingredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0);
-
-          const totals = jsonResponse.totals || {};
-          
-          const response = {
-            meal_name: jsonResponse.meal_name || "Food",
-            ingredients: ingredients,
-            calories: totals.calories ?? 0,
-            protein: totals.protein_g ?? 0,
-            fat: totals.fat_g ?? 0,
-            carbs: totals.carbs_g ?? 0,
-            vitamin_a: totals.vitamin_a ?? 0,
-            vitamin_c: totals.vitamin_c ?? 0,
-            vitamin_d: totals.vitamin_d ?? 0,
-            vitamin_e: totals.vitamin_e ?? 0,
-            vitamin_k: totals.vitamin_k ?? 0,
-            vitamin_b1: totals.vitamin_b1 ?? 0,
-            vitamin_b2: totals.vitamin_b2 ?? 0,
-            vitamin_b3: totals.vitamin_b3 ?? 0,
-            vitamin_b5: totals.vitamin_b5 ?? 0,
-            vitamin_b6: totals.vitamin_b6 ?? 0,
-            vitamin_b7: totals.vitamin_b7 ?? 0,
-            vitamin_b9: totals.vitamin_b9 ?? 0,
-            vitamin_b12: totals.vitamin_b12 ?? 0,
-            calcium: totals.calcium ?? 0,
-            chloride: totals.chloride ?? 0,
-            chromium: totals.chromium ?? 0,
-            copper: totals.copper ?? 0,
-            fluoride: totals.fluoride ?? 0,
-            iodine: totals.iodine ?? 0,
-            iron: totals.iron ?? 0,
-            magnesium: totals.magnesium ?? 0,
-            manganese: totals.manganese ?? 0,
-            molybdenum: totals.molybdenum ?? 0,
-            phosphorus: totals.phosphorus ?? 0,
-            potassium: totals.potassium ?? 0,
-            selenium: totals.selenium ?? 0,
-            sodium: totals.sodium ?? 0,
-            zinc: totals.zinc ?? 0,
-            fiber: totals.fiber ?? 0,
-            cholesterol: totals.cholesterol ?? 0,
-            sugar: totals.sugar ?? 0,
-            saturated_fats: totals.saturated_fats ?? 0,
-            omega_3: totals.omega_3 ?? 0,
-            omega_6: totals.omega_6 ?? 0,
-            units_used: jsonResponse.units_used || null
-          };
-
-          return res.json({
-            success: true,
-            data: response
-          });
-        }
-      } catch (repairError) {
-        console.log('🔧 Ultra-aggressive repair failed:', repairError.message);
-      }
-      
-      return res.status(500).json({
-        success: false,
-        error: 'Invalid JSON response from OpenAI'
-      });
+      console.log('❌ Failed to parse OpenAI JSON, attempting repair...');
+      jsonResponse = repairJSON(content);
     }
 
-  } catch (error) {
-    console.log('🔥 Server error:', error.message);
-    return res.status(500).json({
-      success: false,
-      error: `Server error: ${error.message}`
-    });
-  }
-});
+    if (!jsonResponse || !jsonResponse.ingredients) {
+      console.log('❌ Invalid response format from OpenAI');
+      return [];
+    }
 
-app.listen(PORT, () => {
-  console.log(`Simple micronutrient server running on port ${PORT}`);
+    // Validate and clean ingredients
+    const validIngredients = jsonResponse.ingredients
+      .filter(ing => ing && ing.name && ing.grams)
+      .map(ing => ({
+        name: ing.name.trim(),
+        grams: Math.round(parseFloat(ing.grams) || 0)
+      }))
+      .filter(ing => ing.grams > 0);
+
+    console.log('✅ Validated ingredients:', validIngredients);
+    return validIngredients;
+
+  } catch (error) {
+    console.error('❌ OpenAI Vision error:', error);
+    throw new Error(`Failed to extract ingredients: ${error.message}`);
+  }
+}
+
+// JSON repair function
+function repairJSON(content) {
+  try {
+    // Try to extract JSON from the response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    
+    // If no JSON found, try to construct it from the text
+    const lines = content.split('\n').filter(line => line.trim());
+    const ingredients = [];
+    
+    for (const line of lines) {
+      const match = line.match(/(.+?)\s*[:\-]\s*(\d+)\s*g/i);
+      if (match) {
+        ingredients.push({
+          name: match[1].trim(),
+          grams: parseInt(match[2])
+        });
+      }
+    }
+    
+    return { ingredients };
+  } catch (error) {
+    console.log('❌ JSON repair failed:', error);
+    return { ingredients: [] };
+  }
+}
+
+app.listen(port, () => {
+  console.log(`🚀 FDC Nutrition Server running on port ${port}`);
 });
