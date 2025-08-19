@@ -260,6 +260,9 @@ app.post('/api/analyze-food', async (req, res) => {
       dv_pct: dvPct
     };
 
+    console.log('📤 Sending response to Flutter app with', Object.keys(response).length, 'keys');
+    console.log('📊 Response summary: calories=', totals.calories_kcal, 'protein=', totals.protein_g, 'ingredients=', ingredients.length);
+
     res.json(response);
 
   } catch (error) {
