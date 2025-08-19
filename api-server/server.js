@@ -139,7 +139,7 @@ function ultraRepairJson(content) {
   
   // Extract meal name if possible
   const mealNameMatch = repaired.match(/"meal_name":\s*"([^"]+)"/);
-  const mealName = mealNameMatch ? mealNameMatch[1] : "Dish";
+  const mealName = mealNameMatch ? mealNameMatch[1] : "Dinner Meal";
   
   // Extract any ingredient names
   const nameMatches = repaired.match(/"name":\s*"([^"]+)"/g);
@@ -229,9 +229,20 @@ EXAMPLES OF CORRECT NAMES:
 - "Breakfast Plate" (NOT "Eggs with Toast and Bacon")
 - "Pasta Dinner" (NOT "Spaghetti with Meatballs and Sauce")
 - "Asian Bowl" (NOT "Rice with Chicken and Vegetables")
+- "Eastern European Plate" (NOT "Dumplings with Tomatoes and Sour Cream")
+- "Russian Dinner" (NOT "Pierogi with Sour Cream")
+- "Polish Plate" (NOT "Dumplings and Vegetables")
 
-WRONG: "Spaghetti with Garlic Butter and Rye Bread"
-RIGHT: "Italian Dinner Plate"
+WRONG: "Dumplings with Tomatoes and Sour Cream"
+RIGHT: "Eastern European Plate"
+
+IF YOU CANNOT DETERMINE A SPECIFIC DISH NAME, USE TIME-BASED NAMES:
+- "Breakfast Meal" (for morning foods)
+- "Lunch Meal" (for midday foods)
+- "Dinner Meal" (for evening foods)
+- "Snack" (for small portions)
+
+NEVER USE INGREDIENT LISTS AS THE MEAL NAME!
 
 INGREDIENT NAMING: Use short, simple ingredient names.
 
