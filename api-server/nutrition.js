@@ -1,0 +1,245 @@
+// FDA Daily Values (2020-2025)
+const DV = {
+  vitamins: { 
+    A_mcg: 900, C_mg: 90, D_mcg: 20, E_mg: 15, K_mcg: 120,
+    B1_mg: 1.2, B2_mg: 1.3, B3_mg: 16, B5_mg: 5, B6_mg: 1.3, 
+    B7_mcg: 30, B9_mcg: 400, B12_mcg: 2.4 
+  },
+  minerals: { 
+    Ca_mg: 1300, Cl_mg: 2300, Cr_mcg: 35, Cu_mcg: 900, F_mg: 4, 
+    I_mcg: 150, Fe_mg: 18, Mg_mg: 420, Mn_mg: 2.3, Mo_mcg: 45, 
+    P_mg: 1250, K_mg: 4700, Se_mcg: 55, Na_mg: 2300, Zn_mg: 11 
+  },
+  other: { 
+    fiber_g: 28, cholesterol_mg: 300, sugar_g: 50, satfat_g: 20, 
+    omega3_mg: 1600, omega6_g: 17 
+  }
+};
+
+// Create zero totals structure
+function makeZeroTotals() {
+  return {
+    vitamins: {
+      A_mcg: 0, C_mg: 0, D_mcg: 0, E_mg: 0, K_mcg: 0,
+      B1_mg: 0, B2_mg: 0, B3_mg: 0, B5_mg: 0, B6_mg: 0,
+      B7_mcg: 0, B9_mcg: 0, B12_mcg: 0
+    },
+    minerals: {
+      Ca_mg: 0, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0, F_mg: 0,
+      I_mcg: 0, Fe_mg: 0, Mg_mg: 0, Mn_mg: 0, Mo_mcg: 0,
+      P_mg: 0, K_mg: 0, Se_mcg: 0, Na_mg: 0, Zn_mg: 0
+    },
+    other: {
+      fiber_g: 0, cholesterol_mg: 0, sugar_g: 0, satfat_g: 0,
+      omega3_mg: 0, omega6_g: 0
+    }
+  };
+}
+
+// Pure function to sum nutrient totals from ingredients
+function sumTotals(ingredients, per100DB) {
+  const totals = makeZeroTotals();
+  
+  for (const ing of ingredients) {
+    const ref = per100DB[ing.key]; 
+    if (!ref) continue;
+    
+    const factor = (ing.grams || 0) / 100;
+    
+    // Sum vitamins
+    for (const k of Object.keys(totals.vitamins)) {
+      const src = ref.vitamins?.[k] ?? 0;
+      totals.vitamins[k] += factor * src;
+    }
+    
+    // Sum minerals
+    for (const k of Object.keys(totals.minerals)) {
+      const src = ref.minerals?.[k] ?? 0;
+      totals.minerals[k] += factor * src;
+    }
+    
+    // Sum other nutrients
+    for (const k of Object.keys(totals.other)) {
+      const src = ref.other?.[k] ?? 0;
+      totals.other[k] += factor * src;
+    }
+  }
+  
+  return roundTotals(totals);
+}
+
+// Calculate DV percentages from totals (not vice versa)
+function toDvPct(totals, DV) {
+  const pct = { vitamins: {}, minerals: {}, other: {} };
+  
+  for (const [k, v] of Object.entries(totals.vitamins)) {
+    pct.vitamins[k] = Math.round((v / DV.vitamins[k]) * 100);
+  }
+  
+  for (const [k, v] of Object.entries(totals.minerals)) {
+    pct.minerals[k] = Math.round((v / DV.minerals[k]) * 100);
+  }
+  
+  for (const [k, v] of Object.entries(totals.other)) {
+    pct.other[k] = Math.round((v / DV.other[k]) * 100);
+  }
+  
+  return pct;
+}
+
+// Unit safety and rounding
+function roundTotals(t) {
+  const R = JSON.parse(JSON.stringify(t));
+  
+  // Keys that should be integers (mcg values)
+  const intKeys = [
+    'A_mcg', 'D_mcg', 'K_mcg', 'B7_mcg', 'B9_mcg', 'B12_mcg',
+    'Cr_mcg', 'Cu_mcg', 'I_mcg', 'Mo_mcg', 'Se_mcg'
+  ];
+  
+  const oneDec = (x) => Math.round(x * 10) / 10;
+  
+  const walk = (obj, ints = false) => {
+    Object.keys(obj).forEach(k => {
+      if (typeof obj[k] !== 'number') return;
+      obj[k] = ints || intKeys.includes(k) ? Math.round(obj[k]) : oneDec(obj[k]);
+    });
+  };
+  
+  walk(R.vitamins);
+  walk(R.minerals);
+  walk(R.other);
+  
+  return R;
+}
+
+// Convert nutrition.dart format to our internal format
+function convertToInternalFormat(nutritionData) {
+  return {
+    vitamins: {
+      A_mcg: nutritionData.vitamin_a || 0,
+      C_mg: nutritionData.vitamin_c || 0,
+      D_mcg: nutritionData.vitamin_d || 0,
+      E_mg: nutritionData.vitamin_e || 0,
+      K_mcg: nutritionData.vitamin_k || 0,
+      B1_mg: nutritionData.vitamin_b1 || 0,
+      B2_mg: nutritionData.vitamin_b2 || 0,
+      B3_mg: nutritionData.vitamin_b3 || 0,
+      B5_mg: nutritionData.vitamin_b5 || 0,
+      B6_mg: nutritionData.vitamin_b6 || 0,
+      B7_mcg: nutritionData.vitamin_b7 || 0,
+      B9_mcg: nutritionData.vitamin_b9 || 0,
+      B12_mcg: nutritionData.vitamin_b12 || 0
+    },
+    minerals: {
+      Ca_mg: nutritionData.calcium || 0,
+      Cl_mg: nutritionData.chloride || 0,
+      Cr_mcg: nutritionData.chromium || 0,
+      Cu_mcg: nutritionData.copper || 0,
+      F_mg: nutritionData.fluoride || 0,
+      I_mcg: nutritionData.iodine || 0,
+      Fe_mg: nutritionData.iron || 0,
+      Mg_mg: nutritionData.magnesium || 0,
+      Mn_mg: nutritionData.manganese || 0,
+      Mo_mcg: nutritionData.molybdenum || 0,
+      P_mg: nutritionData.phosphorus || 0,
+      K_mg: nutritionData.potassium || 0,
+      Se_mcg: nutritionData.selenium || 0,
+      Na_mg: nutritionData.sodium || 0,
+      Zn_mg: nutritionData.zinc || 0
+    },
+    other: {
+      fiber_g: nutritionData.fiber || 0,
+      cholesterol_mg: nutritionData.cholesterol || 0,
+      sugar_g: nutritionData.sugar || 0,
+      satfat_g: nutritionData.saturated_fats || 0,
+      omega3_mg: nutritionData.omega_3 || 0,
+      omega6_g: nutritionData.omega_6 || 0
+    }
+  };
+}
+
+// Convert internal format back to nutrition.dart format
+function convertToNutritionFormat(internalData) {
+  return {
+    vitamin_a: internalData.vitamins.A_mcg,
+    vitamin_c: internalData.vitamins.C_mg,
+    vitamin_d: internalData.vitamins.D_mcg,
+    vitamin_e: internalData.vitamins.E_mg,
+    vitamin_k: internalData.vitamins.K_mcg,
+    vitamin_b1: internalData.vitamins.B1_mg,
+    vitamin_b2: internalData.vitamins.B2_mg,
+    vitamin_b3: internalData.vitamins.B3_mg,
+    vitamin_b5: internalData.vitamins.B5_mg,
+    vitamin_b6: internalData.vitamins.B6_mg,
+    vitamin_b7: internalData.vitamins.B7_mcg,
+    vitamin_b9: internalData.vitamins.B9_mcg,
+    vitamin_b12: internalData.vitamins.B12_mcg,
+    calcium: internalData.minerals.Ca_mg,
+    chloride: internalData.minerals.Cl_mg,
+    chromium: internalData.minerals.Cr_mcg,
+    copper: internalData.minerals.Cu_mcg,
+    fluoride: internalData.minerals.F_mg,
+    iodine: internalData.minerals.I_mcg,
+    iron: internalData.minerals.Fe_mg,
+    magnesium: internalData.minerals.Mg_mg,
+    manganese: internalData.minerals.Mn_mg,
+    molybdenum: internalData.minerals.Mo_mcg,
+    phosphorus: internalData.minerals.P_mg,
+    potassium: internalData.minerals.K_mg,
+    selenium: internalData.minerals.Se_mcg,
+    sodium: internalData.minerals.Na_mg,
+    zinc: internalData.minerals.Zn_mg,
+    fiber: internalData.other.fiber_g,
+    cholesterol: internalData.other.cholesterol_mg,
+    sugar: internalData.other.sugar_g,
+    saturated_fats: internalData.other.satfat_g,
+    omega_3: internalData.other.omega3_mg,
+    omega_6: internalData.other.omega6_g
+  };
+}
+
+// Simple USDA database lookup (simplified for now)
+function getPer100DB(ingredientName) {
+  const db = {
+    'chicken breast': {
+      vitamins: { A_mcg: 6, C_mg: 0, D_mcg: 0, E_mg: 0.2, K_mcg: 0, B1_mg: 0.1, B2_mg: 0.1, B3_mg: 13.7, B5_mg: 1.0, B6_mg: 0.6, B7_mcg: 0.1, B9_mcg: 4, B12_mcg: 0.3 },
+      minerals: { Ca_mg: 15, Cl_mg: 77, Cr_mcg: 0, Cu_mcg: 0.1, F_mg: 0, I_mcg: 7, Fe_mg: 1.0, Mg_mg: 29, Mn_mg: 0.0, Mo_mcg: 0, P_mg: 228, K_mg: 256, Se_mcg: 27.6, Na_mg: 74, Zn_mg: 1.0 },
+      other: { fiber_g: 0, cholesterol_mg: 85, sugar_g: 0, satfat_g: 1.1, omega3_mg: 30, omega6_g: 0.5 }
+    },
+    'white rice': {
+      vitamins: { A_mcg: 0, C_mg: 0, D_mcg: 0, E_mg: 0.1, K_mcg: 0, B1_mg: 0.1, B2_mg: 0.0, B3_mg: 1.6, B5_mg: 0.4, B6_mg: 0.1, B7_mcg: 0, B9_mcg: 8, B12_mcg: 0 },
+      minerals: { Ca_mg: 28, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0.2, F_mg: 0, I_mcg: 0, Fe_mg: 0.8, Mg_mg: 25, Mn_mg: 1.1, Mo_mcg: 0, P_mg: 115, K_mg: 115, Se_mcg: 15.1, Na_mg: 5, Zn_mg: 1.2 },
+      other: { fiber_g: 0.4, cholesterol_mg: 0, sugar_g: 0.1, satfat_g: 0.1, omega3_mg: 0, omega6_g: 0.1 }
+    },
+    'tomato': {
+      vitamins: { A_mcg: 833, C_mg: 13.7, D_mcg: 0, E_mg: 0.5, K_mcg: 7.9, B1_mg: 0.1, B2_mg: 0.0, B3_mg: 0.6, B5_mg: 0.1, B6_mg: 0.1, B7_mcg: 0, B9_mcg: 15, B12_mcg: 0 },
+      minerals: { Ca_mg: 10, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0.1, F_mg: 0, I_mcg: 0, Fe_mg: 0.3, Mg_mg: 11, Mn_mg: 0.1, Mo_mcg: 0, P_mg: 24, K_mg: 237, Se_mcg: 0, Na_mg: 5, Zn_mg: 0.2 },
+      other: { fiber_g: 1.2, cholesterol_mg: 0, sugar_g: 2.6, satfat_g: 0, omega3_mg: 0, omega6_g: 0.1 }
+    },
+    'bread': {
+      vitamins: { A_mcg: 0, C_mg: 0, D_mcg: 0, E_mg: 0.3, K_mcg: 0.2, B1_mg: 0.2, B2_mg: 0.1, B3_mg: 3.1, B5_mg: 0.3, B6_mg: 0.1, B7_mcg: 0, B9_mcg: 50, B12_mcg: 0 },
+      minerals: { Ca_mg: 165, Cl_mg: 0, Cr_mcg: 0, Cu_mcg: 0.2, F_mg: 0, I_mcg: 0, Fe_mg: 3.6, Mg_mg: 25, Mn_mg: 0.7, Mo_mcg: 0, P_mg: 98, K_mg: 125, Se_mcg: 30.0, Na_mg: 491, Zn_mg: 1.0 },
+      other: { fiber_g: 2.7, cholesterol_mg: 0, sugar_g: 3.1, satfat_g: 0.4, omega3_mg: 0, omega6_g: 0.8 }
+    }
+  };
+  
+  // Simple key matching (case insensitive)
+  const key = Object.keys(db).find(k => 
+    ingredientName.toLowerCase().includes(k.toLowerCase())
+  );
+  
+  return key ? db[key] : null;
+}
+
+// CommonJS exports
+module.exports = {
+  DV,
+  makeZeroTotals,
+  sumTotals,
+  toDvPct,
+  roundTotals,
+  convertToInternalFormat,
+  convertToNutritionFormat,
+  getPer100DB
+};

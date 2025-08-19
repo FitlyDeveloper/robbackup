@@ -2,19 +2,39 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const { 
+  DV, 
+  sumTotals, 
+  toDvPct, 
+  convertToNutritionFormat, 
+  getPer100DB 
+} = require('./nutrition.js');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 // DEDICATED NUTRITION PROMPT FOR NUTRITION.DART
-const NUTRITION_PROMPT = `You are a nutrition data analyst. Analyze food images and return STRICT JSON with accurate micronutrient values.
+const NUTRITION_PROMPT = `You are a food ingredient extractor. Analyze the food image and extract ONLY ingredient names and weights.
 
-CRITICAL: Use EXACT units that match nutrition.dart expectations:
-- Vitamins: mg (except A, D, B7, B9, B12, K in mcg)
-- Minerals: mg (except Cr, Cu, I, Mo, Se in mcg)  
-- Other: fiber (g), cholesterol (mg), sugar (g), saturated_fats (g), omega_3 (mg), omega_6 (g)
+CRITICAL: Return ONLY this JSON format:
+{
+  "ingredients": [
+    {
+      "name": "ingredient name",
+      "grams": weight_in_grams
+    }
+  ]
+}
 
-Look up real USDA values for each ingredient and scale by weight. Return JSON only.`;
+DO NOT calculate nutrients. DO NOT add totals. ONLY extract ingredients and their weights from the image.
+
+Examples:
+- "chicken breast" (not "chicken")
+- "white rice" (not "rice") 
+- "tomato" (not "tomatoes")
+- "bread" (not "toast")
+
+Return JSON only. No prose, no explanations.`;
 
 console.log('Starting SIMPLE server for micronutrients...');
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
@@ -501,63 +521,115 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
         carbs: ing.carbs_g || 0
       }));
 
-      // USE TOTALS PROVIDED BY OPENAI (as required by the prompt)
-      const totals = jsonResponse.totals || {};
+      // NUTRITION.DART: Use server-side calculation instead of LLM math
+      let response;
       
-      // DEBUG: Log the actual values being returned
-      console.log('🔍 Raw totals from OpenAI:', {
-        omega_3: totals.omega_3,
-        omega_6: totals.omega_6,
-        vitamin_b12: totals.vitamin_b12,
-        iron: totals.iron,
-        sodium: totals.sodium,
-        cholesterol: totals.cholesterol
-      });
-      
-      const response = {
-        meal_name: jsonResponse.meal_name || "Food",
-        ingredients: ingredients,
-        calories: totals.calories ?? 0,
-        protein: totals.protein_g ?? 0,
-        fat: totals.fat_g ?? 0,
-        carbs: totals.carbs_g ?? 0,
-        // MICRONUTRIENTS - TOTALS FROM OPENAI
-        vitamin_a: totals.vitamin_a ?? 0,
-        vitamin_c: totals.vitamin_c ?? 0,
-        vitamin_d: totals.vitamin_d ?? 0,
-        vitamin_e: totals.vitamin_e ?? 0,
-        vitamin_k: totals.vitamin_k ?? 0,
-        vitamin_b1: totals.vitamin_b1 ?? 0,
-        vitamin_b2: totals.vitamin_b2 ?? 0,
-        vitamin_b3: totals.vitamin_b3 ?? 0,
-        vitamin_b5: totals.vitamin_b5 ?? 0,
-        vitamin_b6: totals.vitamin_b6 ?? 0,
-        vitamin_b7: totals.vitamin_b7 ?? 0,
-        vitamin_b9: totals.vitamin_b9 ?? 0,
-        vitamin_b12: totals.vitamin_b12 ?? 0,
-        calcium: totals.calcium ?? 0,
-        chloride: totals.chloride ?? 0,
-        chromium: totals.chromium ?? 0,
-        copper: totals.copper ?? 0,
-        fluoride: totals.fluoride ?? 0,
-        iodine: totals.iodine ?? 0,
-        iron: totals.iron ?? 0,
-        magnesium: totals.magnesium ?? 0,
-        manganese: totals.manganese ?? 0,
-        molybdenum: totals.molybdenum ?? 0,
-        phosphorus: totals.phosphorus ?? 0,
-        potassium: totals.potassium ?? 0,
-        selenium: totals.selenium ?? 0,
-        sodium: totals.sodium ?? 0,
-        zinc: totals.zinc ?? 0,
-        fiber: totals.fiber ?? 0,
-        cholesterol: totals.cholesterol ?? 0,
-        sugar: totals.sugar ?? 0,
-        saturated_fats: totals.saturated_fats ?? 0,
-        omega_3: totals.omega_3 ?? 0,
-        omega_6: totals.omega_6 ?? 0,
-        units_used: jsonResponse.units_used || null
-      };
+      if (isNutritionRequest) {
+        console.log('🎯 Nutrition.dart request - using server-side calculation');
+        
+        // Extract ingredients from LLM response
+        const extractedIngredients = jsonResponse.ingredients || [];
+        console.log('📋 Extracted ingredients:', extractedIngredients);
+        
+        // Build per100DB lookup
+        const per100DB = {};
+        for (const ing of extractedIngredients) {
+          const dbEntry = getPer100DB(ing.name);
+          if (dbEntry) {
+            per100DB[ing.name] = dbEntry;
+            console.log(`✅ Found DB entry for: ${ing.name}`);
+          } else {
+            console.log(`❌ No DB entry for: ${ing.name}`);
+          }
+        }
+        
+        // Calculate totals using proper math
+        const totals = sumTotals(extractedIngredients, per100DB);
+        const dvPct = toDvPct(totals, DV);
+        
+        // Convert to nutrition.dart format
+        const nutritionData = convertToNutritionFormat(totals);
+        
+        // TEMP: verify numbers
+        console.table(extractedIngredients.map(i => ({
+          name: i.name, 
+          g: i.grams,
+          Fe_mg: ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Fe_mg ?? 0),
+          P_mg: ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.P_mg ?? 0),
+          Na_mg: ((i.grams || 0) / 100) * (per100DB[i.name]?.minerals?.Na_mg ?? 0)
+        })));
+        console.log('TOTALS', totals, 'DV%', dvPct);
+        
+        response = {
+          meal_name: jsonResponse.meal_name || "Food",
+          ingredients: extractedIngredients.map(ing => ({
+            name: ing.name,
+            weight_g: ing.grams || 100,
+            amount: `${ing.grams || 100}g`,
+            protein: 0, fat: 0, carbs: 0 // Placeholder for now
+          })),
+          calories: 0, protein: 0, fat: 0, carbs: 0, // Placeholder for now
+          ...nutritionData
+        };
+      } else {
+        // Regular request: use existing logic
+        const totals = jsonResponse.totals || {};
+        
+        // DEBUG: Log the actual values being returned
+        console.log('🔍 Raw totals from OpenAI:', {
+          omega_3: totals.omega_3,
+          omega_6: totals.omega_6,
+          vitamin_b12: totals.vitamin_b12,
+          iron: totals.iron,
+          sodium: totals.sodium,
+          cholesterol: totals.cholesterol
+        });
+        
+        response = {
+          meal_name: jsonResponse.meal_name || "Food",
+          ingredients: ingredients,
+          calories: totals.calories ?? 0,
+          protein: totals.protein_g ?? 0,
+          fat: totals.fat_g ?? 0,
+          carbs: totals.carbs_g ?? 0,
+          // MICRONUTRIENTS - TOTALS FROM OPENAI
+          vitamin_a: totals.vitamin_a ?? 0,
+          vitamin_c: totals.vitamin_c ?? 0,
+          vitamin_d: totals.vitamin_d ?? 0,
+          vitamin_e: totals.vitamin_e ?? 0,
+          vitamin_k: totals.vitamin_k ?? 0,
+          vitamin_b1: totals.vitamin_b1 ?? 0,
+          vitamin_b2: totals.vitamin_b2 ?? 0,
+          vitamin_b3: totals.vitamin_b3 ?? 0,
+          vitamin_b5: totals.vitamin_b5 ?? 0,
+          vitamin_b6: totals.vitamin_b6 ?? 0,
+          vitamin_b7: totals.vitamin_b7 ?? 0,
+          vitamin_b9: totals.vitamin_b9 ?? 0,
+          vitamin_b12: totals.vitamin_b12 ?? 0,
+          calcium: totals.calcium ?? 0,
+          chloride: totals.chloride ?? 0,
+          chromium: totals.chromium ?? 0,
+          copper: totals.copper ?? 0,
+          fluoride: totals.fluoride ?? 0,
+          iodine: totals.iodine ?? 0,
+          iron: totals.iron ?? 0,
+          magnesium: totals.magnesium ?? 0,
+          manganese: totals.manganese ?? 0,
+          molybdenum: totals.molybdenum ?? 0,
+          phosphorus: totals.phosphorus ?? 0,
+          potassium: totals.potassium ?? 0,
+          selenium: totals.selenium ?? 0,
+          sodium: totals.sodium ?? 0,
+          zinc: totals.zinc ?? 0,
+          fiber: totals.fiber ?? 0,
+          cholesterol: totals.cholesterol ?? 0,
+          sugar: totals.sugar ?? 0,
+          saturated_fats: totals.saturated_fats ?? 0,
+          omega_3: totals.omega_3 ?? 0,
+          omega_6: totals.omega_6 ?? 0,
+          units_used: jsonResponse.units_used || null
+        };
+      }
 
              console.log('✅ Response prepared with micronutrients');
        console.log('Sample micronutrients:', {
