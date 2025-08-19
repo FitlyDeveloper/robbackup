@@ -396,7 +396,7 @@ MICRONUTRIENT REQUIREMENTS:
             ]
           }
         ],
-        max_tokens: 1500
+        max_tokens: 2200
       })
     });
 
@@ -412,6 +412,9 @@ MICRONUTRIENT REQUIREMENTS:
     const content = responseData.choices[0].message.content.trim();
     
     console.log('🔥 OpenAI response received, length:', content.length);
+    if (content.length < 20) {
+      console.log('⚠️ Suspiciously short response content:', content);
+    }
     
     try {
       const jsonResponse = JSON.parse(content);
@@ -505,6 +508,7 @@ MICRONUTRIENT REQUIREMENTS:
 
     } catch (parseError) {
       console.log('🔥 JSON parse failed:', parseError.message);
+      console.log('🧾 Raw content snippet:', content.slice(0, 400));
       
       // ULTRA-AGGRESSIVE JSON REPAIR
       let repairedContent = ultraRepairJson(content);
