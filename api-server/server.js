@@ -246,6 +246,7 @@ app.post('/api/analyze-food', async (req, res) => {
 
     // Return new API format
     const response = {
+      food_name: "Analyzed Food", // Add food name for Flutter compatibility
       ingredients: ingredients,
       macros: {
         calories_kcal: totals.calories_kcal,
