@@ -247,7 +247,8 @@ NEVER USE INGREDIENT LISTS AS THE MEAL NAME!
 INGREDIENT NAMING: Use short, simple ingredient names.
 
 INGREDIENT DETECTION:
-- Detect the primary visible ingredients in the image (1-4 items). Do not exceed 5.
+- Detect ALL visible, distinct ingredients in the image. No hard cap.
+- Include small components like sauces, dressings, herbs, leafy greens, seeds, nuts, cheese shavings (e.g., parmesan), and garnishes if visible.
 - Each ingredient must be a real food item visible in the image (e.g., "Chicken", "Bread", "Yogurt sauce").
 - Avoid utensils/containers and avoid generic words like "filling" when a specific food is evident.
 - Provide realistic weight_g for each ingredient and include macros per ingredient.
