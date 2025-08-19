@@ -217,8 +217,12 @@ app.post('/api/analyze-food', async (req, res) => {
 
     console.log('🔥 Analyzing food image...');
 
-    // SIMPLE PROMPT - ONLY MICRONUTRIENTS
-    const systemPrompt = `You are a gourmet chef and nutritionist. Analyze the food image and return ONLY valid JSON with realistic micronutrient values.
+    // PROCESS-DRIVEN PROMPT WITH TOTALS
+    const systemPrompt = `You are a gourmet chef and nutrition analyst. Analyze the food image and return ONLY valid JSON following this process:
+1) Identify ALL visible, distinct ingredients and estimate their portion sizes in grams (weight_g).
+2) For EACH ingredient, lookup realistic micronutrient values using reliable sources (USDA or equivalent) and express them in the REQUIRED UNITS below. Include macros per ingredient too.
+3) Compute meal TOTALS by summing nutrients across ingredients using the SAME UNITS.
+4) Return the JSON exactly in the schema shown. No extra keys, no text outside JSON.
 
 FOOD NAMING: CRITICAL - Use ONLY dish names, NEVER list ingredients. Think like a restaurant menu.
 
@@ -253,7 +257,7 @@ INGREDIENT DETECTION:
 - Avoid utensils/containers and avoid generic words like "filling" when a specific food is evident.
 - Provide realistic weight_g for each ingredient and include macros per ingredient.
 
-UNITS: All micronutrients should be in these units:
+UNITS: All micronutrients must use these units:
 - Vitamins: mg (except vitamin_a in mcg, vitamin_d in mcg, vitamin_b7 in mcg, vitamin_b9 in mcg, vitamin_b12 in mcg, vitamin_k in mcg)
 - Minerals: mg (except chromium in mcg, copper in mcg, fluoride in mg, iodine in mcg, manganese in mg, molybdenum in mcg, selenium in mcg, zinc in mg)
 - Other: fiber (g), cholesterol (mg), sugar (g), saturated_fats (g), omega_3 (mg), omega_6 (g)
@@ -311,6 +315,47 @@ Include an additional object "units_used" that maps each nutrient key to the exa
       "omega_6": 0
     }
   ]
+  ,
+  "totals": {
+    "calories": 0,
+    "protein_g": 0,
+    "fat_g": 0,
+    "carbs_g": 0,
+    "vitamin_a": 0,
+    "vitamin_c": 0,
+    "vitamin_d": 0,
+    "vitamin_e": 0,
+    "vitamin_k": 0,
+    "vitamin_b1": 0,
+    "vitamin_b2": 0,
+    "vitamin_b3": 0,
+    "vitamin_b5": 0,
+    "vitamin_b6": 0,
+    "vitamin_b7": 0,
+    "vitamin_b9": 0,
+    "vitamin_b12": 0,
+    "calcium": 0,
+    "chloride": 0,
+    "chromium": 0,
+    "copper": 0,
+    "fluoride": 0,
+    "iodine": 0,
+    "iron": 0,
+    "magnesium": 0,
+    "manganese": 0,
+    "molybdenum": 0,
+    "phosphorus": 0,
+    "potassium": 0,
+    "selenium": 0,
+    "sodium": 0,
+    "zinc": 0,
+    "fiber": 0,
+    "cholesterol": 0,
+    "sugar": 0,
+    "saturated_fats": 0,
+    "omega_3": 0,
+    "omega_6": 0
+  }
 }
 
 CRITICAL: Use realistic USDA values. Return zero only when the food naturally contains none. Valid JSON only.
@@ -383,7 +428,7 @@ MICRONUTRIENT REQUIREMENTS:
         console.log('📏 Units audit:', JSON.stringify(jsonResponse.units_used));
       }
       
-      // SIMPLE PROCESSING - JUST PASS THROUGH THE DATA
+      // PASS THROUGH THE INGREDIENT LIST
       const ingredients = jsonResponse.ingredients.map(ing => ({
         name: ing.name,
         weight_g: ing.weight_g || 100,
@@ -397,57 +442,51 @@ MICRONUTRIENT REQUIREMENTS:
         carbs: ing.carbs_g || 0
       }));
 
-      // CALCULATE TOTALS
-      const totalCalories = ingredients.reduce((sum, ing) => sum + (ing.calories || 0), 0);
-      const totalProtein = ingredients.reduce((sum, ing) => sum + (ing.protein_g || 0), 0);
-      const totalFat = ingredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0);
-      const totalCarbs = ingredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0);
-
-      // EXTRACT MICRONUTRIENTS FROM FIRST INGREDIENT (SIMPLE APPROACH)
-      const firstIngredient = jsonResponse.ingredients[0];
+      // USE TOTALS PROVIDED BY OPENAI (as required by the prompt)
+      const totals = jsonResponse.totals || {};
       
       const response = {
         meal_name: jsonResponse.meal_name || "Food",
         ingredients: ingredients,
-        calories: totalCalories,
-        protein: totalProtein,
-        fat: totalFat,
-        carbs: totalCarbs,
-        // MICRONUTRIENTS - DIRECT FROM OPENAI
-        vitamin_a: firstIngredient.vitamin_a || 0,
-        vitamin_c: firstIngredient.vitamin_c || 0,
-        vitamin_d: firstIngredient.vitamin_d || 0,
-        vitamin_e: firstIngredient.vitamin_e || 0,
-        vitamin_k: firstIngredient.vitamin_k || 0,
-        vitamin_b1: firstIngredient.vitamin_b1 || 0,
-        vitamin_b2: firstIngredient.vitamin_b2 || 0,
-        vitamin_b3: firstIngredient.vitamin_b3 || 0,
-        vitamin_b5: firstIngredient.vitamin_b5 || 0,
-        vitamin_b6: firstIngredient.vitamin_b6 || 0,
-        vitamin_b7: firstIngredient.vitamin_b7 || 0,
-        vitamin_b9: firstIngredient.vitamin_b9 || 0,
-        vitamin_b12: firstIngredient.vitamin_b12 || 0,
-        calcium: firstIngredient.calcium || 0,
-        chloride: firstIngredient.chloride || 0,
-        chromium: firstIngredient.chromium || 0,
-        copper: firstIngredient.copper || 0,
-        fluoride: firstIngredient.fluoride || 0,
-        iodine: firstIngredient.iodine || 0,
-        iron: firstIngredient.iron || 0,
-        magnesium: firstIngredient.magnesium || 0,
-        manganese: firstIngredient.manganese || 0,
-        molybdenum: firstIngredient.molybdenum || 0,
-        phosphorus: firstIngredient.phosphorus || 0,
-        potassium: firstIngredient.potassium || 0,
-        selenium: firstIngredient.selenium || 0,
-        sodium: firstIngredient.sodium || 0,
-        zinc: firstIngredient.zinc || 0,
-        fiber: firstIngredient.fiber || 0,
-        cholesterol: firstIngredient.cholesterol || 0,
-        sugar: firstIngredient.sugar || 0,
-        saturated_fats: firstIngredient.saturated_fats || 0,
-        omega_3: firstIngredient.omega_3 || 0,
-        omega_6: firstIngredient.omega_6 || 0,
+        calories: totals.calories ?? 0,
+        protein: totals.protein_g ?? 0,
+        fat: totals.fat_g ?? 0,
+        carbs: totals.carbs_g ?? 0,
+        // MICRONUTRIENTS - TOTALS FROM OPENAI
+        vitamin_a: totals.vitamin_a ?? 0,
+        vitamin_c: totals.vitamin_c ?? 0,
+        vitamin_d: totals.vitamin_d ?? 0,
+        vitamin_e: totals.vitamin_e ?? 0,
+        vitamin_k: totals.vitamin_k ?? 0,
+        vitamin_b1: totals.vitamin_b1 ?? 0,
+        vitamin_b2: totals.vitamin_b2 ?? 0,
+        vitamin_b3: totals.vitamin_b3 ?? 0,
+        vitamin_b5: totals.vitamin_b5 ?? 0,
+        vitamin_b6: totals.vitamin_b6 ?? 0,
+        vitamin_b7: totals.vitamin_b7 ?? 0,
+        vitamin_b9: totals.vitamin_b9 ?? 0,
+        vitamin_b12: totals.vitamin_b12 ?? 0,
+        calcium: totals.calcium ?? 0,
+        chloride: totals.chloride ?? 0,
+        chromium: totals.chromium ?? 0,
+        copper: totals.copper ?? 0,
+        fluoride: totals.fluoride ?? 0,
+        iodine: totals.iodine ?? 0,
+        iron: totals.iron ?? 0,
+        magnesium: totals.magnesium ?? 0,
+        manganese: totals.manganese ?? 0,
+        molybdenum: totals.molybdenum ?? 0,
+        phosphorus: totals.phosphorus ?? 0,
+        potassium: totals.potassium ?? 0,
+        selenium: totals.selenium ?? 0,
+        sodium: totals.sodium ?? 0,
+        zinc: totals.zinc ?? 0,
+        fiber: totals.fiber ?? 0,
+        cholesterol: totals.cholesterol ?? 0,
+        sugar: totals.sugar ?? 0,
+        saturated_fats: totals.saturated_fats ?? 0,
+        omega_3: totals.omega_3 ?? 0,
+        omega_6: totals.omega_6 ?? 0,
         units_used: jsonResponse.units_used || null
       };
 
@@ -495,49 +534,49 @@ MICRONUTRIENT REQUIREMENTS:
           const totalFat = ingredients.reduce((sum, ing) => sum + (ing.fat_g || 0), 0);
           const totalCarbs = ingredients.reduce((sum, ing) => sum + (ing.carbs_g || 0), 0);
 
-          const firstIngredient = jsonResponse.ingredients[0];
+          const totals = jsonResponse.totals || {};
           
           const response = {
             meal_name: jsonResponse.meal_name || "Food",
             ingredients: ingredients,
-            calories: totalCalories,
-            protein: totalProtein,
-            fat: totalFat,
-            carbs: totalCarbs,
-            vitamin_a: firstIngredient.vitamin_a || 0,
-            vitamin_c: firstIngredient.vitamin_c || 0,
-            vitamin_d: firstIngredient.vitamin_d || 0,
-            vitamin_e: firstIngredient.vitamin_e || 0,
-            vitamin_k: firstIngredient.vitamin_k || 0,
-            vitamin_b1: firstIngredient.vitamin_b1 || 0,
-            vitamin_b2: firstIngredient.vitamin_b2 || 0,
-            vitamin_b3: firstIngredient.vitamin_b3 || 0,
-            vitamin_b5: firstIngredient.vitamin_b5 || 0,
-            vitamin_b6: firstIngredient.vitamin_b6 || 0,
-            vitamin_b7: firstIngredient.vitamin_b7 || 0,
-            vitamin_b9: firstIngredient.vitamin_b9 || 0,
-            vitamin_b12: firstIngredient.vitamin_b12 || 0,
-            calcium: firstIngredient.calcium || 0,
-            chloride: firstIngredient.chloride || 0,
-            chromium: firstIngredient.chromium || 0,
-            copper: firstIngredient.copper || 0,
-            fluoride: firstIngredient.fluoride || 0,
-            iodine: firstIngredient.iodine || 0,
-            iron: firstIngredient.iron || 0,
-            magnesium: firstIngredient.magnesium || 0,
-            manganese: firstIngredient.manganese || 0,
-            molybdenum: firstIngredient.molybdenum || 0,
-            phosphorus: firstIngredient.phosphorus || 0,
-            potassium: firstIngredient.potassium || 0,
-            selenium: firstIngredient.selenium || 0,
-            sodium: firstIngredient.sodium || 0,
-            zinc: firstIngredient.zinc || 0,
-            fiber: firstIngredient.fiber || 0,
-            cholesterol: firstIngredient.cholesterol || 0,
-            sugar: firstIngredient.sugar || 0,
-            saturated_fats: firstIngredient.saturated_fats || 0,
-            omega_3: firstIngredient.omega_3 || 0,
-            omega_6: firstIngredient.omega_6 || 0,
+            calories: totals.calories ?? 0,
+            protein: totals.protein_g ?? 0,
+            fat: totals.fat_g ?? 0,
+            carbs: totals.carbs_g ?? 0,
+            vitamin_a: totals.vitamin_a ?? 0,
+            vitamin_c: totals.vitamin_c ?? 0,
+            vitamin_d: totals.vitamin_d ?? 0,
+            vitamin_e: totals.vitamin_e ?? 0,
+            vitamin_k: totals.vitamin_k ?? 0,
+            vitamin_b1: totals.vitamin_b1 ?? 0,
+            vitamin_b2: totals.vitamin_b2 ?? 0,
+            vitamin_b3: totals.vitamin_b3 ?? 0,
+            vitamin_b5: totals.vitamin_b5 ?? 0,
+            vitamin_b6: totals.vitamin_b6 ?? 0,
+            vitamin_b7: totals.vitamin_b7 ?? 0,
+            vitamin_b9: totals.vitamin_b9 ?? 0,
+            vitamin_b12: totals.vitamin_b12 ?? 0,
+            calcium: totals.calcium ?? 0,
+            chloride: totals.chloride ?? 0,
+            chromium: totals.chromium ?? 0,
+            copper: totals.copper ?? 0,
+            fluoride: totals.fluoride ?? 0,
+            iodine: totals.iodine ?? 0,
+            iron: totals.iron ?? 0,
+            magnesium: totals.magnesium ?? 0,
+            manganese: totals.manganese ?? 0,
+            molybdenum: totals.molybdenum ?? 0,
+            phosphorus: totals.phosphorus ?? 0,
+            potassium: totals.potassium ?? 0,
+            selenium: totals.selenium ?? 0,
+            sodium: totals.sodium ?? 0,
+            zinc: totals.zinc ?? 0,
+            fiber: totals.fiber ?? 0,
+            cholesterol: totals.cholesterol ?? 0,
+            sugar: totals.sugar ?? 0,
+            saturated_fats: totals.saturated_fats ?? 0,
+            omega_3: totals.omega_3 ?? 0,
+            omega_6: totals.omega_6 ?? 0,
             units_used: jsonResponse.units_used || null
           };
 
