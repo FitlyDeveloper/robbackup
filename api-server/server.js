@@ -45,6 +45,24 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Root endpoint for basic connectivity
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'FDC Nutrition Server is running',
+    timestamp: new Date().toISOString() 
+  });
+});
+
+// Warmup endpoint for Flutter app
+app.get('/api/warmup', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'API server warmed up',
+    timestamp: new Date().toISOString() 
+  });
+});
+
 // Main nutrition analysis endpoint
 app.post('/analyze-nutrition', upload.single('image'), async (req, res) => {
   try {
