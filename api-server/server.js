@@ -302,12 +302,11 @@ UNITS: All micronutrients should be in these units:
 CRITICAL: Use realistic USDA values. NO zeros. Valid JSON only.
 
 MICRONUTRIENT REQUIREMENTS:
-- ALL micronutrients MUST have realistic values (NO zeros)
-- Use actual USDA nutritional database values
+- Use realistic USDA nutritional database values
 - "Other" category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) MUST be accurate
 - Analyze the actual food in the image and provide realistic values
-
-DO NOT RETURN ZEROS FOR ANY MICRONUTRIENT!`;
+- Some micronutrients may be zero if the food naturally contains none (e.g., vitamin D in most plant foods)
+- Focus on providing accurate values for nutrients that are actually present in the food`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -327,10 +326,10 @@ DO NOT RETURN ZEROS FOR ANY MICRONUTRIENT!`;
           {
             role: "user",
             content: [
-                             { 
-                 type: "text", 
-                 text: "Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. DO NOT return zeros - use actual USDA nutritional values. Pay special attention to the 'Other' category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) - these MUST be accurate and realistic."
-               },
+                                            { 
+                  type: "text", 
+                  text: "Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. Use actual USDA nutritional values. Pay special attention to the 'Other' category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) - these MUST be accurate and realistic. Some micronutrients may be zero if the food naturally contains none."
+                },
               { 
                 type: "image_url", 
                 image_url: { url: image }
