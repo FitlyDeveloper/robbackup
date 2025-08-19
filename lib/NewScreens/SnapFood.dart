@@ -624,12 +624,8 @@ class _SnapFoodState extends State<SnapFood> {
         response['name']?.toString() ??
         '';
 
-    if (foodName.toLowerCase().contains('chicken') &&
-        !foodName.toLowerCase().contains('dish') &&
-        !foodName.toLowerCase().contains('meal')) {
-      debugPrint('❌ API response has suspicious generic food name: $foodName');
-      return false;
-    }
+    // REMOVED: Overly strict validation that was rejecting valid food names
+    // The API is working correctly and returning real data
 
     debugPrint('✅ API response validation passed');
     return true;
