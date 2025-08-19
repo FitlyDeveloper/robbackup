@@ -8,7 +8,8 @@ const {
   toDvPct, 
   convertToNutritionFormat, 
   getPer100DB,
-  validateResults
+  validateResults,
+  runTestCases
 } = require('./nutrition.js');
 
 const app = express();
@@ -39,6 +40,9 @@ Return JSON only. No prose, no explanations.`;
 
 console.log('Starting SIMPLE server for micronutrients...');
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
+
+// Run test cases on startup
+runTestCases();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -563,6 +567,10 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
            name: i.name, 
            grams: i.grams,
            factor: ((i.grams || 0) / 100).toFixed(2),
+           'Calories': ((i.grams || 0) / 100) * (per100DB[i.name]?.calories ?? 0),
+           'Protein (g)': ((i.grams || 0) / 100) * (per100DB[i.name]?.protein_g ?? 0),
+           'Fat (g)': ((i.grams || 0) / 100) * (per100DB[i.name]?.fat_g ?? 0),
+           'Carbs (g)': ((i.grams || 0) / 100) * (per100DB[i.name]?.carbs_g ?? 0),
            'Vit A (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.A_mcg ?? 0),
            'Vit C (mg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.C_mg ?? 0),
            'Vit K (mcg)': ((i.grams || 0) / 100) * (per100DB[i.name]?.vitamins?.K_mcg ?? 0),
@@ -572,6 +580,10 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
          })));
          
          console.log('📊 FINAL TOTALS:', {
+           'Calories': `${totals.calories} kcal`,
+           'Protein': `${totals.protein_g} g`,
+           'Fat': `${totals.fat_g} g`,
+           'Carbs': `${totals.carbs_g} g`,
            'Vit A': `${totals.vitamins.A_mcg} mcg (${dvPct.vitamins.A_mcg}% DV)`,
            'Vit C': `${totals.vitamins.C_mg} mg (${dvPct.vitamins.C_mg}% DV)`,
            'Vit K': `${totals.vitamins.K_mcg} mcg (${dvPct.vitamins.K_mcg}% DV)`,
@@ -586,9 +598,14 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
             name: ing.name,
             weight_g: ing.grams || 100,
             amount: `${ing.grams || 100}g`,
-            protein: 0, fat: 0, carbs: 0 // Placeholder for now
+            protein: ((ing.grams || 0) / 100) * (per100DB[ing.name]?.protein_g ?? 0),
+            fat: ((ing.grams || 0) / 100) * (per100DB[ing.name]?.fat_g ?? 0),
+            carbs: ((ing.grams || 0) / 100) * (per100DB[ing.name]?.carbs_g ?? 0)
           })),
-          calories: 0, protein: 0, fat: 0, carbs: 0, // Placeholder for now
+          calories: nutritionData.calories,
+          protein: nutritionData.protein,
+          fat: nutritionData.fat,
+          carbs: nutritionData.carbs,
           ...nutritionData
         };
       } else {
