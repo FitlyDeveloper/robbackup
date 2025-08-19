@@ -139,21 +139,37 @@ function extractBalancedJson(text) {
 function repairJsonFormat(raw) {
   if (!raw || typeof raw !== 'string') return raw;
   let s = raw.trim();
+  
   // Strip markdown fences
   s = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+  
   // Extract main JSON object if extra prose surrounds it
   const embedded = extractBalancedJson(s);
   if (embedded) s = embedded;
+  
   // Normalize smart quotes
-  s = s.replace(/[“”]/g, '"').replace(/[‘’]/g, '\'');
-  // Quote unquoted property names: key: value -> "key": value
+  s = s.replace(/[""]/g, '"').replace(/['']/g, '\'');
+  
+  // AGGRESSIVE: Quote ALL unquoted property names (multiple patterns)
   s = s.replace(/([,{\n\r\t\s])([A-Za-z_][A-Za-z0-9_]*)(\s*):/g, '$1"$2"$3:');
+  s = s.replace(/(\n\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):/g, '$1"$2"$3:');
+  s = s.replace(/^([A-Za-z_][A-Za-z0-9_]*)(\s*):/gm, '"$1"$2:');
+  
+  // Fix property names that might be at start of line
+  s = s.replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*):/gm, '$1"$2"$3:');
+  
   // Convert single-quoted strings to double-quoted
   s = s.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+  
   // Remove trailing commas
   s = s.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+  
   // Collapse duplicate commas
   s = s.replace(/,\s*,/g, ',');
+  
+  // Fix any remaining unquoted keys (last resort)
+  s = s.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*):/g, '$1"$2"$3:');
+  
   return s;
 }
 
@@ -292,15 +308,13 @@ async function processAndAnalyzeImage(jobId, userId, image) {
     });
 
                                               // COMPREHENSIVE prompt - request ALL 34 micronutrients tracked on nutrition.dart screen
-        const systemPrompt = `You are a professional nutritionist analyzing food images. Identify ingredients and provide COMPLETE nutritional information.
-
-Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients:
+        const systemPrompt = `You are a nutritionist. Analyze the food image and return ONLY valid JSON with realistic nutrition data.
 
 {
-  "meal_name": "descriptive meal name",
+  "meal_name": "Descriptive Name",
   "ingredients": [
     {
-      "name": "ingredient name",
+      "name": "Food Item",
       "weight_g": 100,
       "calories": 80,
       "protein_g": 5,
@@ -344,21 +358,7 @@ Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients
   ]
 }
 
-CRITICAL REQUIREMENTS:
-1. Provide realistic nutritional values for ALL 34 micronutrients listed above
-2. DO NOT use zero values unless the food genuinely contains none of that nutrient
-3. Use actual nutritional data - apricots have vitamin A, vitamin C, potassium, etc.
-4. Every ingredient must include ALL 34 micronutrient fields with realistic values
-5. Base values on standard USDA nutritional data for the foods you identify
-
-EXAMPLE: For 100g apricots, realistic values would be:
-- vitamin_a: 1926 (apricots are high in vitamin A)
-- vitamin_c: 10 (moderate vitamin C)
-- potassium: 259 (good source)
-- iron: 0.4 (small amount)
-- calcium: 13 (small amount)
-
-Return complete nutritional profiles, not placeholder zeros.`;
+RULES: Use realistic USDA values. NO zeros. Valid JSON only.`;
 
     let finalResponse = null;
     
@@ -1207,15 +1207,13 @@ app.post('/api/analyze-food', limiter, async (req, res) => {
       const processedImage = image;
       
                                          // COMPREHENSIVE prompt - request ALL 34 micronutrients tracked on nutrition.dart screen
-         const systemPrompt = `You are a professional nutritionist analyzing food images. Identify ingredients and provide COMPLETE nutritional information.
-
-Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients:
+         const systemPrompt = `You are a nutritionist. Analyze the food image and return ONLY valid JSON with realistic nutrition data.
 
 {
-  "meal_name": "descriptive meal name",
+  "meal_name": "Descriptive Name",
   "ingredients": [
     {
-      "name": "ingredient name",
+      "name": "Food Item",
       "weight_g": 100,
       "calories": 80,
       "protein_g": 5,
@@ -1259,21 +1257,7 @@ Return ONLY valid JSON with realistic nutrition values for ALL 34 micronutrients
   ]
 }
 
-CRITICAL REQUIREMENTS:
-1. Provide realistic nutritional values for ALL 34 micronutrients listed above
-2. DO NOT use zero values unless the food genuinely contains none of that nutrient
-3. Use actual nutritional data - apricots have vitamin A, vitamin C, potassium, etc.
-4. Every ingredient must include ALL 34 micronutrient fields with realistic values
-5. Base values on standard USDA nutritional data for the foods you identify
-
-EXAMPLE: For 100g apricots, realistic values would be:
-- vitamin_a: 1926 (apricots are high in vitamin A)
-- vitamin_c: 10 (moderate vitamin C)
-- potassium: 259 (good source)
-- iron: 0.4 (small amount)
-- calcium: 13 (small amount)
-
-Return complete nutritional profiles, not placeholder zeros.`;
+RULES: Use realistic USDA values. NO zeros. Valid JSON only.`;
 
       // Make OpenAI API call with timeout
       const controller = new AbortController();
