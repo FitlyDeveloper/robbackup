@@ -19,6 +19,82 @@ const DV = {
 // In-memory cache for FDC lookups (name -> fdcId)
 const fdcCache = new Map();
 
+// Nutrient numbers (USDA FDC) → our keys (use RAE for Vit A; mcg for Vit D)
+const MAP = {
+  // macros
+  208: 'calories_kcal',   // Energy (kcal)
+  203: 'protein_g',       // Protein (g)
+  204: 'fat_g',           // Total fat (g)
+  205: 'carbs_g',         // Carbohydrate (g)
+  // vitamins (use RAE and mcg variants)
+  320: 'A_mcg',           // Vitamin A, RAE (mcg)
+  401: 'C_mg',            // Vitamin C (mg)
+  328: 'D_mcg',           // Vitamin D (mcg)
+  323: 'E_mg',            // Vitamin E (mg)
+  430: 'K_mcg',           // Vitamin K (mcg)
+  404: 'B1_mg',           // Thiamin (mg)
+  405: 'B2_mg',           // Riboflavin (mg)
+  406: 'B3_mg',           // Niacin (mg)
+  410: 'B5_mg',           // Pantothenic acid (mg)
+  415: 'B6_mg',           // Vitamin B-6 (mg)
+  416: 'B7_mcg',          // Biotin (mcg)
+  417: 'B9_mcg',          // Folate, total (mcg)
+  418: 'B12_mcg',         // Vitamin B-12 (mcg)
+  // minerals
+  301: 'Ca_mg',           // Calcium (mg)
+  304: 'Mg_mg',           // Magnesium (mg)
+  305: 'P_mg',            // Phosphorus (mg)
+  306: 'K_mg',            // Potassium (mg)
+  307: 'Na_mg',           // Sodium (mg)
+  303: 'Fe_mg',           // Iron (mg)
+  309: 'Zn_mg',           // Zinc (mg)
+  312: 'Cu_mcg',          // Copper (mcg)
+  315: 'Mn_mg',           // Manganese (mg)
+  317: 'Se_mcg',          // Selenium (mcg)
+  313: 'I_mcg',           // Iodine (mcg) – often missing
+  321: 'Cl_mg',           // Chloride (mg) – often missing
+  322: 'Mo_mcg',          // Molybdenum (mcg)
+  // other
+  291: 'fiber_g',         // Fiber (g)
+  269: 'sugar_g',         // Sugars total (g)
+  601: 'cholesterol_mg',  // Cholesterol (mg)
+  606: 'satfat_g',        // Fatty acids, total saturated (g)
+  851: 'omega3_mg',       // Omega-3 (mg) – ALA/EPA/DHA proxies vary
+  675: 'omega6_g'         // Omega-6 (g)
+};
+
+function readNutrientNumber(n) {
+  // handle both shapes
+  if (n.nutrientNumber) return String(n.nutrientNumber).trim();
+  if (n.nutrient?.number) return String(n.nutrient.number).trim();
+  if (n.nutrient?.id) return String(n.nutrient.id).trim(); // last-resort; not ideal
+  return null;
+}
+
+function readAmount(n) {
+  // handle both shapes
+  if (typeof n.amount === 'number') return n.amount;
+  if (typeof n.value === 'number') return n.value;
+  return null;
+}
+
+// create a flat per-100g nutrient map from an FDC food object
+function extractPer100(food) {
+  const out = {};
+  const arr = Array.isArray(food.foodNutrients) ? food.foodNutrients : [];
+  for (const n of arr) {
+    const numStr = readNutrientNumber(n);
+    const amt = readAmount(n);
+    if (!numStr || amt == null) continue;
+    const num = Number(numStr);
+    const key = MAP[num];
+    if (!key) continue;
+    // Aggregate if duplicate entries appear
+    out[key] = (out[key] || 0) + amt;
+  }
+  return out;
+}
+
 // Create zero totals structure
 function makeZeroTotals() {
   return {
@@ -114,83 +190,6 @@ async function fetchFDCData(fdcId) {
   }
 }
 
-// Extract nutrients from FDC data
-function extractNutrients(fdcData) {
-  if (!fdcData || !fdcData.foodNutrients) {
-    return null;
-  }
-
-  const nutrients = makeZeroTotals();
-  
-  // FDC nutrient mapping
-  const nutrientMap = {
-    // Macronutrients
-    '203': 'protein_g',      // Protein
-    '204': 'fat_g',          // Total lipid (fat)
-    '205': 'carbs_g',        // Carbohydrate, by difference
-    '208': 'calories_kcal',  // Energy
-    
-    // Vitamins
-    '320': 'vitamins.A_mcg', // Vitamin A, IU (convert to mcg)
-    '401': 'vitamins.C_mg',  // Vitamin C
-    '328': 'vitamins.D_mcg', // Vitamin D (D2 + D3)
-    '323': 'vitamins.E_mg',  // Vitamin E (alpha-tocopherol)
-    '430': 'vitamins.K_mcg', // Vitamin K (phylloquinone)
-    '404': 'vitamins.B1_mg', // Thiamin
-    '405': 'vitamins.B2_mg', // Riboflavin
-    '406': 'vitamins.B3_mg', // Niacin
-    '410': 'vitamins.B5_mg', // Pantothenic acid
-    '415': 'vitamins.B6_mg', // Vitamin B-6
-    '418': 'vitamins.B12_mcg', // Vitamin B-12
-    '435': 'vitamins.B9_mcg', // Folate, total
-    '421': 'vitamins.B7_mcg', // Biotin
-    
-    // Minerals
-    '301': 'minerals.Ca_mg', // Calcium
-    '601': 'minerals.cholesterol_mg', // Cholesterol
-    '303': 'minerals.Fe_mg', // Iron
-    '304': 'minerals.Mg_mg', // Magnesium
-    '305': 'minerals.P_mg',  // Phosphorus
-    '306': 'minerals.K_mg',  // Potassium
-    '307': 'minerals.Na_mg', // Sodium
-    '309': 'minerals.Zn_mg', // Zinc
-    '312': 'minerals.Cu_mcg', // Copper
-    '315': 'minerals.Mn_mg', // Manganese
-    '317': 'minerals.Se_mcg', // Selenium
-    '291': 'other.fiber_g',  // Fiber, total dietary
-    '269': 'other.sugar_g',  // Sugars, total including NLEA
-    '606': 'other.satfat_g', // Fatty acids, total saturated
-    '645': 'other.omega3_mg', // Fatty acids, total monounsaturated (approximation)
-    '646': 'other.omega6_g'  // Fatty acids, total polyunsaturated (approximation)
-  };
-
-  for (const nutrient of fdcData.foodNutrients) {
-    const nutrientId = nutrient.nutrientId?.toString();
-    const value = nutrient.value || 0;
-    
-    if (nutrientMap[nutrientId]) {
-      const path = nutrientMap[nutrientId].split('.');
-      let target = nutrients;
-      
-      // Navigate to the nested property
-      for (let i = 0; i < path.length - 1; i++) {
-        target = target[path[i]];
-      }
-      
-      // Set the value
-      target[path[path.length - 1]] = value;
-    }
-  }
-
-  // Special handling for Vitamin A (convert IU to mcg if needed)
-  if (nutrients.vitamins.A_mcg > 1000) {
-    // Likely in IU, convert to mcg (1 IU = 0.3 mcg for retinol)
-    nutrients.vitamins.A_mcg = Math.round(nutrients.vitamins.A_mcg * 0.3);
-  }
-
-  return nutrients;
-}
-
 // Calculate totals from ingredients using FDC data
 async function calculateTotalsFromFDC(ingredients) {
   const totals = makeZeroTotals();
@@ -212,36 +211,38 @@ async function calculateTotalsFromFDC(ingredients) {
       continue;
     }
     
-    // Extract nutrients
-    const nutrients = extractNutrients(fdcData);
-    if (!nutrients) {
+    // Extract nutrients using the new robust parser
+    const per100 = extractPer100(fdcData);
+    console.log('FDC per100 for', ing.name, per100);
+    
+    if (!per100 || Object.keys(per100).length === 0) {
       console.log(`❌ Failed to extract nutrients for: ${ing.name}`);
       continue;
     }
     
     // Scale by grams/100
-    const factor = (ing.grams || 0) / 100;
-    console.log(`📊 ${ing.name}: ${ing.grams}g × factor ${factor.toFixed(2)}`);
+    const f = (ing.grams || 0) / 100;
+    console.log('Factor', f.toFixed(2), 'Scaled protein_g=', ((per100.protein_g||0)*f).toFixed(2));
     
     // Sum macronutrients
-    totals.calories_kcal += factor * nutrients.calories_kcal;
-    totals.protein_g += factor * nutrients.protein_g;
-    totals.fat_g += factor * nutrients.fat_g;
-    totals.carbs_g += factor * nutrients.carbs_g;
+    totals.calories_kcal += (per100.calories_kcal || 0) * f;
+    totals.protein_g += (per100.protein_g || 0) * f;
+    totals.fat_g += (per100.fat_g || 0) * f;
+    totals.carbs_g += (per100.carbs_g || 0) * f;
     
     // Sum vitamins
-    for (const [k, v] of Object.entries(nutrients.vitamins)) {
-      totals.vitamins[k] += factor * v;
+    for (const k of Object.keys(totals.vitamins)) {
+      totals.vitamins[k] += (per100[k] || 0) * f;
     }
     
     // Sum minerals
-    for (const [k, v] of Object.entries(nutrients.minerals)) {
-      totals.minerals[k] += factor * v;
+    for (const k of Object.keys(totals.minerals)) {
+      totals.minerals[k] += (per100[k] || 0) * f;
     }
     
     // Sum other nutrients
-    for (const [k, v] of Object.entries(nutrients.other)) {
-      totals.other[k] += factor * v;
+    for (const k of Object.keys(totals.other)) {
+      totals.other[k] += (per100[k] || 0) * f;
     }
   }
   
@@ -380,7 +381,8 @@ async function runFDCTest() {
     console.log('Key Minerals:', {
       'Iron (mg)': totals.minerals.Fe_mg,
       'Sodium (mg)': totals.minerals.Na_mg,
-      'Calcium (mg)': totals.minerals.Ca_mg
+      'Calcium (mg)': totals.minerals.Ca_mg,
+      'Potassium (mg)': totals.minerals.K_mg
     });
     console.log('Cache size:', fdcCache.size);
     
@@ -400,5 +402,5 @@ module.exports = {
   runFDCTest,
   searchFDC,
   fetchFDCData,
-  extractNutrients
+  extractPer100
 };
