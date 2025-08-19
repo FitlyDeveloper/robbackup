@@ -277,7 +277,7 @@ class FoodAnalyzerApi {
             }),
           )
           .timeout(const Duration(
-              seconds: 25)); // Reduced to 25s for faster responses
+              seconds: 60)); // Increased to 60s for Render.com
 
       if (response.statusCode != 200) {
         throw Exception('Lightning API failed: ${response.statusCode}');
