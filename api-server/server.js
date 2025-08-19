@@ -299,7 +299,17 @@ UNITS: All micronutrients should be in these units:
   ]
 }
 
-CRITICAL: Use realistic USDA values. NO zeros. Valid JSON only.`;
+CRITICAL: Use realistic USDA values. NO zeros. Valid JSON only.
+
+MICRONUTRIENT REQUIREMENTS:
+- ALL micronutrients MUST have realistic values (NO zeros)
+- Use actual USDA nutritional database values
+- "Other" category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) MUST be accurate
+- Example: A meal with dumplings should have fiber=2-4g, cholesterol=20-50mg, sugar=3-8g, saturated_fats=2-6g
+- Example: A meal with tomatoes should have vitamin_c=15-25mg, fiber=2-4g
+- Example: A meal with sour cream should have cholesterol=30-60mg, saturated_fats=3-8g
+
+DO NOT RETURN ZEROS FOR ANY MICRONUTRIENT!`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -319,10 +329,10 @@ CRITICAL: Use realistic USDA values. NO zeros. Valid JSON only.`;
           {
             role: "user",
             content: [
-              { 
-                type: "text", 
-                text: "Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. DO NOT return zeros - use actual USDA nutritional values."
-              },
+                             { 
+                 type: "text", 
+                 text: "Analyze this food image and provide COMPLETE nutritional data with REALISTIC values for ALL 34 micronutrients. DO NOT return zeros - use actual USDA nutritional values. Pay special attention to the 'Other' category (fiber, cholesterol, sugar, saturated_fats, omega_3, omega_6) - these MUST be accurate and realistic."
+               },
               { 
                 type: "image_url", 
                 image_url: { url: image }
