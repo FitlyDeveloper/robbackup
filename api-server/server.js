@@ -380,6 +380,8 @@ Include an additional object "units_used" that maps each nutrient key to the exa
 
 CRITICAL: You MUST research and use REAL nutritional data from reliable sources. DO NOT estimate, guess, or use placeholder values. Every number must come from actual nutritional research.
 
+IMPORTANT: You MUST complete the entire JSON response. Do not truncate or leave incomplete data. The response must be valid JSON that can be parsed.
+
 VALID JSON ONLY. Return zero only when the food naturally contains none.
 
 MICRONUTRIENT REQUIREMENTS:
@@ -420,7 +422,7 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
             ]
           }
         ],
-        max_tokens: 2200
+                 max_tokens: 3000
       })
     });
 
@@ -435,10 +437,13 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
     const responseData = await response.json();
     const content = responseData.choices[0].message.content.trim();
     
-    console.log('🔥 OpenAI response received, length:', content.length);
-    if (content.length < 20) {
-      console.log('⚠️ Suspiciously short response content:', content);
-    }
+         console.log('🔥 OpenAI response received, length:', content.length);
+     if (content.length < 20) {
+       console.log('⚠️ Suspiciously short response content:', content);
+     }
+     if (content.length > 2000) {
+       console.log('✅ Response length looks good for complete data');
+     }
     
     try {
       const jsonResponse = JSON.parse(content);
@@ -517,13 +522,19 @@ RESEARCH COMMAND: For each ingredient, mentally search "ingredient name nutritio
         units_used: jsonResponse.units_used || null
       };
 
-      console.log('✅ Response prepared with micronutrients');
-      console.log('Sample micronutrients:', {
-        vitamin_a: response.vitamin_a,
-        vitamin_c: response.vitamin_c,
-        iron: response.iron,
-        potassium: response.potassium
-      });
+             console.log('✅ Response prepared with micronutrients');
+       console.log('Sample micronutrients:', {
+         vitamin_a: response.vitamin_a,
+         vitamin_c: response.vitamin_c,
+         iron: response.iron,
+         potassium: response.potassium
+       });
+       console.log('📊 Macros check:', {
+         calories: response.calories,
+         protein: response.protein,
+         fat: response.fat,
+         carbs: response.carbs
+       });
 
       return res.json({
         success: true,
