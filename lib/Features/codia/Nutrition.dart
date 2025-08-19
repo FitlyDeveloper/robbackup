@@ -1606,7 +1606,7 @@ class _NutritionPage extends State<NutritionPage>
               name: displayName,
               value: '${numericValue.toString()}/$dailyValue $unit',
               percent: '${(progress * 100).round()}%',
-              progress: progress.clamp(0.0, 2.0), // Allow up to 200%
+              progress: progress, // allow >100%
               progressColor: _getProgressColor(progress),
             );
             if (progress > 0) appliedVitamins++;
@@ -1623,7 +1623,7 @@ class _NutritionPage extends State<NutritionPage>
               name: displayName,
               value: '${numericValue.toString()}/$dailyValue $unit',
               percent: '${(progress * 100).round()}%',
-              progress: progress.clamp(0.0, 2.0),
+              progress: progress, // allow >100%
               progressColor: _getProgressColor(progress),
             );
             if (progress > 0) appliedMinerals++;
@@ -1640,7 +1640,7 @@ class _NutritionPage extends State<NutritionPage>
               name: displayName,
               value: '${numericValue.toString()}/$dailyValue $unit',
               percent: '${(progress * 100).round()}%',
-              progress: progress.clamp(0.0, 2.0),
+              progress: progress, // allow >100%
               progressColor: _getProgressColor(progress),
             );
             if (progress > 0) appliedOther++;
@@ -3816,13 +3816,13 @@ class _NutritionPage extends State<NutritionPage>
       'molybdenum': 45.0,
       'phosphorus': 700.0, 'potassium': 3500.0, 'selenium': 55.0,
       'sodium': 2300.0, 'zinc': 11.0,
-      // Other
+      // Other (units match UI: fiber g, cholesterol mg, sugar g, saturated_fats g, omega_3 mg, omega_6 g)
       'fiber': 25.0, 'cholesterol': 300.0, 'sugar': 50.0,
-      'saturated_fats': 20.0, 'omega_3': 1000.0, 'omega_6': 17000.0,
+      'saturated_fats': 20.0, 'omega_3': 1600.0, 'omega_6': 17.0,
     };
 
     double dailyValue = dailyValues[nutrient] ?? 100.0;
-    double progress = (value / dailyValue).clamp(0.0, 1.0);
+    double progress = (value / dailyValue);
     return progress;
   }
 

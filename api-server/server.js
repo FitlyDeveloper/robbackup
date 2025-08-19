@@ -248,8 +248,13 @@ INGREDIENT NAMING: Use short, simple ingredient names.
 
 UNITS: All micronutrients should be in these units:
 - Vitamins: mg (except vitamin_a in mcg, vitamin_d in mcg, vitamin_b7 in mcg, vitamin_b9 in mcg, vitamin_b12 in mcg, vitamin_k in mcg)
-- Minerals: mg (except chromium in mcg, copper in mg, fluoride in mg, iodine in mcg, manganese in mg, molybdenum in mcg, selenium in mcg, zinc in mg)
+- Minerals: mg (except chromium in mcg, copper in mcg, fluoride in mg, iodine in mcg, manganese in mg, molybdenum in mcg, selenium in mcg, zinc in mg)
 - Other: fiber (g), cholesterol (mg), sugar (g), saturated_fats (g), omega_3 (mg), omega_6 (g)
+
+UNIT ENFORCEMENT:
+- Return raw numeric values ONLY (no unit suffixes inside numbers).
+- Use the exact units above. Especially: omega_3 must be in mg and omega_6 must be in g. Copper must be in mcg.
+- If your internal estimate is in a different unit, convert it so the returned number matches the required unit.
 
 {
   "meal_name": "Gourmet Food Name",
