@@ -17,6 +17,40 @@ app.get('/', (req, res) => {
   res.json({ status: 'operational' });
 });
 
+// Enhanced JSON repair function
+function repairJsonFormat(raw) {
+  if (!raw || typeof raw !== 'string') return raw;
+  let s = raw.trim();
+  
+  // Strip markdown fences
+  s = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+  
+  // Normalize smart quotes
+  s = s.replace(/[""]/g, '"').replace(/['']/g, '\'');
+  
+  // AGGRESSIVE: Quote ALL unquoted property names (multiple patterns)
+  s = s.replace(/([,{\n\r\t\s])([A-Za-z_][A-Za-z0-9_]*)(\s*):/g, '$1"$2"$3:');
+  s = s.replace(/(\n\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):/g, '$1"$2"$3:');
+  s = s.replace(/^([A-Za-z_][A-Za-z0-9_]*)(\s*):/gm, '"$1"$2:');
+  
+  // Fix property names that might be at start of line
+  s = s.replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*):/gm, '$1"$2"$3:');
+  
+  // Convert single-quoted strings to double-quoted
+  s = s.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+  
+  // Remove trailing commas
+  s = s.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+  
+  // Collapse duplicate commas
+  s = s.replace(/,\s*,/g, ',');
+  
+  // Fix any remaining unquoted keys (last resort)
+  s = s.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*):/g, '$1"$2"$3:');
+  
+  return s;
+}
+
 // SIMPLIFIED FOOD ANALYSIS - ONLY MICRONUTRIENTS
 app.post('/api/analyze-food', async (req, res) => {
   try {
@@ -232,12 +266,10 @@ CRITICAL: Use realistic USDA values. NO zeros. Valid JSON only.`;
     } catch (parseError) {
       console.log('🔥 JSON parse failed:', parseError.message);
       
-      // SIMPLE JSON REPAIR
-      let repairedContent = content.trim()
-        .replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        .replace(/,\s*}/g, '}')
-        .replace(/,\s*]/g, ']');
+      // ENHANCED JSON REPAIR
+      let repairedContent = repairJsonFormat(content);
       
+      // Additional fixes for common OpenAI issues
       try {
         const jsonResponse = JSON.parse(repairedContent);
         
