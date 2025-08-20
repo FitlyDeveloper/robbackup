@@ -26,7 +26,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Deterministic name normalization - map to consistent FDC entries
+// Comprehensive name normalization - map to consistent FDC entries
 const NORMALIZE = [
   // Proteins - cooked variants
   [/^chicken( breast)?$/i, "chicken, breast, cooked, roasted, skinless"],
@@ -35,25 +35,26 @@ const NORMALIZE = [
   [/^salmon$/i, "salmon, cooked"],
   [/^tuna$/i, "tuna, cooked"],
   [/^egg$/i, "egg, whole, cooked"],
-  [/^meat filling$/i, "beef, ground, cooked"], // Generic meat filling → ground beef
+  [/^meat filling$/i, "beef, ground, cooked"],
   [/^ground meat$/i, "beef, ground, cooked"],
   [/^minced meat$/i, "beef, ground, cooked"],
   
   // Starches - cooked variants
   [/^sweet potato(s)?$/i, "sweet potato, baked, flesh only"],
-  [/^sweet potatoe(s)?$/i, "sweet potato, baked, flesh only"], // Common misspelling
-  [/^yam(s)?$/i, "sweet potato, baked, flesh only"], // Yams are often sweet potatoes
+  [/^sweet potatoe(s)?$/i, "sweet potato, baked, flesh only"],
+  [/^yam(s)?$/i, "sweet potato, baked, flesh only"],
   [/^potato(s)?$/i, "potato, baked, flesh only"],
   [/^rice$/i, "rice, white, cooked"],
   [/^spaghetti$/i, "spaghetti, cooked"],
   [/^pasta$/i, "pasta, cooked"],
+  [/^noodles$/i, "noodles, cooked"],
   [/^bread|dark bread$/i, "bread, wheat"],
-  [/^whole grain bread$/i, "bread, whole wheat"], // Add specific whole grain bread mapping
-  [/^whole wheat bread$/i, "bread, whole wheat"], // Add whole wheat bread mapping
+  [/^whole grain bread$/i, "bread, whole wheat"],
+  [/^whole wheat bread$/i, "bread, whole wheat"],
   [/^oatmeal$/i, "oats, cooked"],
   
-  // Dairy - improved mappings
-  [/^sour cream$/i, "sour cream, cultured"], // More specific mapping
+  // Dairy
+  [/^sour cream$/i, "sour cream, cultured"],
   [/^greek yogurt$/i, "yogurt, Greek, plain, nonfat"],
   [/^yogurt$/i, "yogurt, plain, whole milk"],
   [/^milk$/i, "milk, whole"],
@@ -68,8 +69,12 @@ const NORMALIZE = [
   [/^tomato(es)?$/i, "tomato, raw"],
   [/^cucumber$/i, "cucumber, raw"],
   [/^bell pepper$/i, "peppers, sweet, raw"],
+  [/^snow peas$/i, "peas, green, raw"],
+  [/^bean sprouts$/i, "bean sprouts, raw"],
   [/^cilantro$/i, "cilantro, raw"],
   [/^parsley$/i, "parsley, raw"],
+  [/^lime$/i, "lime, raw"],
+  [/^red chili$/i, "peppers, hot chili, red, raw"],
   
   // Fruits - raw variants
   [/^apple(s)?$/i, "apple, raw, with skin"],
@@ -108,7 +113,7 @@ function normalizeName(s) {
   return s; // Return original if no match
 }
 
-// Robust FDC search with deterministic filtering
+// Robust FDC search with multiple strategies
 async function searchFDCWithFiltering(ingredientName) {
   if (!process.env.FDC_API_KEY) {
     console.log('❌ FDC_API_KEY not configured');
@@ -118,10 +123,45 @@ async function searchFDCWithFiltering(ingredientName) {
   const normalizedName = normalizeName(ingredientName);
   console.log(`🔍 Searching FDC for: "${ingredientName}" → "${normalizedName}"`);
 
+  // Strategy 1: Try normalized search first
+  let match = await searchFDCStrategy(normalizedName, 'normalized');
+  
+  // Strategy 2: If no match, try original name
+  if (!match) {
+    console.log(`🔄 No match with normalized name, trying original: "${ingredientName}"`);
+    match = await searchFDCStrategy(ingredientName, 'original');
+  }
+  
+  // Strategy 3: If still no match, try simplified search
+  if (!match) {
+    const simplifiedName = simplifyIngredientName(ingredientName);
+    console.log(`🔄 No match with original name, trying simplified: "${simplifiedName}"`);
+    match = await searchFDCStrategy(simplifiedName, 'simplified');
+  }
+  
+  // Strategy 4: Last resort - try category-based search
+  if (!match) {
+    const categorySearch = getCategorySearchTerm(ingredientName);
+    if (categorySearch) {
+      console.log(`🔄 No match with simplified name, trying category: "${categorySearch}"`);
+      match = await searchFDCStrategy(categorySearch, 'category');
+    }
+  }
+
+  if (match) {
+    console.log(`✅ Found FDC match: ${match.description} (score: ${match.score.toFixed(2)}, type: ${match.dataType})`);
+  } else {
+    console.log(`❌ No FDC match found for: ${ingredientName}`);
+  }
+  
+  return match;
+}
+
+// Individual search strategy
+async function searchFDCStrategy(searchTerm, strategy) {
   try {
-    // Search with Foundation/SR Legacy/Survey data only (no brands)
     const searchParams = new URLSearchParams({
-      query: normalizedName,
+      query: searchTerm,
       api_key: process.env.FDC_API_KEY,
       dataType: 'Foundation,SR Legacy,Survey (FNDDS)',
       pageSize: 50,
@@ -140,72 +180,22 @@ async function searchFDCWithFiltering(ingredientName) {
     const data = await response.json();
     
     if (!data.foods || data.foods.length === 0) {
-      console.log(`❌ No FDC results for: ${normalizedName}`);
       return null;
     }
 
-    console.log(`🔍 FDC Search Debug for "${normalizedName}":`);
-    console.log(`   Found ${data.foods.length} total results`);
-    
-    // Score and filter candidates
+    // Score and filter candidates with strategy-specific thresholds
     const scoredCandidates = data.foods.slice(0, 20).map(food => {
-      const score = calculateFDCMatchScore(food, normalizedName);
+      const score = calculateFDCMatchScore(food, searchTerm, strategy);
       return { ...food, score };
-    }).filter(food => food.score > 0); // Only keep positive scores
-
-    console.log(`   After scoring: ${scoredCandidates.length} candidates with score > 0`);
-    
-    if (scoredCandidates.length > 0) {
-      console.log(`   Top 3 candidates:`);
-      scoredCandidates.slice(0, 3).forEach((candidate, idx) => {
-        console.log(`     ${idx + 1}. ${candidate.description} (score: ${candidate.score.toFixed(2)}, type: ${candidate.dataType})`);
-      });
-    }
+    }).filter(food => food.score > getMinScoreForStrategy(strategy));
 
     if (scoredCandidates.length === 0) {
-      console.log(`❌ No good FDC matches for: ${normalizedName}`);
-      
-      // Try a more lenient search as fallback
-      console.log(`🔄 Trying fallback search for: ${normalizedName}`);
-      const fallbackParams = new URLSearchParams({
-        query: ingredientName, // Use original name instead of normalized
-        api_key: process.env.FDC_API_KEY,
-        dataType: 'Foundation,SR Legacy,Survey (FNDDS)',
-        pageSize: 25
-      });
-      
-      const fallbackUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?${fallbackParams}`;
-      const fallbackResponse = await fetch(fallbackUrl);
-      
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        if (fallbackData.foods && fallbackData.foods.length > 0) {
-          const fallbackCandidates = fallbackData.foods.slice(0, 10).map(food => {
-            const score = calculateFDCMatchScore(food, ingredientName);
-            return { ...food, score };
-          }).filter(food => food.score > 5); // Lower threshold for fallback
-          
-          if (fallbackCandidates.length > 0) {
-            fallbackCandidates.sort((a, b) => b.score - a.score);
-            const bestFallback = fallbackCandidates[0];
-            console.log(`✅ Found fallback match: ${bestFallback.description} (score: ${bestFallback.score.toFixed(2)})`);
-            return {
-              fdcId: bestFallback.fdcId,
-              description: bestFallback.description,
-              dataType: bestFallback.dataType,
-              score: bestFallback.score
-            };
-          }
-        }
-      }
-      
       return null;
     }
 
     // Sort by score (highest first), then by data type preference
     scoredCandidates.sort((a, b) => {
       if (Math.abs(a.score - b.score) < 0.1) {
-        // If scores are close, prefer Foundation > SR Legacy > Survey
         const aType = a.dataType?.toLowerCase() || '';
         const bType = b.dataType?.toLowerCase() || '';
         if (aType.includes('foundation') && !bType.includes('foundation')) return -1;
@@ -217,7 +207,6 @@ async function searchFDCWithFiltering(ingredientName) {
     });
 
     const bestMatch = scoredCandidates[0];
-    console.log(`✅ Found FDC match: ${bestMatch.description} (score: ${bestMatch.score.toFixed(2)}, type: ${bestMatch.dataType})`);
     
     return {
       fdcId: bestMatch.fdcId,
@@ -227,13 +216,47 @@ async function searchFDCWithFiltering(ingredientName) {
     };
 
   } catch (error) {
-    console.log(`❌ FDC search error for ${normalizedName}:`, error.message);
+    console.log(`❌ FDC search error for ${searchTerm}:`, error.message);
     return null;
   }
 }
 
-// Calculate FDC match score with strict filtering
-function calculateFDCMatchScore(food, searchTerm) {
+// Get minimum score threshold based on search strategy
+function getMinScoreForStrategy(strategy) {
+  switch (strategy) {
+    case 'normalized': return 15;  // Strict for normalized names
+    case 'original': return 10;    // Medium for original names
+    case 'simplified': return 5;   // Lenient for simplified names
+    case 'category': return 3;     // Very lenient for category searches
+    default: return 10;
+  }
+}
+
+// Simplify ingredient name for broader matching
+function simplifyIngredientName(name) {
+  return name
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')[0]; // Take first word only
+}
+
+// Get category-based search term
+function getCategorySearchTerm(name) {
+  const lowerName = name.toLowerCase();
+  
+  if (lowerName.includes('pea')) return 'peas';
+  if (lowerName.includes('sprout')) return 'bean sprouts';
+  if (lowerName.includes('cilantro') || lowerName.includes('coriander')) return 'cilantro';
+  if (lowerName.includes('chili') || lowerName.includes('pepper')) return 'peppers';
+  if (lowerName.includes('lime') || lowerName.includes('lemon')) return 'citrus';
+  if (lowerName.includes('noodle') || lowerName.includes('pasta')) return 'pasta';
+  
+  return null;
+}
+
+// Calculate FDC match score with strategy-based filtering
+function calculateFDCMatchScore(food, searchTerm, strategy) {
   let score = 0;
   const description = food.description.toLowerCase();
   const dataType = food.dataType?.toLowerCase() || '';
@@ -244,32 +267,27 @@ function calculateFDCMatchScore(food, searchTerm) {
   
   // Check for major category mismatches - instant disqualification
   const isProtein = searchTerm.includes('chicken') || searchTerm.includes('beef') || searchTerm.includes('pork') || searchTerm.includes('salmon') || searchTerm.includes('tuna') || searchTerm.includes('meat');
-  const isStarch = searchTerm.includes('potato') || searchTerm.includes('sweet potato') || searchTerm.includes('rice') || searchTerm.includes('pasta') || searchTerm.includes('bread');
+  const isStarch = searchTerm.includes('potato') || searchTerm.includes('sweet potato') || searchTerm.includes('rice') || searchTerm.includes('pasta') || searchTerm.includes('bread') || searchTerm.includes('noodle');
   const isDairy = searchTerm.includes('cream') || searchTerm.includes('milk') || searchTerm.includes('yogurt') || searchTerm.includes('cheese');
-  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato') || searchTerm.includes('cilantro') || searchTerm.includes('kimchi') || searchTerm.includes('peach');
+  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato') || searchTerm.includes('cilantro') || searchTerm.includes('pea') || searchTerm.includes('sprout') || searchTerm.includes('lime') || searchTerm.includes('chili');
   
-  // If searching for a starch but description contains protein keywords, instant disqualification
-  if (isStarch && (description.includes('beef') || description.includes('chicken') || description.includes('pork') || description.includes('meat') || description.includes('fish'))) {
-    console.log(`❌ REJECTED: ${searchTerm} (starch) matched to ${description} (protein)`);
-    return 0; // Instant disqualification
+  const descIsProtein = description.includes('chicken') || description.includes('beef') || description.includes('pork') || description.includes('salmon') || description.includes('tuna') || description.includes('meat');
+  const descIsStarch = description.includes('potato') || description.includes('rice') || description.includes('pasta') || description.includes('bread') || description.includes('noodle');
+  const descIsDairy = description.includes('cream') || description.includes('milk') || description.includes('yogurt') || description.includes('cheese');
+  const descIsProduce = description.includes('apple') || description.includes('banana') || description.includes('carrot') || description.includes('broccoli') || description.includes('tomato') || description.includes('cilantro') || description.includes('pea') || description.includes('sprout') || description.includes('lime') || description.includes('pepper');
+  
+  // Instant disqualification for major category mismatches
+  if ((isProtein && descIsStarch) || (isProtein && descIsDairy) || (isProtein && descIsProduce)) {
+    return -1000;
   }
-  
-  // If searching for a protein but description contains starch keywords, instant disqualification
-  if (isProtein && (description.includes('potato') || description.includes('rice') || description.includes('bread') || description.includes('pasta'))) {
-    console.log(`❌ REJECTED: ${searchTerm} (protein) matched to ${description} (starch)`);
-    return 0; // Instant disqualification
+  if ((isStarch && descIsProtein) || (isStarch && descIsDairy)) {
+    return -1000;
   }
-  
-  // If searching for dairy but description contains non-dairy keywords, instant disqualification
-  if (isDairy && (description.includes('beef') || description.includes('chicken') || description.includes('potato') || description.includes('bread'))) {
-    console.log(`❌ REJECTED: ${searchTerm} (dairy) matched to ${description} (non-dairy)`);
-    return 0; // Instant disqualification
+  if ((isDairy && descIsProtein) || (isDairy && descIsStarch)) {
+    return -1000;
   }
-  
-  // If searching for produce but description contains non-produce keywords, instant disqualification
-  if (isProduce && (description.includes('beef') || description.includes('chicken') || description.includes('bread') || description.includes('cream'))) {
-    console.log(`❌ REJECTED: ${searchTerm} (produce) matched to ${description} (non-produce)`);
-    return 0; // Instant disqualification
+  if ((isProduce && descIsProtein) || (isProduce && descIsDairy)) {
+    return -1000;
   }
   
   // Heavy penalties for unwanted items
@@ -284,38 +302,29 @@ function calculateFDCMatchScore(food, searchTerm) {
   // Check for banned tokens - heavy penalty
   for (const banned of bannedTokens) {
     if (description.includes(banned)) {
-      score -= 50; // Very heavy penalty
+      score -= 50;
     }
   }
   
-  // Token overlap scoring - balanced approach
+  // Token overlap scoring with strategy-based weights
+  const searchTokens = searchTerm.split(/\s+/).filter(t => t.length > 2);
+  const descTokens = description.split(/\s+/).filter(t => t.length > 2);
+  
   let matches = 0;
-  for (const searchWord of searchWords) {
-    if (descWords.some(descWord => descWord.includes(searchWord) || searchWord.includes(descWord))) {
+  for (const searchToken of searchTokens) {
+    if (descTokens.some(descToken => descToken.includes(searchToken) || searchToken.includes(descToken))) {
       matches++;
     }
   }
   
-  // Base score from token overlap
-  if (searchWords.length > 0) {
-    const matchPercentage = matches / searchWords.length;
-    score += matchPercentage * 40; // Balanced weight
-    
-    // Require at least 40% word match for any score (reduced from 60%)
-    if (matchPercentage < 0.4) {
-      score -= 50; // Moderate penalty for low match percentage
-    }
-  }
+  // Base score from token overlap with strategy-based multiplier
+  const tokenScore = (matches / searchTokens.length) * 20;
+  const strategyMultiplier = strategy === 'normalized' ? 1.5 : strategy === 'original' ? 1.0 : strategy === 'simplified' ? 0.8 : 0.6;
+  score += tokenScore * strategyMultiplier;
   
   // Bonus for exact phrase match
   if (description.includes(searchTerm)) {
-    score += 25; // Increased from 15
-  }
-  
-  // Partial phrase match bonus - more lenient
-  const commonWords = searchWords.filter(word => descWords.some(descWord => descWord.includes(word) || word.includes(descWord)));
-  if (commonWords.length >= Math.ceil(searchWords.length * 0.6)) { // Reduced from 0.8 to 0.6
-    score += 12; // Increased from 8
+    score += strategy === 'normalized' ? 30 : 15;
   }
   
   // Data type preference
@@ -337,13 +346,6 @@ function calculateFDCMatchScore(food, searchTerm) {
     score += 2;
   }
   
-  // Require minimum score threshold - reduced from 20 to 10
-  if (score < 10) { // Reduced minimum threshold
-    console.log(`❌ REJECTED: ${searchTerm} matched to ${description} (score: ${score})`);
-    return 0; // Reject low-scoring matches
-  }
-  
-  console.log(`✅ ACCEPTED: ${searchTerm} matched to ${description} (score: ${score})`);
   return Math.max(0, score);
 }
 
