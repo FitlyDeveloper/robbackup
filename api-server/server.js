@@ -70,11 +70,13 @@ const NORMALIZE = [
   [/^cucumber$/i, "cucumber, raw"],
   [/^bell pepper$/i, "peppers, sweet, raw"],
   [/^snow peas$/i, "peas, green, raw"],
+  [/^snap peas$/i, "snap peas, raw"],
   [/^bean sprouts$/i, "bean sprouts, raw"],
   [/^cilantro$/i, "cilantro, raw"],
   [/^parsley$/i, "parsley, raw"],
   [/^lime$/i, "lime, raw"],
   [/^red chili$/i, "peppers, hot chili, red, raw"],
+  [/^hot chili$/i, "peppers, hot chili, red, raw"],
   
   // Fruits - raw variants
   [/^apple(s)?$/i, "apple, raw, with skin"],
@@ -207,8 +209,8 @@ async function searchFDCStrategy(searchTerm, strategy) {
     });
 
     const bestMatch = scoredCandidates[0];
-    
-    return {
+  
+  return {
       fdcId: bestMatch.fdcId,
       description: bestMatch.description,
       dataType: bestMatch.dataType,
@@ -241,11 +243,11 @@ function simplifyIngredientName(name) {
     .split(' ')[0]; // Take first word only
 }
 
-// Get category-based search term
+// Get category-based search term with specific mappings
 function getCategorySearchTerm(name) {
   const lowerName = name.toLowerCase();
   
-  // More specific mappings to prevent wrong matches
+  // Specific mappings to prevent wrong matches
   if (lowerName.includes('snap pea')) return 'snap peas';
   if (lowerName.includes('bean sprout')) return 'bean sprouts';
   if (lowerName.includes('cilantro') || lowerName.includes('coriander')) return 'cilantro';
@@ -415,14 +417,14 @@ app.post("/api/test-vision", async (req, res) => {
     
     const visionResponse = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
+        messages: [
+          {
+                role: "system",
           content: "You are a food ingredient extractor. Return JSON: {\"ingredients\": [{\"name\": \"ingredient name\", \"grams\": weight}]}"
-        },
-        {
-          role: "user",
-          content: [
+              },
+              {
+                role: "user",
+                content: [
             { type: "text", text: "What ingredients do you see in this image?" },
             {
               type: "image_url",
@@ -469,7 +471,7 @@ app.post("/api/analyze-food", async (req, res) => {
     if (clientIngredients && Array.isArray(clientIngredients)) {
       ingredients = clientIngredients;
       console.log("📋 Using client-provided ingredients:", ingredients.length);
-    } else {
+          } else {
       // Call OpenAI Vision for OCR
       const imageData = imageBase64 || imageUrl;
       if (!imageData) {
@@ -620,7 +622,7 @@ app.post("/api/analyze-food", async (req, res) => {
               const repaired = JSON.parse(jsonMatch[0]);
               ingredients = repaired.ingredients || [];
               console.log("🔧 Repaired JSON, extracted ingredients:", ingredients.length);
-            } else {
+    } else {
               console.error("❌ No JSON found in response");
               // Try fallback approach even if JSON parsing fails
               console.log("⚠️ Trying fallback ingredient detection...");
