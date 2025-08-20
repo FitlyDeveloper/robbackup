@@ -216,128 +216,7 @@ function normalizeName(s) {
   return t;
 }
 
-// Robust FDC search with scoring
-async function searchFDCWithScoring(ingredientName) {
-  if (!process.env.FDC_API_KEY) {
-    console.log('❌ FDC_API_KEY not configured');
-    return null;
-  }
 
-  const normalizedName = normalizeName(ingredientName);
-  console.log(`🔍 Searching FDC for: "${ingredientName}" → "${normalizedName}"`);
-
-  try {
-    // Search with Foundation/SR Legacy/Survey data only
-    const searchParams = new URLSearchParams({
-      query: normalizedName,
-      api_key: process.env.FDC_API_KEY,
-      dataType: 'Foundation,SR Legacy,Survey (FNDDS)',
-      pageSize: 50,
-      sortBy: 'dataType.keyword',
-      sortOrder: 'asc'
-    });
-    
-    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${searchParams}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      console.log(`❌ FDC search failed: ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    
-    if (!data.foods || data.foods.length === 0) {
-      console.log(`❌ No FDC results for: ${normalizedName}`);
-      return null;
-    }
-
-    // Score candidates
-    const scoredCandidates = data.foods.slice(0, 20).map(food => {
-      const score = calculateFDCMatchScore(food, normalizedName);
-      return { ...food, score };
-    });
-
-    // Sort by score (highest first)
-    scoredCandidates.sort((a, b) => b.score - a.score);
-
-    const bestMatch = scoredCandidates[0];
-    
-    if (bestMatch && bestMatch.score > 0) {
-      console.log(`✅ Found FDC match: ${bestMatch.description} (score: ${bestMatch.score.toFixed(2)})`);
-      return {
-        fdcId: bestMatch.fdcId,
-        description: bestMatch.description,
-        dataType: bestMatch.dataType,
-        score: bestMatch.score
-      };
-    } else {
-      console.log(`❌ No good FDC match found for: ${normalizedName}`);
-      return null;
-    }
-
-  } catch (error) {
-    console.log(`❌ FDC search error for ${normalizedName}:`, error.message);
-    return null;
-  }
-}
-
-// Calculate FDC match score
-function calculateFDCMatchScore(food, searchTerm) {
-  let score = 0;
-  const description = food.description.toLowerCase();
-  const dataType = food.dataType?.toLowerCase() || '';
-  
-  // Banned tokens that indicate processed/branded foods
-  const bannedTokens = [
-    "reduced", "low-calorie", "baby", "formula", "supplement", 
-    "meal kit", "filling", "mix", "frozen dinner", "snack", 
-    "brand", "lite", "diet", "fat-free", "sugar-free", "organic",
-    "premium", "gourmet", "artisan", "craft", "specialty"
-  ];
-  
-  // Check for banned tokens
-  for (const banned of bannedTokens) {
-    if (description.includes(banned)) {
-      score -= 10; // Heavy penalty
-    }
-  }
-  
-  // Token overlap scoring
-  const searchTokens = searchTerm.split(/\s+/).filter(t => t.length > 2);
-  const descTokens = description.split(/\s+/).filter(t => t.length > 2);
-  
-  let matches = 0;
-  for (const searchToken of searchTokens) {
-    if (descTokens.some(descToken => descToken.includes(searchToken) || searchToken.includes(descToken))) {
-      matches++;
-    }
-  }
-  
-  // Base score from token overlap
-  score += (matches / searchTokens.length) * 10;
-  
-  // Bonus for exact phrase match
-  if (description.includes(searchTerm)) {
-    score += 5;
-  }
-  
-  // Data type preference
-  if (dataType.includes('foundation')) {
-    score += 3;
-  } else if (dataType.includes('sr legacy')) {
-    score += 2;
-  } else if (dataType.includes('survey')) {
-    score += 1;
-  }
-  
-  // Prefer raw/fresh items
-  if (description.includes('raw') || description.includes('fresh')) {
-    score += 2;
-  }
-  
-  return Math.max(0, score); // Don't return negative scores
-}
 
 // Helper functions
 function titleCase(s) {
@@ -690,40 +569,40 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     
     console.log(`🔍 Processing ingredient: ${name} (${grams}g)`);
     
-    // Search FDC with robust scoring
-    const match = await searchFDCWithScoring(name);
-    if (!match) {
-      console.log(`❌ No FDC data found for: ${name}`);
-      continue;
-    }
-    
-    // Fetch nutrient data
-    const fdcData = await fetchFDCData(match.fdcId);
-    if (!fdcData) {
-      console.log(`❌ Failed to fetch FDC data for: ${name}`);
-      continue;
-    }
-    
-    // Extract nutrients
-    const per100 = extractPer100(fdcData);
-    console.log('FDC per100 for', name, per100);
-    
-    if (!per100 || Object.keys(per100).length === 0) {
-      console.log(`❌ Failed to extract nutrients for: ${name}`);
-      continue;
-    }
-    
-    // Scale by grams/100
-    const f = (grams || 0) / 100;
-    console.log('Factor', f.toFixed(2), 'Scaled protein_g=', ((per100.protein_g||0)*f).toFixed(2));
-    
-    // Build per-ingredient record with FDC metadata
-    const item = {
-      name: titleCase(name),
-      grams: Math.round(grams),
-      fdcId: match.fdcId,
-      fdcTitle: match.description,
-      dataType: match.dataType,
+              // Search FDC
+     const fdcId = await searchFDC(name);
+     if (!fdcId) {
+       console.log(`❌ No FDC data found for: ${name}`);
+       continue;
+     }
+     
+     // Fetch nutrient data
+     const fdcData = await fetchFDCData(fdcId);
+     if (!fdcData) {
+       console.log(`❌ Failed to fetch FDC data for: ${name}`);
+       continue;
+     }
+     
+     // Extract nutrients
+     const per100 = extractPer100(fdcData);
+     console.log('FDC per100 for', name, per100);
+     
+     if (!per100 || Object.keys(per100).length === 0) {
+       console.log(`❌ Failed to extract nutrients for: ${name}`);
+       continue;
+     }
+     
+     // Scale by grams/100
+     const f = (grams || 0) / 100;
+     console.log('Factor', f.toFixed(2), 'Scaled protein_g=', ((per100.protein_g||0)*f).toFixed(2));
+     
+     // Build per-ingredient record with FDC metadata
+     const item = {
+       name: titleCase(name),
+       grams: Math.round(grams),
+       fdcId: fdcId,
+       fdcTitle: fdcData.description || name,
+       dataType: fdcData.dataType || 'Unknown',
       calories_kcal: round1((per100.calories_kcal || 0) * f),
       protein_g: round1((per100.protein_g || 0) * f),
       fat_g: round1((per100.fat_g || 0) * f),
