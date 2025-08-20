@@ -35,6 +35,9 @@ const NORMALIZE = [
   [/^salmon$/i, "salmon, cooked"],
   [/^tuna$/i, "tuna, cooked"],
   [/^egg$/i, "egg, whole, cooked"],
+  [/^meat filling$/i, "beef, ground, cooked"], // Generic meat filling → ground beef
+  [/^ground meat$/i, "beef, ground, cooked"],
+  [/^minced meat$/i, "beef, ground, cooked"],
   
   // Starches - cooked variants
   [/^sweet potato(s)?$/i, "sweet potato, baked, flesh only"],
@@ -45,8 +48,8 @@ const NORMALIZE = [
   [/^bread|dark bread$/i, "bread, wheat"],
   [/^oatmeal$/i, "oats, cooked"],
   
-  // Dairy
-  [/^sour cream$/i, "sour cream"],
+  // Dairy - improved mappings
+  [/^sour cream$/i, "sour cream, cultured"], // More specific mapping
   [/^greek yogurt$/i, "yogurt, Greek, plain, nonfat"],
   [/^yogurt$/i, "yogurt, plain, whole milk"],
   [/^milk$/i, "milk, whole"],
@@ -61,6 +64,8 @@ const NORMALIZE = [
   [/^tomato(es)?$/i, "tomato, raw"],
   [/^cucumber$/i, "cucumber, raw"],
   [/^bell pepper$/i, "peppers, sweet, raw"],
+  [/^cilantro$/i, "cilantro, raw"],
+  [/^parsley$/i, "parsley, raw"],
   
   // Fruits - raw variants
   [/^apple(s)?$/i, "apple, raw, with skin"],
@@ -198,9 +203,9 @@ function calculateFDCMatchScore(food, searchTerm) {
     }
   }
   
-  // Token overlap scoring
-  const searchTokens = searchTerm.split(/\s+/).filter(t => t.length > 2);
-  const descTokens = description.split(/\s+/).filter(t => t.length > 2);
+  // Token overlap scoring - improved for better matching
+  const searchTokens = searchTerm.split(/\s+/).filter(t => t.length > 1); // Reduced minimum length
+  const descTokens = description.split(/\s+/).filter(t => t.length > 1);
   
   let matches = 0;
   for (const searchToken of searchTokens) {
@@ -209,12 +214,22 @@ function calculateFDCMatchScore(food, searchTerm) {
     }
   }
   
-  // Base score from token overlap
-  score += (matches / searchTokens.length) * 20;
+  // Base score from token overlap - more lenient
+  if (searchTokens.length > 0) {
+    score += (matches / searchTokens.length) * 25; // Increased from 20
+  }
   
   // Bonus for exact phrase match
   if (description.includes(searchTerm)) {
-    score += 10;
+    score += 15; // Increased from 10
+  }
+  
+  // Partial phrase match bonus
+  const searchWords = searchTerm.split(/\s+/);
+  const descWords = description.split(/\s+/);
+  const commonWords = searchWords.filter(word => descWords.some(descWord => descWord.includes(word) || word.includes(descWord)));
+  if (commonWords.length >= Math.ceil(searchWords.length * 0.7)) { // 70% word match
+    score += 8;
   }
   
   // Data type preference
@@ -227,7 +242,7 @@ function calculateFDCMatchScore(food, searchTerm) {
   }
   
   // Prefer cooked/processed items for proteins and starches
-  const isProtein = searchTerm.includes('chicken') || searchTerm.includes('beef') || searchTerm.includes('pork') || searchTerm.includes('salmon') || searchTerm.includes('tuna');
+  const isProtein = searchTerm.includes('chicken') || searchTerm.includes('beef') || searchTerm.includes('pork') || searchTerm.includes('salmon') || searchTerm.includes('tuna') || searchTerm.includes('meat');
   const isStarch = searchTerm.includes('potato') || searchTerm.includes('rice') || searchTerm.includes('pasta') || searchTerm.includes('bread');
   
   if ((isProtein || isStarch) && (description.includes('cooked') || description.includes('baked') || description.includes('roasted'))) {
@@ -235,11 +250,12 @@ function calculateFDCMatchScore(food, searchTerm) {
   }
   
   // Prefer raw for fruits/vegetables
-  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato');
+  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato') || searchTerm.includes('cilantro');
   if (isProduce && description.includes('raw')) {
     score += 2;
   }
   
+  // Lower threshold for acceptance - more lenient
   return Math.max(0, score); // Don't return negative scores
 }
 
