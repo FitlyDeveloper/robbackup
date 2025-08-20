@@ -1,406 +1,478 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
 const OpenAI = require('openai');
-const fs = require('fs');
-const path = require('path');
 
-const {
-  DV,
-  makeZeroTotals,
-  calculateTotalsFromFDC,
-  calculateDVPct,
+// Import nutrition functions
+const { 
+  makeZeroTotals, 
+  calculateDVPct, 
   roundTotals,
-  convertToNutritionFormat,
-  runFDCTest,
   searchFDC,
   fetchFDCData,
   extractPer100
-} = require('./nutrition.js');
+} = require('./nutrition');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// Configure OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// Configure multer for file uploads
-const upload = multer({ dest: 'uploads/' });
-
-console.log('Starting FDC-based nutrition server with enhanced reliability...');
-console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
-console.log('FDC API Key present:', process.env.FDC_API_KEY ? 'Yes' : 'No');
-
-// Run FDC test on startup
-runFDCTest();
-
-app.use(cors());
-
-// BEFORE any routes - increase body limits for base64 JSON payloads
+// Server hardening - handle large payloads
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cors());
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// Initialize OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Root endpoint for basic connectivity
-app.get('/', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'FDC Nutrition Server is running',
-    timestamp: new Date().toISOString() 
-  });
-});
+// Name normalization for deterministic FDC matching
+const NORMALIZE = [
+  [/^dark\s*bread$/i, "bread, whole wheat"],
+  [/^bread$/i, "bread, wheat"],
+  [/^spaghetti$/i, "spaghetti, cooked"],
+  [/^grated\s*cheese$/i, "cheese, parmesan, grated"],
+  [/^salami$/i, "salami"],
+  [/^coleslaw.*$/i, "coleslaw"],
+  [/^chicken breast$/i, "chicken, breast, roasted"],
+  [/^greek yogurt$/i, "yogurt, Greek, plain, nonfat"],
+  [/^sour cream$/i, "sour cream"],
+  [/^sweet potato$/i, "sweet potato, baked, flesh only"],
+  [/^pineapple$/i, "pineapple, raw"],
+  [/^watermelon$/i, "watermelon, raw"],
+  [/^apple$/i, "apple, raw, with skin"],
+  [/^banana$/i, "banana, raw"],
+  [/^orange$/i, "orange, raw"],
+  [/^tomato$/i, "tomato, raw"],
+  [/^lettuce$/i, "lettuce, raw"],
+  [/^carrot$/i, "carrot, raw"],
+  [/^broccoli$/i, "broccoli, raw"],
+  [/^spinach$/i, "spinach, raw"],
+  [/^rice$/i, "rice, white, cooked"],
+  [/^pasta$/i, "pasta, cooked"],
+  [/^beef$/i, "beef, ground, cooked"],
+  [/^pork$/i, "pork, ground, cooked"],
+  [/^salmon$/i, "salmon, raw"],
+  [/^tuna$/i, "tuna, raw"],
+  [/^egg$/i, "egg, whole, raw"],
+  [/^milk$/i, "milk, whole"],
+  [/^cheese$/i, "cheese, cheddar"],
+  [/^butter$/i, "butter, salted"],
+  [/^oil$/i, "oil, olive"],
+  [/^salt$/i, "salt, table"],
+  [/^pepper$/i, "pepper, black"],
+  [/^garlic$/i, "garlic, raw"],
+  [/^onion$/i, "onion, raw"],
+  [/^potato$/i, "potato, raw"],
+  [/^corn$/i, "corn, sweet, raw"],
+  [/^peas$/i, "peas, green, raw"],
+  [/^beans$/i, "beans, black, raw"],
+  [/^lentils$/i, "lentils, raw"],
+  [/^quinoa$/i, "quinoa, raw"],
+  [/^oatmeal$/i, "oats, raw"],
+  [/^almonds$/i, "almonds, raw"],
+  [/^peanuts$/i, "peanuts, raw"],
+  [/^walnuts$/i, "walnuts, raw"],
+  [/^honey$/i, "honey"],
+  [/^sugar$/i, "sugar, granulated"],
+  [/^flour$/i, "flour, wheat, all-purpose"],
+  [/^vinegar$/i, "vinegar, distilled"],
+  [/^soy sauce$/i, "soy sauce"],
+  [/^mustard$/i, "mustard, prepared"],
+  [/^ketchup$/i, "ketchup"],
+  [/^mayonnaise$/i, "mayonnaise"],
+  [/^hot sauce$/i, "hot sauce"],
+  [/^salsa$/i, "salsa"],
+  [/^guacamole$/i, "guacamole"],
+  [/^hummus$/i, "hummus"],
+  [/^tahini$/i, "tahini"],
+  [/^olives$/i, "olives, ripe"],
+  [/^pickles$/i, "pickles, cucumber"],
+  [/^cucumber$/i, "cucumber, raw"],
+  [/^bell pepper$/i, "peppers, sweet, raw"],
+  [/^jalapeno$/i, "peppers, jalapeno, raw"],
+  [/^mushroom$/i, "mushrooms, raw"],
+  [/^zucchini$/i, "squash, summer, raw"],
+  [/^eggplant$/i, "eggplant, raw"],
+  [/^cauliflower$/i, "cauliflower, raw"],
+  [/^cabbage$/i, "cabbage, raw"],
+  [/^kale$/i, "kale, raw"],
+  [/^arugula$/i, "arugula, raw"],
+  [/^basil$/i, "basil, fresh"],
+  [/^cilantro$/i, "cilantro, raw"],
+  [/^parsley$/i, "parsley, raw"],
+  [/^mint$/i, "mint, fresh"],
+  [/^oregano$/i, "oregano, fresh"],
+  [/^thyme$/i, "thyme, fresh"],
+  [/^rosemary$/i, "rosemary, fresh"],
+  [/^sage$/i, "sage, fresh"],
+  [/^bay leaf$/i, "bay leaf"],
+  [/^cinnamon$/i, "cinnamon, ground"],
+  [/^nutmeg$/i, "nutmeg, ground"],
+  [/^ginger$/i, "ginger, raw"],
+  [/^turmeric$/i, "turmeric, ground"],
+  [/^cumin$/i, "cumin, ground"],
+  [/^paprika$/i, "paprika"],
+  [/^chili powder$/i, "chili powder"],
+  [/^oregano$/i, "oregano, dried"],
+  [/^basil$/i, "basil, dried"],
+  [/^thyme$/i, "thyme, dried"],
+  [/^rosemary$/i, "rosemary, dried"],
+  [/^sage$/i, "sage, dried"],
+  [/^bay leaf$/i, "bay leaf, dried"],
+  [/^cinnamon$/i, "cinnamon, ground"],
+  [/^nutmeg$/i, "nutmeg, ground"],
+  [/^ginger$/i, "ginger, ground"],
+  [/^turmeric$/i, "turmeric, ground"],
+  [/^cumin$/i, "cumin, ground"],
+  [/^paprika$/i, "paprika"],
+  [/^chili powder$/i, "chili powder"],
+  [/^cayenne$/i, "cayenne pepper"],
+  [/^black pepper$/i, "pepper, black"],
+  [/^white pepper$/i, "pepper, white"],
+  [/^salt$/i, "salt, table"],
+  [/^sea salt$/i, "salt, sea"],
+  [/^kosher salt$/i, "salt, kosher"],
+  [/^himalayan salt$/i, "salt, pink"],
+  [/^garlic powder$/i, "garlic, powder"],
+  [/^onion powder$/i, "onion, powder"],
+  [/^celery salt$/i, "celery salt"],
+  [/^lemon pepper$/i, "lemon pepper"],
+  [/^cajun seasoning$/i, "cajun seasoning"],
+  [/^italian seasoning$/i, "italian seasoning"],
+  [/^herbs de provence$/i, "herbs de provence"],
+  [/^curry powder$/i, "curry powder"],
+  [/^garam masala$/i, "garam masala"],
+  [/^cardamom$/i, "cardamom, ground"],
+  [/^cloves$/i, "cloves, ground"],
+  [/^allspice$/i, "allspice, ground"],
+  [/^star anise$/i, "star anise"],
+  [/^fennel$/i, "fennel, ground"],
+  [/^coriander$/i, "coriander, ground"],
+  [/^fenugreek$/i, "fenugreek, ground"],
+  [/^saffron$/i, "saffron"],
+  [/^vanilla$/i, "vanilla extract"],
+  [/^almond extract$/i, "almond extract"],
+  [/^lemon extract$/i, "lemon extract"],
+  [/^orange extract$/i, "orange extract"],
+  [/^mint extract$/i, "mint extract"],
+  [/^peppermint extract$/i, "peppermint extract"],
+  [/^rose water$/i, "rose water"],
+  [/^orange blossom water$/i, "orange blossom water"],
+  [/^almond milk$/i, "almond milk, unsweetened"],
+  [/^soy milk$/i, "soy milk, unsweetened"],
+  [/^oat milk$/i, "oat milk, unsweetened"],
+  [/^coconut milk$/i, "coconut milk"],
+  [/^cashew milk$/i, "cashew milk, unsweetened"],
+  [/^rice milk$/i, "rice milk, unsweetened"],
+  [/^hemp milk$/i, "hemp milk, unsweetened"],
+  [/^flax milk$/i, "flax milk, unsweetened"],
+  [/^macadamia milk$/i, "macadamia milk, unsweetened"],
+  [/^hazelnut milk$/i, "hazelnut milk, unsweetened"],
+  [/^pistachio milk$/i, "pistachio milk, unsweetened"],
+  [/^walnut milk$/i, "walnut milk, unsweetened"],
+  [/^pecan milk$/i, "pecan milk, unsweetened"],
+  [/^brazil nut milk$/i, "brazil nut milk, unsweetened"],
+  [/^pumpkin seed milk$/i, "pumpkin seed milk, unsweetened"],
+  [/^sunflower seed milk$/i, "sunflower seed milk, unsweetened"],
+  [/^sesame milk$/i, "sesame milk, unsweetened"],
+  [/^quinoa milk$/i, "quinoa milk, unsweetened"],
+  [/^amaranth milk$/i, "amaranth milk, unsweetened"],
+  [/^teff milk$/i, "teff milk, unsweetened"],
+  [/^sorghum milk$/i, "sorghum milk, unsweetened"],
+  [/^millet milk$/i, "millet milk, unsweetened"],
+  [/^buckwheat milk$/i, "buckwheat milk, unsweetened"],
+  [/^kamut milk$/i, "kamut milk, unsweetened"],
+  [/^spelt milk$/i, "spelt milk, unsweetened"],
+  [/^emmer milk$/i, "emmer milk, unsweetened"],
+  [/^einkorn milk$/i, "einkorn milk, unsweetened"],
+  [/^farro milk$/i, "farro milk, unsweetened"],
+  [/^freekeh milk$/i, "freekeh milk, unsweetened"],
+  [/^bulgur milk$/i, "bulgur milk, unsweetened"],
+  [/^couscous milk$/i, "couscous milk, unsweetened"],
+  [/^polenta milk$/i, "polenta milk, unsweetened"],
+  [/^grits milk$/i, "grits milk, unsweetened"],
+  [/^cornmeal milk$/i, "cornmeal milk, unsweetened"],
+  [/^semolina milk$/i, "semolina milk, unsweetened"],
+  [/^durum wheat milk$/i, "durum wheat milk, unsweetened"],
+  [/^hard wheat milk$/i, "hard wheat milk, unsweetened"],
+  [/^soft wheat milk$/i, "soft wheat milk, unsweetened"],
+  [/^red wheat milk$/i, "red wheat milk, unsweetened"],
+  [/^white wheat milk$/i, "white wheat milk, unsweetened"],
+  [/^winter wheat milk$/i, "winter wheat milk, unsweetened"],
+  [/^spring wheat milk$/i, "spring wheat milk, unsweetened"],
+  [/^durum wheat milk$/i, "durum wheat milk, unsweetened"],
+  [/^hard wheat milk$/i, "hard wheat milk, unsweetened"],
+  [/^soft wheat milk$/i, "soft wheat milk, unsweetened"],
+  [/^red wheat milk$/i, "red wheat milk, unsweetened"],
+  [/^white wheat milk$/i, "white wheat milk, unsweetened"],
+  [/^winter wheat milk$/i, "winter wheat milk, unsweetened"],
+  [/^spring wheat milk$/i, "spring wheat milk, unsweetened"],
+];
 
-// Warmup endpoint for Flutter app
-app.get('/api/warmup', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'API server warmed up',
-    timestamp: new Date().toISOString() 
-  });
-});
+function normalizeName(s) {
+  const t = String(s || "").trim().toLowerCase();
+  for (const [re, out] of NORMALIZE) if (re.test(t)) return out;
+  return t;
+}
 
-// Main nutrition analysis endpoint
-app.post('/analyze-nutrition', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided' });
-    }
-
-    console.log('📸 Processing image:', req.file.originalname);
-
-    // Read the image file
-    const imageBuffer = fs.readFileSync(req.file.path);
-    const base64Image = imageBuffer.toString('base64');
-
-    // Clean up the uploaded file
-    fs.unlinkSync(req.file.path);
-
-    // Extract ingredients using OpenAI Vision (ONLY name and grams)
-    const ingredients = await extractIngredientsFromImage(base64Image);
-    
-    if (!ingredients || ingredients.length === 0) {
-      return res.status(400).json({ error: 'No ingredients detected in image' });
-    }
-
-    console.log('🔍 Extracted ingredients:', ingredients);
-
-    // Calculate nutrition using FDC
-    const totals = await calculateTotalsFromFDC(ingredients);
-    const dvPct = calculateDVPct(totals);
-
-    // Format response for nutrition.dart
-    const nutritionData = convertToNutritionFormat(totals, dvPct);
-
-    // Create ingredients list for nutrition.dart
-    const ingredientsList = ingredients.map(ing => ({
-      name: ing.name,
-      weight_g: ing.grams || 100,
-      amount: `${ing.grams || 100}g`,
-      protein: ((ing.grams || 0) / 100) * (totals.protein_g / ingredients.length), // Approximate per ingredient
-      fat: ((ing.grams || 0) / 100) * (totals.fat_g / ingredients.length),
-      carbs: ((ing.grams || 0) / 100) * (totals.carbs_g / ingredients.length)
-    }));
-
-    // Detailed verification logging
-    console.log('\n📊 INGREDIENT BREAKDOWN:');
-    for (const i of ingredients) {
-      console.log(`${i.name}: ${i.grams}g`);
-    }
-
-    console.log('\n📊 FINAL TOTALS:');
-    console.log('Macros:', {
-      'Calories': `${totals.calories_kcal} kcal`,
-      'Protein': `${totals.protein_g} g`,
-      'Fat': `${totals.fat_g} g`,
-      'Carbs': `${totals.carbs_g} g`
-    });
-    console.log('Key Vitamins:', {
-      'Vit A': `${totals.vitamins.A_mcg} mcg (${dvPct.vitamins.A_mcg}% DV)`,
-      'Vit C': `${totals.vitamins.C_mg} mg (${dvPct.vitamins.C_mg}% DV)`,
-      'Vit K': `${totals.vitamins.K_mcg} mcg (${dvPct.vitamins.K_mcg}% DV)`,
-      'B12': `${totals.vitamins.B12_mcg} mcg (${dvPct.vitamins.B12_mcg}% DV)`
-    });
-    console.log('Key Minerals:', {
-      'Iron': `${totals.minerals.Fe_mg} mg (${dvPct.minerals.Fe_mg}% DV)`,
-      'Sodium': `${totals.minerals.Na_mg} mg (${dvPct.minerals.Na_mg}% DV)`,
-      'Calcium': `${totals.minerals.Ca_mg} mg (${dvPct.minerals.Ca_mg}% DV)`
-    });
-
-    // Return nutrition.dart format
-    const response = {
-      meal_name: "Food",
-      ingredients: ingredientsList,
-      calories: nutritionData.calories,
-      protein: nutritionData.protein,
-      fat: nutritionData.fat,
-      carbs: nutritionData.carbs,
-      ...nutritionData
-    };
-
-    res.json(response);
-
-  } catch (error) {
-    console.error('❌ Error processing nutrition analysis:', error);
-    res.status(500).json({ error: 'Failed to analyze nutrition', details: error.message });
+// Robust FDC search with scoring
+async function searchFDCWithScoring(ingredientName) {
+  if (!process.env.FDC_API_KEY) {
+    console.log('❌ FDC_API_KEY not configured');
+    return null;
   }
-});
 
-// New endpoint for the updated API format
-app.post('/analyze-nutrition-v2', upload.single('image'), async (req, res) => {
+  const normalizedName = normalizeName(ingredientName);
+  console.log(`🔍 Searching FDC for: "${ingredientName}" → "${normalizedName}"`);
+
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided' });
-    }
-
-    console.log('📸 Processing image (v2):', req.file.originalname);
-
-    // Read the image file
-    const imageBuffer = fs.readFileSync(req.file.path);
-    const base64Image = imageBuffer.toString('base64');
-
-    // Clean up the uploaded file
-    fs.unlinkSync(req.file.path);
-
-    // Extract ingredients using OpenAI Vision (ONLY name and grams)
-    const ingredients = await extractIngredientsFromImage(base64Image);
+    // Search with Foundation/SR Legacy/Survey data only
+    const searchParams = new URLSearchParams({
+      query: normalizedName,
+      api_key: process.env.FDC_API_KEY,
+      dataType: 'Foundation,SR Legacy,Survey (FNDDS)',
+      pageSize: 50,
+      sortBy: 'dataType.keyword',
+      sortOrder: 'asc'
+    });
     
-    if (!ingredients || ingredients.length === 0) {
-      return res.status(400).json({ error: 'No ingredients detected in image' });
-    }
-
-    console.log('🔍 Extracted ingredients:', ingredients);
-
-    // Calculate nutrition using FDC
-    const totals = await calculateTotalsFromFDC(ingredients);
-    const dvPct = calculateDVPct(totals);
-
-    // Return new API format
-    const response = {
-      ingredients: ingredients,
-      macros: {
-        calories_kcal: totals.calories_kcal,
-        protein_g: totals.protein_g,
-        fat_g: totals.fat_g,
-        carbs_g: totals.carbs_g
-      },
-      vitamins: totals.vitamins,
-      minerals: totals.minerals,
-      other: totals.other,
-      dv_pct: dvPct
-    };
-
-    res.json(response);
-
-  } catch (error) {
-    console.error('❌ Error processing nutrition analysis (v2):', error);
-    res.status(500).json({ error: 'Failed to analyze nutrition', details: error.message });
-  }
-});
-
-// New endpoint that accepts either imageUrl or imageBase64
-app.post('/api/analyze-food', async (req, res) => {
-  try {
-    const { imageUrl, imageBase64, source } = req.body || {};
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${searchParams}`;
+    const response = await fetch(url);
     
-    if (!imageUrl && !imageBase64) {
-      return res.status(400).json({ error: "Provide imageUrl or imageBase64" });
+    if (!response.ok) {
+      console.log(`❌ FDC search failed: ${response.status}`);
+      return null;
     }
 
-    let base64Image;
+    const data = await response.json();
     
-    if (imageBase64) {
-      // Use provided base64 image
-      base64Image = imageBase64;
-      console.log('📸 Processing base64 image (size:', Math.round(imageBase64.length / 1024), 'KB)');
-    } else if (imageUrl) {
-      // Fetch image from URL
-      console.log('📸 Processing image URL:', imageUrl);
-      try {
-        const response = await fetch(imageUrl);
-        if (!response.ok) {
-          return res.status(400).json({ error: 'Failed to fetch image from URL' });
-        }
-        const imageBuffer = await response.arrayBuffer();
-        base64Image = Buffer.from(imageBuffer).toString('base64');
-      } catch (error) {
-        return res.status(400).json({ error: 'Failed to fetch image from URL', details: error.message });
-      }
+    if (!data.foods || data.foods.length === 0) {
+      console.log(`❌ No FDC results for: ${normalizedName}`);
+      return null;
     }
 
-    // Extract ingredients using OpenAI Vision (ONLY name and grams)
-    const ingredients = await extractIngredientsFromImage(base64Image);
-    
-    if (!ingredients || ingredients.length === 0) {
-      return res.status(400).json({ error: 'No ingredients detected in image' });
-    }
-
-    console.log('🔍 Extracted ingredients:', ingredients);
-
-    // Calculate nutrition using FDC with per-ingredient data
-    const { totals, perIngredient } = await calculateTotalsFromFDCWithPerIngredient(ingredients);
-    const dvPct = calculateDVPct(totals);
-
-    // Return new API format with per-ingredient data
-    const response = {
-      food_name: "Analyzed Food", // Add food name for Flutter compatibility
-      ingredients: ingredients, // Now augmented with kcal/macros
-      macros: {
-        calories_kcal: totals.calories_kcal,
-        protein_g: totals.protein_g,
-        fat_g: totals.fat_g,
-        carbs_g: totals.carbs_g
-      },
-      vitamins: totals.vitamins,
-      minerals: totals.minerals,
-      other: totals.other,
-      dv_pct: dvPct,
-      perIngredient: perIngredient // Detailed list for the flip side UI
-    };
-
-    console.log('📤 Sending response to Flutter app with', Object.keys(response).length, 'keys');
-    console.log('📊 Response summary: calories=', totals.calories_kcal, 'protein=', totals.protein_g, 'ingredients=', ingredients.length);
-
-    res.json(response);
-
-  } catch (error) {
-    console.error('❌ Error processing nutrition analysis:', error);
-    res.status(500).json({ error: 'Failed to analyze nutrition', details: error.message });
-  }
-});
-
-// Extract ingredients from image using OpenAI Vision
-async function extractIngredientsFromImage(base64Image) {
-  try {
-    console.log('🤖 Calling OpenAI Vision for ingredient extraction...');
-
-    // Extract base64 data from data URI if present
-    let cleanBase64 = base64Image;
-    if (base64Image.startsWith('data:image/')) {
-      const commaIndex = base64Image.indexOf(',');
-      if (commaIndex !== -1) {
-        cleanBase64 = base64Image.substring(commaIndex + 1);
-        console.log('📸 Extracted base64 data from data URI (length:', cleanBase64.length, ')');
-      }
-    }
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are a food ingredient extractor. Your ONLY job is to identify ingredients and their weights from food images.
-
-RULES:
-- Extract ONLY ingredient names and weights in grams
-- Do NOT calculate any nutrients, calories, or nutrition facts
-- Do NOT provide any nutritional analysis
-- Output ONLY valid JSON in this exact format: {"ingredients": [{"name": "Ingredient Name", "grams": weight_in_grams}]}
-- If you can't determine the weight, estimate based on typical serving sizes
-- Be specific with ingredient names (e.g., "chicken breast" not just "chicken")
-- If multiple ingredients are visible, list them all
-- If no ingredients are visible, return {"ingredients": []}`
-
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Extract the ingredients and their weights from this food image. Return ONLY the JSON with ingredients array."
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${cleanBase64}`
-              }
-            }
-          ]
-        }
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 500
+    // Score candidates
+    const scoredCandidates = data.foods.slice(0, 20).map(food => {
+      const score = calculateFDCMatchScore(food, normalizedName);
+      return { ...food, score };
     });
 
-    const content = response.choices[0].message.content;
-    console.log('🤖 OpenAI response:', content);
+    // Sort by score (highest first)
+    scoredCandidates.sort((a, b) => b.score - a.score);
 
-    // Parse JSON response
-    let jsonResponse;
-    try {
-      jsonResponse = JSON.parse(content);
-    } catch (parseError) {
-      console.log('❌ Failed to parse OpenAI JSON, attempting repair...');
-      jsonResponse = repairJSON(content);
+    const bestMatch = scoredCandidates[0];
+    
+    if (bestMatch && bestMatch.score > 0) {
+      console.log(`✅ Found FDC match: ${bestMatch.description} (score: ${bestMatch.score.toFixed(2)})`);
+      return {
+        fdcId: bestMatch.fdcId,
+        description: bestMatch.description,
+        dataType: bestMatch.dataType,
+        score: bestMatch.score
+      };
+    } else {
+      console.log(`❌ No good FDC match found for: ${normalizedName}`);
+      return null;
     }
-
-    if (!jsonResponse || !jsonResponse.ingredients) {
-      console.log('❌ Invalid response format from OpenAI');
-      return [];
-    }
-
-    // Validate and clean ingredients
-    const validIngredients = jsonResponse.ingredients
-      .filter(ing => ing && ing.name && ing.grams)
-      .map(ing => ({
-        name: ing.name.trim(),
-        grams: Math.round(parseFloat(ing.grams) || 0)
-      }))
-      .filter(ing => ing.grams > 0);
-
-    console.log('✅ Validated ingredients:', validIngredients);
-    return validIngredients;
 
   } catch (error) {
-    console.error('❌ OpenAI Vision error:', error);
-    throw new Error(`Failed to extract ingredients: ${error.message}`);
+    console.log(`❌ FDC search error for ${normalizedName}:`, error.message);
+    return null;
   }
 }
 
-// JSON repair function
-function repairJSON(content) {
-  try {
-    // Try to extract JSON from the response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+// Calculate FDC match score
+function calculateFDCMatchScore(food, searchTerm) {
+  let score = 0;
+  const description = food.description.toLowerCase();
+  const dataType = food.dataType?.toLowerCase() || '';
+  
+  // Banned tokens that indicate processed/branded foods
+  const bannedTokens = [
+    "reduced", "low-calorie", "baby", "formula", "supplement", 
+    "meal kit", "filling", "mix", "frozen dinner", "snack", 
+    "brand", "lite", "diet", "fat-free", "sugar-free", "organic",
+    "premium", "gourmet", "artisan", "craft", "specialty"
+  ];
+  
+  // Check for banned tokens
+  for (const banned of bannedTokens) {
+    if (description.includes(banned)) {
+      score -= 10; // Heavy penalty
     }
-    
-    // If no JSON found, try to construct it from the text
-    const lines = content.split('\n').filter(line => line.trim());
-    const ingredients = [];
-    
-    for (const line of lines) {
-      const match = line.match(/(.+?)\s*[:\-]\s*(\d+)\s*g/i);
-      if (match) {
-        ingredients.push({
-          name: match[1].trim(),
-          grams: parseInt(match[2])
-        });
-      }
-    }
-    
-    return { ingredients };
-  } catch (error) {
-    console.log('❌ JSON repair failed:', error);
-    return { ingredients: [] };
   }
+  
+  // Token overlap scoring
+  const searchTokens = searchTerm.split(/\s+/).filter(t => t.length > 2);
+  const descTokens = description.split(/\s+/).filter(t => t.length > 2);
+  
+  let matches = 0;
+  for (const searchToken of searchTokens) {
+    if (descTokens.some(descToken => descToken.includes(searchToken) || searchToken.includes(descToken))) {
+      matches++;
+    }
+  }
+  
+  // Base score from token overlap
+  score += (matches / searchTokens.length) * 10;
+  
+  // Bonus for exact phrase match
+  if (description.includes(searchTerm)) {
+    score += 5;
+  }
+  
+  // Data type preference
+  if (dataType.includes('foundation')) {
+    score += 3;
+  } else if (dataType.includes('sr legacy')) {
+    score += 2;
+  } else if (dataType.includes('survey')) {
+    score += 1;
+  }
+  
+  // Prefer raw/fresh items
+  if (description.includes('raw') || description.includes('fresh')) {
+    score += 2;
+  }
+  
+  return Math.max(0, score); // Don't return negative scores
 }
 
 // Helper functions
-function titleCase(s) { 
-  return String(s||'').replace(/\w\S*/g, w => w[0].toUpperCase()+w.slice(1)); 
+function titleCase(s) {
+  return String(s || '').replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1));
 }
 
-function round1(x) { 
-  return Math.round((x||0)*10)/10; 
+function round1(x) {
+  return Math.round((x || 0) * 10) / 10;
 }
+
+// Health check endpoint
+app.get("/health", (_, res) => res.json({ ok: true }));
+
+// Root endpoint
+app.get("/", (_, res) => res.json({ 
+  service: "FDC Nutrition API", 
+  status: "running",
+  endpoints: ["/health", "/api/analyze-food"]
+}));
+
+// Main nutrition analysis endpoint
+app.post("/api/analyze-food", async (req, res) => {
+  try {
+    const { imageBase64, imageUrl, ingredients: clientIngredients } = req.body || {};
+    
+    if (!imageBase64 && !imageUrl && !clientIngredients) {
+      return res.status(400).json({ 
+        error: "Provide imageUrl or imageBase64 or ingredients[]" 
+      });
+    }
+
+    let ingredients = [];
+
+    // Use client ingredients if provided, otherwise call Vision
+    if (clientIngredients && Array.isArray(clientIngredients)) {
+      ingredients = clientIngredients;
+      console.log("📋 Using client-provided ingredients:", ingredients.length);
+    } else {
+      // Call OpenAI Vision for OCR
+      const imageData = imageBase64 || imageUrl;
+      if (!imageData) {
+        return res.status(400).json({ error: "No image data provided" });
+      }
+
+      console.log("🔍 Calling OpenAI Vision for ingredient extraction...");
+      
+      const visionResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a food ingredient extractor. Analyze the image and extract ONLY ingredient names and weights in grams. 
+            Return a JSON object with this exact format: {"ingredients": [{"name": "ingredient name", "grams": weight_in_grams}]}
+            Do NOT calculate nutrition, calories, or macros. Only extract the ingredient list.`
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Extract the ingredients from this food image. Return only the JSON with ingredient names and grams."
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: imageData.startsWith('data:') ? imageData : imageData
+                }
+              }
+            ]
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 500
+      });
+
+      const visionContent = visionResponse.choices[0]?.message?.content;
+      if (!visionContent) {
+        return res.status(500).json({ error: "Failed to extract ingredients from image" });
+      }
+
+      try {
+        const parsed = JSON.parse(visionContent);
+        ingredients = parsed.ingredients || [];
+        console.log("📋 Extracted ingredients:", ingredients.length);
+      } catch (parseError) {
+        console.error("❌ Failed to parse Vision response:", parseError);
+        return res.status(500).json({ error: "Failed to parse ingredient extraction" });
+      }
+    }
+
+    if (ingredients.length === 0) {
+      return res.status(400).json({ error: "No ingredients found" });
+    }
+
+    // Process ingredients with FDC
+    const { totals, perIngredient } = await calculateTotalsFromFDCWithPerIngredient(ingredients);
+    
+    // Calculate DV percentages
+    const dvPct = calculateDVPct(totals);
+
+    // Build response
+    const response = {
+      ingredients, // augmented with nutrition data
+      perIngredient, // detailed breakdown
+      macros: {
+        calories_kcal: totals.calories_kcal,
+        protein_g: totals.protein_g,
+        fat_g: totals.fat_g,
+        carbs_g: totals.carbs_g
+      },
+      totals,
+      dv_pct: dvPct,
+      source: { 
+        nutrition: "FDC", 
+        vision: clientIngredients ? "Client-provided" : "OpenAI (OCR only)" 
+      }
+    };
+
+    console.log("📤 Sending response to Flutter app");
+    console.log("📊 Response summary:", {
+      calories: totals.calories_kcal,
+      protein: totals.protein_g,
+      ingredients: ingredients.length
+    });
+
+    res.json(response);
+
+  } catch (error) {
+    console.error("❌ API error:", error);
+    res.status(500).json({ 
+      error: "Failed to analyze nutrition",
+      details: error.message 
+    });
+  }
+});
 
 // Calculate totals from FDC with per-ingredient data
 async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
@@ -413,15 +485,15 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     
     console.log(`🔍 Processing ingredient: ${name} (${grams}g)`);
     
-    // Search FDC for this ingredient
-    const fdcId = await searchFDC(name);
-    if (!fdcId) {
+    // Search FDC with robust scoring
+    const match = await searchFDCWithScoring(name);
+    if (!match) {
       console.log(`❌ No FDC data found for: ${name}`);
       continue;
     }
     
     // Fetch nutrient data
-    const fdcData = await fetchFDCData(fdcId);
+    const fdcData = await fetchFDCData(match.fdcId);
     if (!fdcData) {
       console.log(`❌ Failed to fetch FDC data for: ${name}`);
       continue;
@@ -440,15 +512,17 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     const f = (grams || 0) / 100;
     console.log('Factor', f.toFixed(2), 'Scaled protein_g=', ((per100.protein_g||0)*f).toFixed(2));
     
-    // Build per-ingredient record
+    // Build per-ingredient record with FDC metadata
     const item = {
       name: titleCase(name),
       grams: Math.round(grams),
+      fdcId: match.fdcId,
+      fdcTitle: match.description,
+      dataType: match.dataType,
       calories_kcal: round1((per100.calories_kcal || 0) * f),
       protein_g: round1((per100.protein_g || 0) * f),
       fat_g: round1((per100.fat_g || 0) * f),
       carbs_g: round1((per100.carbs_g || 0) * f),
-      // Optional micros shown in the flip card if needed
       vitamins: {
         A_mcg: Math.round((per100.A_mcg || 0) * f),
         C_mg: round1((per100.C_mg || 0) * f),
@@ -465,11 +539,8 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     
     perIngredient.push(item);
     
-    // Augment the original ingredient element with nutrition data
-    ingredients[idx].calories_kcal = item.calories_kcal;
-    ingredients[idx].protein_g = item.protein_g;
-    ingredients[idx].fat_g = item.fat_g;
-    ingredients[idx].carbs_g = item.carbs_g;
+    // Augment the original ingredient element
+    ingredients[idx] = { ...ingredients[idx], ...item };
     
     // Sum macronutrients for totals
     totals.calories_kcal += (per100.calories_kcal || 0) * f;
@@ -500,43 +571,16 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     kcal: i.calories_kcal, 
     P: i.protein_g, 
     F: i.fat_g, 
-    C: i.carbs_g
+    C: i.carbs_g,
+    fdcId: i.fdcId
   })));
   
   return { totals: roundTotals(totals), perIngredient };
 }
 
-// Validate nutrient data is reasonable
-function validateNutrientData(nutrients, ingredientName) {
-  if (!nutrients) return false;
-  
-  // Check for reasonable calorie range (per 100g)
-  if (nutrients.calories_kcal && (nutrients.calories_kcal < 0 || nutrients.calories_kcal > 900)) {
-    console.log(`❌ Unreasonable calories for ${ingredientName}: ${nutrients.calories_kcal} kcal/100g`);
-    return false;
-  }
-  
-  // Check for reasonable fat content (per 100g)
-  if (nutrients.fat_g && (nutrients.fat_g < 0 || nutrients.fat_g > 100)) {
-    console.log(`❌ Unreasonable fat for ${ingredientName}: ${nutrients.fat_g} g/100g`);
-    return false;
-  }
-  
-  // Check for reasonable protein content (per 100g)
-  if (nutrients.protein_g && (nutrients.protein_g < 0 || nutrients.protein_g > 50)) {
-    console.log(`❌ Unreasonable protein for ${ingredientName}: ${nutrients.protein_g} g/100g`);
-    return false;
-  }
-  
-  // Check for reasonable carb content (per 100g)
-  if (nutrients.carbs_g && (nutrients.carbs_g < 0 || nutrients.carbs_g > 100)) {
-    console.log(`❌ Unreasonable carbs for ${ingredientName}: ${nutrients.carbs_g} g/100g`);
-    return false;
-  }
-  
-  return true;
-}
+// Warmup endpoint
+app.get("/api/warmup", (_, res) => res.json({ status: "Server is ready" }));
 
-app.listen(port, () => {
-  console.log(`🚀 FDC Nutrition Server running on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`🚀 FDC Nutrition Server running on port ${PORT}`);
 });
