@@ -31,6 +31,8 @@ const openai = new OpenAI({
 const NORMALIZE = [
   // Proteins - cooked variants
   [/^chicken( breast)?$/i, "chicken, breast, cooked, roasted, skinless"],
+  [/^chicken thighs$/i, "chicken, thigh, cooked, roasted, skinless"],
+  [/^chicken thigh$/i, "chicken, thigh, cooked, roasted, skinless"],
   [/^beef$/i, "beef, ground, cooked"],
   [/^pork$/i, "pork, ground, cooked"],
   [/^salmon$/i, "salmon, cooked"],
