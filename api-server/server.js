@@ -446,21 +446,19 @@ app.post("/api/analyze-food", async (req, res) => {
       console.log("🔍 Calling OpenAI Vision for ingredient extraction...");
       console.log("📸 Image data type:", typeof imageData);
       console.log("📸 Image data length:", imageData.length);
-      console.log("📸 Image data starts with:", imageData.substring(0, 50));
       
       // Clean base64 data from data URI if present
       let cleanImageData = imageData;
-      if (imageData.startsWith('data:image/')) {
+      if (typeof imageData === 'string' && imageData.startsWith('data:image/')) {
         const commaIndex = imageData.indexOf(',');
         if (commaIndex !== -1) {
           cleanImageData = imageData.substring(commaIndex + 1);
           console.log('📸 Extracted base64 data from data URI (length:', cleanImageData.length, ')');
-          console.log('📸 Clean data starts with:', cleanImageData.substring(0, 50));
         }
       }
       
-      // Validate base64 data
-      if (!cleanImageData || cleanImageData.length < 100) {
+      // Basic validation
+      if (!cleanImageData || cleanImageData.length < 50) {
         console.error("❌ Invalid base64 data - too short");
         return res.status(400).json({ error: "Invalid image data" });
       }
@@ -476,90 +474,99 @@ app.post("/api/analyze-food", async (req, res) => {
       
       console.log("🤖 Preparing OpenAI Vision request...");
       
-      const visionResponse = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are a food ingredient extractor. Analyze the image and extract ONLY ingredient names and weights in grams. 
-            Return a JSON object with this exact format: {"ingredients": [{"name": "ingredient name", "grams": weight_in_grams}]}
-            Do NOT calculate nutrition, calories, or macros. Only extract the ingredient list.
-            If you can't determine the weight, estimate based on typical serving sizes.
-            Be specific with ingredient names (e.g., "chicken breast" not just "chicken").
-            If multiple ingredients are visible, list them all.
-            If no ingredients are visible, return {"ingredients": []}`
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Extract the ingredients from this food image. Return only the JSON with ingredient names and grams."
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${cleanImageData}`
-                }
-              }
-            ]
-          }
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 500
-      });
-
-      console.log("🤖 OpenAI Vision API call completed");
-      console.log("🤖 Response status:", visionResponse.choices ? "success" : "failed");
-      console.log("🤖 Number of choices:", visionResponse.choices?.length || 0);
-
-      const visionContent = visionResponse.choices[0]?.message?.content;
-      if (!visionContent) {
-        console.error("❌ No content in OpenAI response");
-        console.error("❌ Full response:", JSON.stringify(visionResponse, null, 2));
-        return res.status(500).json({ error: "Failed to extract ingredients from image" });
-      }
-
-      console.log("🤖 OpenAI Vision response:", visionContent);
-      console.log("🤖 Response length:", visionContent.length);
-
       try {
-        const parsed = JSON.parse(visionContent);
-        ingredients = parsed.ingredients || [];
-        console.log("📋 Extracted ingredients:", ingredients.length);
-        console.log("📋 Raw ingredients:", JSON.stringify(ingredients, null, 2));
-        
-        // Validate and clean ingredients
-        ingredients = ingredients
-          .filter(ing => ing && ing.name && ing.grams)
-          .map(ing => ({
-            name: ing.name.trim(),
-            grams: Math.round(parseFloat(ing.grams) || 0)
-          }))
-          .filter(ing => ing.grams > 0);
-        
-        console.log("✅ Validated ingredients:", ingredients);
-        console.log("✅ Final ingredient count:", ingredients.length);
-        
-      } catch (parseError) {
-        console.error("❌ Failed to parse Vision response:", parseError);
-        console.error("Raw response:", visionContent);
-        
-        // Try to repair JSON if parsing failed
+        const visionResponse = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are a food ingredient extractor. Analyze the image and extract ONLY ingredient names and weights in grams. 
+              Return a JSON object with this exact format: {"ingredients": [{"name": "ingredient name", "grams": weight_in_grams}]}
+              Do NOT calculate nutrition, calories, or macros. Only extract the ingredient list.
+              If you can't determine the weight, estimate based on typical serving sizes.
+              Be specific with ingredient names (e.g., "chicken breast" not just "chicken").
+              If multiple ingredients are visible, list them all.
+              If no ingredients are visible, return {"ingredients": []}`
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Extract the ingredients from this food image. Return only the JSON with ingredient names and grams."
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/jpeg;base64,${cleanImageData}`
+                  }
+                }
+              ]
+            }
+          ],
+          response_format: { type: "json_object" },
+          max_tokens: 500
+        });
+
+        console.log("🤖 OpenAI Vision API call completed");
+        console.log("🤖 Response status:", visionResponse.choices ? "success" : "failed");
+        console.log("🤖 Number of choices:", visionResponse.choices?.length || 0);
+
+        const visionContent = visionResponse.choices[0]?.message?.content;
+        if (!visionContent) {
+          console.error("❌ No content in OpenAI response");
+          console.error("❌ Full response:", JSON.stringify(visionResponse, null, 2));
+          return res.status(500).json({ error: "Failed to extract ingredients from image" });
+        }
+
+        console.log("🤖 OpenAI Vision response:", visionContent);
+        console.log("🤖 Response length:", visionContent.length);
+
         try {
-          const jsonMatch = visionContent.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const repaired = JSON.parse(jsonMatch[0]);
-            ingredients = repaired.ingredients || [];
-            console.log("🔧 Repaired JSON, extracted ingredients:", ingredients.length);
-          } else {
-            console.error("❌ No JSON found in response");
+          const parsed = JSON.parse(visionContent);
+          ingredients = parsed.ingredients || [];
+          console.log("📋 Extracted ingredients:", ingredients.length);
+          console.log("📋 Raw ingredients:", JSON.stringify(ingredients, null, 2));
+          
+          // Validate and clean ingredients
+          ingredients = ingredients
+            .filter(ing => ing && ing.name && ing.grams)
+            .map(ing => ({
+              name: ing.name.trim(),
+              grams: Math.round(parseFloat(ing.grams) || 0)
+            }))
+            .filter(ing => ing.grams > 0);
+          
+          console.log("✅ Validated ingredients:", ingredients);
+          console.log("✅ Final ingredient count:", ingredients.length);
+          
+        } catch (parseError) {
+          console.error("❌ Failed to parse Vision response:", parseError);
+          console.error("Raw response:", visionContent);
+          
+          // Try to repair JSON if parsing failed
+          try {
+            const jsonMatch = visionContent.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const repaired = JSON.parse(jsonMatch[0]);
+              ingredients = repaired.ingredients || [];
+              console.log("🔧 Repaired JSON, extracted ingredients:", ingredients.length);
+            } else {
+              console.error("❌ No JSON found in response");
+              return res.status(500).json({ error: "Failed to parse ingredient extraction" });
+            }
+          } catch (repairError) {
+            console.error("❌ JSON repair failed:", repairError);
             return res.status(500).json({ error: "Failed to parse ingredient extraction" });
           }
-        } catch (repairError) {
-          console.error("❌ JSON repair failed:", repairError);
-          return res.status(500).json({ error: "Failed to parse ingredient extraction" });
         }
+        
+      } catch (openaiError) {
+        console.error("❌ OpenAI Vision API error:", openaiError);
+        return res.status(500).json({ 
+          error: "OpenAI Vision API failed", 
+          details: openaiError.message 
+        });
       }
     }
 
