@@ -164,6 +164,15 @@ async function searchFDCWithFiltering(ingredientName) {
     }
   }
 
+  // Strategy 5: Fallback to estimated values for common ingredients
+  if (!match) {
+    const fallbackMatch = getFallbackNutrition(ingredientName);
+    if (fallbackMatch) {
+      console.log(`🔄 Strategy 5: Using fallback nutrition for "${ingredientName}"`);
+      return fallbackMatch;
+    }
+  }
+
   if (match) {
     console.log(`✅✅✅ FOUND FDC MATCH: ${match.description} (score: ${match.score.toFixed(2)}, type: ${match.dataType})`);
   } else {
@@ -346,8 +355,14 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   if (searchTerm.includes('rice') && description.includes('flour')) {
     return -1000; // Rice ≠ Rice flour
   }
+  if (searchTerm.includes('rice') && description.includes('raw') && !searchTerm.includes('raw')) {
+    return -1000; // Rice ≠ Raw rice (should be cooked)
+  }
   if (searchTerm.includes('cilantro') && description.includes('blackberr')) {
     return -1000; // Cilantro ≠ Blackberries
+  }
+  if (searchTerm.includes('cilantro') && description.includes('blueberr')) {
+    return -1000; // Cilantro ≠ Blueberries
   }
   if (searchTerm.includes('onion') && description.includes('green onion') && !searchTerm.includes('green')) {
     return -1000; // Onion ≠ Green onion
@@ -413,6 +428,37 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   }
   
   return Math.max(0, score);
+}
+
+// Fallback nutrition for ingredients not in FDC
+function getFallbackNutrition(ingredientName) {
+  const lowerName = ingredientName.toLowerCase();
+  
+  // Common fallback values
+  const fallbacks = {
+    'vegetable broth': {
+      fdcId: 'fallback_vegetable_broth',
+      description: 'Vegetable broth (estimated)',
+      dataType: 'Fallback',
+      score: 100,
+      calories_kcal: 15, // ~15 kcal per 100g
+      protein_g: 0.5,
+      fat_g: 0.1,
+      carbs_g: 2.5
+    },
+    'chicken broth': {
+      fdcId: 'fallback_chicken_broth',
+      description: 'Chicken broth (estimated)',
+      dataType: 'Fallback',
+      score: 100,
+      calories_kcal: 20, // ~20 kcal per 100g
+      protein_g: 2.0,
+      fat_g: 0.5,
+      carbs_g: 1.0
+    }
+  };
+  
+  return fallbacks[lowerName] || null;
 }
 
 // Helper functions
