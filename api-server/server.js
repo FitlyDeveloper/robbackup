@@ -142,14 +142,15 @@ async function searchFDCWithFiltering(ingredientName) {
       return null;
     }
 
+    console.log(`🔍 FDC Search Debug for "${normalizedName}":`);
+    console.log(`   Found ${data.foods.length} total results`);
+    
     // Score and filter candidates
     const scoredCandidates = data.foods.slice(0, 20).map(food => {
       const score = calculateFDCMatchScore(food, normalizedName);
       return { ...food, score };
     }).filter(food => food.score > 0); // Only keep positive scores
 
-    console.log(`🔍 FDC Search Debug for "${normalizedName}":`);
-    console.log(`   Found ${data.foods.length} total results`);
     console.log(`   After scoring: ${scoredCandidates.length} candidates with score > 0`);
     
     if (scoredCandidates.length > 0) {
@@ -161,6 +162,41 @@ async function searchFDCWithFiltering(ingredientName) {
 
     if (scoredCandidates.length === 0) {
       console.log(`❌ No good FDC matches for: ${normalizedName}`);
+      
+      // Try a more lenient search as fallback
+      console.log(`🔄 Trying fallback search for: ${normalizedName}`);
+      const fallbackParams = new URLSearchParams({
+        query: ingredientName, // Use original name instead of normalized
+        api_key: process.env.FDC_API_KEY,
+        dataType: 'Foundation,SR Legacy,Survey (FNDDS)',
+        pageSize: 25
+      });
+      
+      const fallbackUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?${fallbackParams}`;
+      const fallbackResponse = await fetch(fallbackUrl);
+      
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json();
+        if (fallbackData.foods && fallbackData.foods.length > 0) {
+          const fallbackCandidates = fallbackData.foods.slice(0, 10).map(food => {
+            const score = calculateFDCMatchScore(food, ingredientName);
+            return { ...food, score };
+          }).filter(food => food.score > 5); // Lower threshold for fallback
+          
+          if (fallbackCandidates.length > 0) {
+            fallbackCandidates.sort((a, b) => b.score - a.score);
+            const bestFallback = fallbackCandidates[0];
+            console.log(`✅ Found fallback match: ${bestFallback.description} (score: ${bestFallback.score.toFixed(2)})`);
+            return {
+              fdcId: bestFallback.fdcId,
+              description: bestFallback.description,
+              dataType: bestFallback.dataType,
+              score: bestFallback.score
+            };
+          }
+        }
+      }
+      
       return null;
     }
 
