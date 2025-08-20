@@ -413,35 +413,27 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     
     console.log(`🔍 Processing ingredient: ${name} (${grams}g)`);
     
-    let per100 = null;
-    
-    // Try FDC first
+    // Search FDC for this ingredient
     const fdcId = await searchFDC(name);
-    if (fdcId) {
-      const fdcData = await fetchFDCData(fdcId);
-      if (fdcData) {
-        per100 = extractPer100(fdcData);
-        console.log('FDC per100 for', name, per100);
-        
-        // Validate the data is reasonable
-        if (validateNutrientData(per100, name)) {
-          console.log('✅ Using FDC data for:', name);
-        } else {
-          console.log('❌ FDC data validation failed, trying fallback for:', name);
-          per100 = null;
-        }
-      }
+    if (!fdcId) {
+      console.log(`❌ No FDC data found for: ${name}`);
+      continue;
     }
     
-    // Use fallback if FDC failed or returned unreasonable data
-    if (!per100) {
-      per100 = getFallbackData(name);
-      if (per100) {
-        console.log('✅ Using fallback data for:', name);
-      } else {
-        console.log('❌ No data available for:', name);
-        continue;
-      }
+    // Fetch nutrient data
+    const fdcData = await fetchFDCData(fdcId);
+    if (!fdcData) {
+      console.log(`❌ Failed to fetch FDC data for: ${name}`);
+      continue;
+    }
+    
+    // Extract nutrients
+    const per100 = extractPer100(fdcData);
+    console.log('FDC per100 for', name, per100);
+    
+    if (!per100 || Object.keys(per100).length === 0) {
+      console.log(`❌ Failed to extract nutrients for: ${name}`);
+      continue;
     }
     
     // Scale by grams/100

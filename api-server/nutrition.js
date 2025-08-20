@@ -16,106 +16,6 @@ const DV = {
   }
 };
 
-// Known good nutrition data for common ingredients (per 100g)
-const FALLBACK_DATA = {
-  'peach': {
-    calories_kcal: 39,
-    protein_g: 0.9,
-    fat_g: 0.3,
-    carbs_g: 10.0,
-    fiber_g: 1.5,
-    sugar_g: 8.4,
-    A_mcg: 16,
-    C_mg: 6.6,
-    K_mcg: 2.6,
-    B12_mcg: 0,
-    Ca_mg: 6,
-    Fe_mg: 0.3,
-    K_mg: 190,
-    Na_mg: 0
-  },
-  'chicken breast': {
-    calories_kcal: 165,
-    protein_g: 31.0,
-    fat_g: 3.6,
-    carbs_g: 0,
-    fiber_g: 0,
-    sugar_g: 0,
-    A_mcg: 6,
-    C_mg: 0,
-    K_mcg: 0,
-    B12_mcg: 0.3,
-    Ca_mg: 15,
-    Fe_mg: 1.0,
-    K_mg: 256,
-    Na_mg: 74
-  },
-  'sweet potato': {
-    calories_kcal: 86,
-    protein_g: 1.6,
-    fat_g: 0.1,
-    carbs_g: 20.1,
-    fiber_g: 3.0,
-    sugar_g: 4.2,
-    A_mcg: 709,
-    C_mg: 2.4,
-    K_mcg: 1.8,
-    B12_mcg: 0,
-    Ca_mg: 30,
-    Fe_mg: 0.6,
-    K_mg: 337,
-    Na_mg: 55
-  },
-  'kimchi': {
-    calories_kcal: 23,
-    protein_g: 2.0,
-    fat_g: 0.5,
-    carbs_g: 4.5,
-    fiber_g: 1.6,
-    sugar_g: 1.1,
-    A_mcg: 49,
-    C_mg: 21.0,
-    K_mcg: 43.6,
-    B12_mcg: 0,
-    Ca_mg: 33,
-    Fe_mg: 2.5,
-    K_mg: 151,
-    Na_mg: 498
-  },
-  'sour cream': {
-    calories_kcal: 198,
-    protein_g: 2.4,
-    fat_g: 19.4,
-    carbs_g: 4.6,
-    fiber_g: 0,
-    sugar_g: 3.2,
-    A_mcg: 88,
-    C_mg: 0.9,
-    K_mcg: 1.5,
-    B12_mcg: 0.2,
-    Ca_mg: 101,
-    Fe_mg: 0.1,
-    K_mg: 125,
-    Na_mg: 30
-  },
-  'bread': {
-    calories_kcal: 265,
-    protein_g: 9.0,
-    fat_g: 3.2,
-    carbs_g: 49.0,
-    fiber_g: 2.7,
-    sugar_g: 5.0,
-    A_mcg: 0,
-    C_mg: 0,
-    K_mcg: 0.2,
-    B12_mcg: 0,
-    Ca_mg: 151,
-    Fe_mg: 3.6,
-    K_mg: 115,
-    Na_mg: 491
-  }
-};
-
 // In-memory cache for FDC lookups (name -> fdcId)
 const fdcCache = new Map();
 
@@ -163,28 +63,7 @@ const MAP = {
   675: 'omega6_g'         // Omega-6 (g)
 };
 
-// Get fallback data for an ingredient
-function getFallbackData(ingredientName) {
-  const cleanName = ingredientName.toLowerCase().trim();
-  
-  // Try exact match first
-  if (FALLBACK_DATA[cleanName]) {
-    console.log(`✅ Using fallback data for: ${ingredientName}`);
-    return FALLBACK_DATA[cleanName];
-  }
-  
-  // Try partial matches
-  for (const [key, data] of Object.entries(FALLBACK_DATA)) {
-    if (cleanName.includes(key) || key.includes(cleanName)) {
-      console.log(`✅ Using fallback data for: ${ingredientName} (matched: ${key})`);
-      return data;
-    }
-  }
-  
-  return null;
-}
-
-// Improved FDC search with fallback
+// Improved FDC search - simplified and more reliable
 async function searchFDC(ingredientName) {
   if (!process.env.FDC_API_KEY) {
     console.log('❌ FDC_API_KEY not configured');
@@ -202,17 +81,16 @@ async function searchFDC(ingredientName) {
   try {
     console.log(`🔍 Searching FDC for: ${ingredientName}`);
     
-    // Clean the search term
+    // Clean the search term - be more permissive
     const cleanName = ingredientName.toLowerCase()
       .replace(/[^\w\s]/g, '') // Remove special characters
       .trim();
     
-    // Build search query with filters for better results
+    // Simple search without restrictive filters
     const searchParams = new URLSearchParams({
       query: cleanName,
       api_key: process.env.FDC_API_KEY,
-      dataType: 'Foundation,SR Legacy', // Focus on raw ingredients
-      pageSize: 25,
+      pageSize: 50, // Get more results
       sortBy: 'dataType.keyword',
       sortOrder: 'asc'
     });
@@ -228,29 +106,26 @@ async function searchFDC(ingredientName) {
     const data = await response.json();
     
     if (data.foods && data.foods.length > 0) {
-      // Find the best match - prioritize raw ingredients
-      let bestMatch = null;
-      let bestScore = -1;
-      
-      for (const food of data.foods.slice(0, 10)) { // Check first 10 results
-        const score = calculateFoodMatchScore(food, cleanName);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMatch = food;
+      // Take the first result that has reasonable nutrition data
+      for (const food of data.foods.slice(0, 20)) { // Check first 20 results
+        const score = calculateSimpleFoodMatchScore(food, cleanName);
+        if (score > 0) { // Any positive score is acceptable
+          console.log(`✅ Found FDC ID ${food.fdcId} for: ${ingredientName} (score: ${score.toFixed(2)})`);
+          console.log(`   Description: ${food.description}`);
+          
+          // Cache the result
+          fdcCache.set(cacheKey, food.fdcId);
+          return food.fdcId;
         }
       }
       
-      if (bestMatch && bestScore > 0.3) { // Minimum score threshold
-        console.log(`✅ Found FDC ID ${bestMatch.fdcId} for: ${ingredientName} (score: ${bestScore.toFixed(2)})`);
-        console.log(`   Description: ${bestMatch.description}`);
-        
-        // Cache the result
-        fdcCache.set(cacheKey, bestMatch.fdcId);
-        return bestMatch.fdcId;
-      } else {
-        console.log(`❌ No good FDC match found for: ${ingredientName}`);
-        return null;
-      }
+      // If no good match found, just take the first result
+      const firstFood = data.foods[0];
+      console.log(`⚠️ Using first FDC result for: ${ingredientName}`);
+      console.log(`   Description: ${firstFood.description}`);
+      
+      fdcCache.set(cacheKey, firstFood.fdcId);
+      return firstFood.fdcId;
     } else {
       console.log(`❌ No FDC results for: ${ingredientName}`);
       return null;
@@ -261,11 +136,10 @@ async function searchFDC(ingredientName) {
   }
 }
 
-// Calculate how well a food item matches the search term
-function calculateFoodMatchScore(food, searchTerm) {
+// Simplified food matching - less restrictive
+function calculateSimpleFoodMatchScore(food, searchTerm) {
   let score = 0;
   const description = food.description.toLowerCase();
-  const dataType = food.dataType?.toLowerCase() || '';
   
   // Exact match gets highest score
   if (description.includes(searchTerm)) {
@@ -280,26 +154,14 @@ function calculateFoodMatchScore(food, searchTerm) {
     }
   }
   
-  // Prefer raw ingredients over processed foods
-  if (dataType.includes('foundation') || dataType.includes('sr legacy')) {
-    score += 5;
-  }
-  
-  // Penalize processed foods
-  if (description.includes('canned') || description.includes('frozen') || 
-      description.includes('processed') || description.includes('cooked')) {
-    score -= 3;
-  }
-  
-  // Prefer "raw" or "fresh" items
+  // Prefer raw ingredients but don't penalize heavily
   if (description.includes('raw') || description.includes('fresh')) {
-    score += 3;
+    score += 1;
   }
   
-  // Penalize items with brand names or specific preparations
-  if (description.includes('brand') || description.includes('recipe') ||
-      description.includes('prepared')) {
-    score -= 2;
+  // Very light penalty for processed foods
+  if (description.includes('canned') || description.includes('frozen')) {
+    score -= 1;
   }
   
   return score;
@@ -325,9 +187,9 @@ async function fetchFDCData(fdcId) {
 
     const data = await response.json();
     
-    // Validate the data looks reasonable
-    if (!validateFDCData(data)) {
-      console.log(`❌ FDC data validation failed for ID: ${fdcId}`);
+    // Only validate basic structure, not values
+    if (!data || !data.foodNutrients || !Array.isArray(data.foodNutrients)) {
+      console.log(`❌ FDC data structure invalid for ID: ${fdcId}`);
       return null;
     }
     
@@ -336,36 +198,6 @@ async function fetchFDCData(fdcId) {
     console.log(`❌ FDC fetch error for ${fdcId}:`, error.message);
     return null;
   }
-}
-
-// Validate FDC data to ensure it's reasonable
-function validateFDCData(food) {
-  if (!food || !food.foodNutrients || !Array.isArray(food.foodNutrients)) {
-    return false;
-  }
-  
-  // Extract basic nutrients
-  const nutrients = extractPer100(food);
-  
-  // Check for reasonable calorie range (per 100g)
-  if (nutrients.calories_kcal && (nutrients.calories_kcal < 0 || nutrients.calories_kcal > 900)) {
-    console.log(`❌ Unreasonable calories: ${nutrients.calories_kcal} kcal/100g`);
-    return false;
-  }
-  
-  // Check for reasonable fat content (per 100g)
-  if (nutrients.fat_g && (nutrients.fat_g < 0 || nutrients.fat_g > 100)) {
-    console.log(`❌ Unreasonable fat: ${nutrients.fat_g} g/100g`);
-    return false;
-  }
-  
-  // Check for reasonable protein content (per 100g)
-  if (nutrients.protein_g && (nutrients.protein_g < 0 || nutrients.protein_g > 50)) {
-    console.log(`❌ Unreasonable protein: ${nutrients.protein_g} g/100g`);
-    return false;
-  }
-  
-  return true;
 }
 
 function readNutrientNumber(n) {
@@ -381,7 +213,7 @@ function readAmount(n) {
   return null;
 }
 
-// Improved nutrient extraction with validation
+// Simplified nutrient extraction - no validation caps
 function extractPer100(food) {
   const out = {};
   const arr = Array.isArray(food.foodNutrients) ? food.foodNutrients : [];
@@ -399,22 +231,6 @@ function extractPer100(food) {
     
     // Aggregate if duplicate entries appear
     out[key] = (out[key] || 0) + amt;
-  }
-  
-  // Validate and cap unreasonable values
-  if (out.calories_kcal && out.calories_kcal > 900) {
-    console.log(`⚠️ Capping unreasonable calories: ${out.calories_kcal} → 900`);
-    out.calories_kcal = 900;
-  }
-  
-  if (out.fat_g && out.fat_g > 100) {
-    console.log(`⚠️ Capping unreasonable fat: ${out.fat_g} → 100`);
-    out.fat_g = 100;
-  }
-  
-  if (out.protein_g && out.protein_g > 50) {
-    console.log(`⚠️ Capping unreasonable protein: ${out.protein_g} → 50`);
-    out.protein_g = 50;
   }
   
   return out;
@@ -446,42 +262,34 @@ function makeZeroTotals() {
   };
 }
 
-// Calculate totals from ingredients using FDC data with fallback
+// Calculate totals from ingredients using FDC data - simplified
 async function calculateTotalsFromFDC(ingredients) {
   const totals = makeZeroTotals();
   
   for (const ing of ingredients) {
     console.log(`🔍 Processing: ${ing.name} (${ing.grams}g)`);
     
-    let per100 = null;
-    
-    // Try FDC first
+    // Search FDC for this ingredient
     const fdcId = await searchFDC(ing.name);
-    if (fdcId) {
-      const fdcData = await fetchFDCData(fdcId);
-      if (fdcData) {
-        per100 = extractPer100(fdcData);
-        console.log('FDC per100 for', ing.name, per100);
-        
-        // Validate the data is reasonable
-        if (validateNutrientData(per100, ing.name)) {
-          console.log('✅ Using FDC data for:', ing.name);
-        } else {
-          console.log('❌ FDC data validation failed, trying fallback for:', ing.name);
-          per100 = null;
-        }
-      }
+    if (!fdcId) {
+      console.log(`❌ No FDC data found for: ${ing.name}`);
+      continue;
     }
     
-    // Use fallback if FDC failed or returned unreasonable data
-    if (!per100) {
-      per100 = getFallbackData(ing.name);
-      if (per100) {
-        console.log('✅ Using fallback data for:', ing.name);
-      } else {
-        console.log('❌ No data available for:', ing.name);
-        continue;
-      }
+    // Fetch nutrient data
+    const fdcData = await fetchFDCData(fdcId);
+    if (!fdcData) {
+      console.log(`❌ Failed to fetch FDC data for: ${ing.name}`);
+      continue;
+    }
+    
+    // Extract nutrients
+    const per100 = extractPer100(fdcData);
+    console.log('FDC per100 for', ing.name, per100);
+    
+    if (!per100 || Object.keys(per100).length === 0) {
+      console.log(`❌ Failed to extract nutrients for: ${ing.name}`);
+      continue;
     }
     
     // Scale by grams/100
@@ -697,6 +505,5 @@ module.exports = {
   runFDCTest,
   searchFDC,
   fetchFDCData,
-  extractPer100,
-  getFallbackData
+  extractPer100
 };
