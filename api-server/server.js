@@ -358,6 +358,67 @@ app.get("/", (_, res) => res.json({
   endpoints: ["/health", "/api/analyze-food"]
 }));
 
+// Test endpoint for debugging image processing
+app.post("/api/test-vision", async (req, res) => {
+  try {
+    const { imageBase64 } = req.body || {};
+    
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Provide imageBase64" });
+    }
+
+    console.log("🧪 TEST VISION - Image data length:", imageBase64.length);
+    
+    // Clean base64 data
+    let cleanImageData = imageBase64;
+    if (imageBase64.startsWith('data:image/')) {
+      const commaIndex = imageBase64.indexOf(',');
+      if (commaIndex !== -1) {
+        cleanImageData = imageBase64.substring(commaIndex + 1);
+      }
+    }
+    
+    console.log("🧪 TEST VISION - Clean data length:", cleanImageData.length);
+    
+    const visionResponse = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a food ingredient extractor. Return JSON: {\"ingredients\": [{\"name\": \"ingredient name\", \"grams\": weight}]}"
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "What ingredients do you see in this image?" },
+            {
+              type: "image_url",
+              image_url: { url: `data:image/jpeg;base64,${cleanImageData}` }
+            }
+          ]
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 300
+    });
+
+    const content = visionResponse.choices[0]?.message?.content;
+    
+    res.json({
+      success: true,
+      content: content,
+      parsed: content ? JSON.parse(content) : null
+    });
+    
+  } catch (error) {
+    console.error("🧪 TEST VISION ERROR:", error);
+    res.status(500).json({ 
+      error: "Test failed", 
+      details: error.message 
+    });
+  }
+});
+
 // Main nutrition analysis endpoint
 app.post("/api/analyze-food", async (req, res) => {
   try {
@@ -383,6 +444,9 @@ app.post("/api/analyze-food", async (req, res) => {
       }
 
       console.log("🔍 Calling OpenAI Vision for ingredient extraction...");
+      console.log("📸 Image data type:", typeof imageData);
+      console.log("📸 Image data length:", imageData.length);
+      console.log("📸 Image data starts with:", imageData.substring(0, 50));
       
       // Clean base64 data from data URI if present
       let cleanImageData = imageData;
@@ -391,8 +455,26 @@ app.post("/api/analyze-food", async (req, res) => {
         if (commaIndex !== -1) {
           cleanImageData = imageData.substring(commaIndex + 1);
           console.log('📸 Extracted base64 data from data URI (length:', cleanImageData.length, ')');
+          console.log('📸 Clean data starts with:', cleanImageData.substring(0, 50));
         }
       }
+      
+      // Validate base64 data
+      if (!cleanImageData || cleanImageData.length < 100) {
+        console.error("❌ Invalid base64 data - too short");
+        return res.status(400).json({ error: "Invalid image data" });
+      }
+      
+      try {
+        // Test base64 decode
+        Buffer.from(cleanImageData, 'base64');
+        console.log("✅ Base64 data is valid");
+      } catch (base64Error) {
+        console.error("❌ Invalid base64 data:", base64Error.message);
+        return res.status(400).json({ error: "Invalid base64 image data" });
+      }
+      
+      console.log("🤖 Preparing OpenAI Vision request...");
       
       const visionResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -427,17 +509,25 @@ app.post("/api/analyze-food", async (req, res) => {
         max_tokens: 500
       });
 
+      console.log("🤖 OpenAI Vision API call completed");
+      console.log("🤖 Response status:", visionResponse.choices ? "success" : "failed");
+      console.log("🤖 Number of choices:", visionResponse.choices?.length || 0);
+
       const visionContent = visionResponse.choices[0]?.message?.content;
       if (!visionContent) {
+        console.error("❌ No content in OpenAI response");
+        console.error("❌ Full response:", JSON.stringify(visionResponse, null, 2));
         return res.status(500).json({ error: "Failed to extract ingredients from image" });
       }
 
       console.log("🤖 OpenAI Vision response:", visionContent);
+      console.log("🤖 Response length:", visionContent.length);
 
       try {
         const parsed = JSON.parse(visionContent);
         ingredients = parsed.ingredients || [];
         console.log("📋 Extracted ingredients:", ingredients.length);
+        console.log("📋 Raw ingredients:", JSON.stringify(ingredients, null, 2));
         
         // Validate and clean ingredients
         ingredients = ingredients
@@ -449,6 +539,7 @@ app.post("/api/analyze-food", async (req, res) => {
           .filter(ing => ing.grams > 0);
         
         console.log("✅ Validated ingredients:", ingredients);
+        console.log("✅ Final ingredient count:", ingredients.length);
         
       } catch (parseError) {
         console.error("❌ Failed to parse Vision response:", parseError);
@@ -462,6 +553,7 @@ app.post("/api/analyze-food", async (req, res) => {
             ingredients = repaired.ingredients || [];
             console.log("🔧 Repaired JSON, extracted ingredients:", ingredients.length);
           } else {
+            console.error("❌ No JSON found in response");
             return res.status(500).json({ error: "Failed to parse ingredient extraction" });
           }
         } catch (repairError) {
