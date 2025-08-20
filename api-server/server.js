@@ -540,6 +540,39 @@ app.post("/api/analyze-food", async (req, res) => {
           console.log("✅ Validated ingredients:", ingredients);
           console.log("✅ Final ingredient count:", ingredients.length);
           
+          // If no ingredients found, try a more lenient approach
+          if (ingredients.length === 0) {
+            console.log("⚠️ No ingredients found, trying fallback approach...");
+            
+            // Try to extract any food items mentioned in the response
+            const fallbackIngredients = [];
+            const responseText = visionContent.toLowerCase();
+            
+            // Common food keywords to look for
+            const foodKeywords = [
+              'chicken', 'beef', 'pork', 'fish', 'salmon', 'tuna',
+              'rice', 'pasta', 'bread', 'potato', 'sweet potato',
+              'carrot', 'broccoli', 'spinach', 'lettuce', 'tomato',
+              'apple', 'banana', 'orange', 'strawberry', 'blueberry',
+              'yogurt', 'milk', 'cheese', 'egg', 'butter', 'oil'
+            ];
+            
+            for (const keyword of foodKeywords) {
+              if (responseText.includes(keyword)) {
+                fallbackIngredients.push({
+                  name: keyword,
+                  grams: 100 // Default serving size
+                });
+                console.log(`🔍 Found fallback ingredient: ${keyword}`);
+              }
+            }
+            
+            if (fallbackIngredients.length > 0) {
+              ingredients = fallbackIngredients;
+              console.log("✅ Using fallback ingredients:", ingredients);
+            }
+          }
+          
         } catch (parseError) {
           console.error("❌ Failed to parse Vision response:", parseError);
           console.error("Raw response:", visionContent);
@@ -553,7 +586,34 @@ app.post("/api/analyze-food", async (req, res) => {
               console.log("🔧 Repaired JSON, extracted ingredients:", ingredients.length);
             } else {
               console.error("❌ No JSON found in response");
-              return res.status(500).json({ error: "Failed to parse ingredient extraction" });
+              // Try fallback approach even if JSON parsing fails
+              console.log("⚠️ Trying fallback ingredient detection...");
+              const fallbackIngredients = [];
+              const responseText = visionContent.toLowerCase();
+              
+              const foodKeywords = [
+                'chicken', 'beef', 'pork', 'fish', 'salmon', 'tuna',
+                'rice', 'pasta', 'bread', 'potato', 'sweet potato',
+                'carrot', 'broccoli', 'spinach', 'lettuce', 'tomato',
+                'apple', 'banana', 'orange', 'strawberry', 'blueberry',
+                'yogurt', 'milk', 'cheese', 'egg', 'butter', 'oil'
+              ];
+              
+              for (const keyword of foodKeywords) {
+                if (responseText.includes(keyword)) {
+                  fallbackIngredients.push({
+                    name: keyword,
+                    grams: 100
+                  });
+                }
+              }
+              
+              if (fallbackIngredients.length > 0) {
+                ingredients = fallbackIngredients;
+                console.log("✅ Using fallback ingredients from text:", ingredients);
+              } else {
+                return res.status(500).json({ error: "Failed to parse ingredient extraction" });
+              }
             }
           } catch (repairError) {
             console.error("❌ JSON repair failed:", repairError);
