@@ -41,6 +41,8 @@ const NORMALIZE = [
   
   // Starches - cooked variants
   [/^sweet potato(s)?$/i, "sweet potato, baked, flesh only"],
+  [/^sweet potatoe(s)?$/i, "sweet potato, baked, flesh only"], // Common misspelling
+  [/^yam(s)?$/i, "sweet potato, baked, flesh only"], // Yams are often sweet potatoes
   [/^potato(s)?$/i, "potato, baked, flesh only"],
   [/^rice$/i, "rice, white, cooked"],
   [/^spaghetti$/i, "spaghetti, cooked"],
@@ -187,6 +189,36 @@ function calculateFDCMatchScore(food, searchTerm) {
   const description = food.description.toLowerCase();
   const dataType = food.dataType?.toLowerCase() || '';
   
+  // CRITICAL: Heavy penalties for completely wrong matches
+  const searchWords = searchTerm.split(/\s+/).filter(w => w.length > 2);
+  const descWords = description.split(/\s+/).filter(w => w.length > 2);
+  
+  // Check for major category mismatches - instant disqualification
+  const isProtein = searchTerm.includes('chicken') || searchTerm.includes('beef') || searchTerm.includes('pork') || searchTerm.includes('salmon') || searchTerm.includes('tuna') || searchTerm.includes('meat');
+  const isStarch = searchTerm.includes('potato') || searchTerm.includes('rice') || searchTerm.includes('pasta') || searchTerm.includes('bread');
+  const isDairy = searchTerm.includes('cream') || searchTerm.includes('milk') || searchTerm.includes('yogurt') || searchTerm.includes('cheese');
+  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato') || searchTerm.includes('cilantro') || searchTerm.includes('kimchi');
+  
+  // If searching for a starch but description contains protein keywords, heavy penalty
+  if (isStarch && (description.includes('beef') || description.includes('chicken') || description.includes('pork') || description.includes('meat') || description.includes('fish'))) {
+    score -= 1000; // Instant disqualification
+  }
+  
+  // If searching for a protein but description contains starch keywords, heavy penalty
+  if (isProtein && (description.includes('potato') || description.includes('rice') || description.includes('bread') || description.includes('pasta'))) {
+    score -= 1000; // Instant disqualification
+  }
+  
+  // If searching for dairy but description contains non-dairy keywords, heavy penalty
+  if (isDairy && (description.includes('beef') || description.includes('chicken') || description.includes('potato') || description.includes('bread'))) {
+    score -= 1000; // Instant disqualification
+  }
+  
+  // If searching for produce but description contains non-produce keywords, heavy penalty
+  if (isProduce && (description.includes('beef') || description.includes('chicken') || description.includes('bread') || description.includes('cream'))) {
+    score -= 1000; // Instant disqualification
+  }
+  
   // Heavy penalties for unwanted items
   const bannedTokens = [
     "reduced", "low-calorie", "baby", "formula", "supplement", 
@@ -203,33 +235,34 @@ function calculateFDCMatchScore(food, searchTerm) {
     }
   }
   
-  // Token overlap scoring - improved for better matching
-  const searchTokens = searchTerm.split(/\s+/).filter(t => t.length > 1); // Reduced minimum length
-  const descTokens = description.split(/\s+/).filter(t => t.length > 1);
-  
+  // Token overlap scoring - MUCH more strict
   let matches = 0;
-  for (const searchToken of searchTokens) {
-    if (descTokens.some(descToken => descToken.includes(searchToken) || searchToken.includes(descToken))) {
+  for (const searchWord of searchWords) {
+    if (descWords.some(descWord => descWord.includes(searchWord) || searchWord.includes(descWord))) {
       matches++;
     }
   }
   
-  // Base score from token overlap - more lenient
-  if (searchTokens.length > 0) {
-    score += (matches / searchTokens.length) * 25; // Increased from 20
+  // Base score from token overlap - require high match percentage
+  if (searchWords.length > 0) {
+    const matchPercentage = matches / searchWords.length;
+    score += matchPercentage * 50; // Increased weight
+    
+    // Require at least 60% word match for any score
+    if (matchPercentage < 0.6) {
+      score -= 100; // Heavy penalty for low match percentage
+    }
   }
   
   // Bonus for exact phrase match
   if (description.includes(searchTerm)) {
-    score += 15; // Increased from 10
+    score += 30; // Increased from 15
   }
   
-  // Partial phrase match bonus
-  const searchWords = searchTerm.split(/\s+/);
-  const descWords = description.split(/\s+/);
+  // Partial phrase match bonus - more strict
   const commonWords = searchWords.filter(word => descWords.some(descWord => descWord.includes(word) || word.includes(descWord)));
-  if (commonWords.length >= Math.ceil(searchWords.length * 0.7)) { // 70% word match
-    score += 8;
+  if (commonWords.length >= Math.ceil(searchWords.length * 0.8)) { // Increased from 0.7 to 0.8
+    score += 15; // Increased from 8
   }
   
   // Data type preference
@@ -242,21 +275,21 @@ function calculateFDCMatchScore(food, searchTerm) {
   }
   
   // Prefer cooked/processed items for proteins and starches
-  const isProtein = searchTerm.includes('chicken') || searchTerm.includes('beef') || searchTerm.includes('pork') || searchTerm.includes('salmon') || searchTerm.includes('tuna') || searchTerm.includes('meat');
-  const isStarch = searchTerm.includes('potato') || searchTerm.includes('rice') || searchTerm.includes('pasta') || searchTerm.includes('bread');
-  
   if ((isProtein || isStarch) && (description.includes('cooked') || description.includes('baked') || description.includes('roasted'))) {
     score += 3;
   }
   
   // Prefer raw for fruits/vegetables
-  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato') || searchTerm.includes('cilantro');
   if (isProduce && description.includes('raw')) {
     score += 2;
   }
   
-  // Lower threshold for acceptance - more lenient
-  return Math.max(0, score); // Don't return negative scores
+  // Require minimum score threshold
+  if (score < 20) { // Increased minimum threshold
+    return 0; // Reject low-scoring matches
+  }
+  
+  return Math.max(0, score);
 }
 
 // Helper functions
