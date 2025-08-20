@@ -30,7 +30,7 @@ const openai = new OpenAI({
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
-console.log('Starting FDC-based nutrition server...');
+console.log('Starting FDC-based nutrition server with enhanced reliability...');
 console.log('OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
 console.log('FDC API Key present:', process.env.FDC_API_KEY ? 'Yes' : 'No');
 
