@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:cloud_functions/cloud_functions.dart';
 import '../services/food_analyzer_api.dart';
+import '../models/ingredient_item.dart';
 
 class AIService {
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
@@ -268,7 +269,10 @@ class AIService {
   Future<Map<String, dynamic>> analyzeFoodImage(Uint8List imageBytes) async {
     try {
       // Use the FoodAnalyzerApi class to call the Render.com API
-      return await FoodAnalyzerApi.analyzeFoodImage(imageBytes);
+      final nutritionResponse = await FoodAnalyzerApi.analyzeFoodImage(imageBytes);
+      
+      // Convert NutritionResponse to Map<String, dynamic> for backward compatibility
+      return nutritionResponse.toJson();
     } catch (e) {
       print('AI Service: Error analyzing food: $e');
 

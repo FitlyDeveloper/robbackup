@@ -19,6 +19,10 @@ import '../Features/codia/Nutrition.dart' as nutrition;
 import 'SaveWorkout.dart';
 import 'SaveWorkout1.dart';
 
+// Import new models and formatters
+import '../models/ingredient_item.dart';
+import '../utils/nutrition_formatters.dart';
+
 // Custom scroll physics optimized for mouse wheel
 class SlowScrollPhysics extends ScrollPhysics {
   const SlowScrollPhysics({ScrollPhysics? parent}) : super(parent: parent);
@@ -1152,7 +1156,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       }
 
       if (existingIndex >= 0) {
-        // Merge with existing; preserve fields like image_key/has_image when new payload lacks them
+        // CRITICAL: Check if the updated card would be too large before updating
         final Map<String, dynamic> existing =
             Map<String, dynamic>.from(parsed[existingIndex]);
         try {
@@ -1161,8 +1165,22 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         } catch (_) {}
         final Map<String, dynamic> merged = Map<String, dynamic>.from(existing);
         merged.addAll(upsertCard);
-        parsed[existingIndex] = merged;
-        print('✏️ Updated existing food card: $_foodName');
+
+        // Check the size of the merged card
+        final String mergedCardJson = jsonEncode(merged);
+        final int cardSizeBytes = mergedCardJson.length;
+        final double cardSizeMB = cardSizeBytes / (1024 * 1024);
+
+        if (cardSizeMB > 1.0) {
+          print(
+              '⚠️ FOODCARDOPEN: Updated card would be too large (${cardSizeMB.toStringAsFixed(2)}MB), keeping original card unchanged');
+          print(
+              '✅ FOODCARDOPEN: Nutrition data saved separately, original card preserved');
+          // Don't update the card, keep the original
+        } else {
+          parsed[existingIndex] = merged;
+          print('✏️ Updated existing food card: $_foodName');
+        }
       } else {
         // CRITICAL: If no existing card found, create a new one with the correct scanId
         // This should never happen if scanId is passed correctly
@@ -1173,7 +1191,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         print('🆕 Inserted new food card: $_foodName');
       }
 
-      // Serialize back to StringList with size limits. Keep malformed entries as-is.
+      // Serialize back to StringList. Keep malformed entries as-is.
       final List<String> updatedCards = [];
 
       for (var e in parsed) {
@@ -1186,11 +1204,9 @@ class _FoodCardOpenState extends State<FoodCardOpen>
         }
 
         if (cardJson.isNotEmpty) {
-          // Check card size and limit to 0.5MB (500KB)
+          // Just show the card size for debugging
           final int cardSizeBytes = cardJson.length;
           final double cardSizeMB = cardSizeBytes / (1024 * 1024);
-
-          // Just show the card size, no compression after scan
           print(
               '📊 FOODCARDOPEN: Card size: ${cardSizeMB.toStringAsFixed(2)}MB');
           updatedCards.add(cardJson);
@@ -1201,10 +1217,19 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       print(
           '📝 FOODCARDOPEN: Keeping all ${updatedCards.length} cards (no limits)');
 
-      // Save without quota management - allow all cards
-      await prefs.setStringList('food_cards', updatedCards);
-      print(
-          '✅ FOODCARDOPEN: Updated food_cards list with ${updatedCards.length} cards (no size limits)');
+      // Save with quota error handling
+      try {
+        await prefs.setStringList('food_cards', updatedCards);
+        print(
+            '✅ FOODCARDOPEN: Updated food_cards list with ${updatedCards.length} cards (no size limits)');
+      } catch (e) {
+        print('Error updating food_cards: $e');
+        print(
+            '⚠️ FOODCARDOPEN: Failed to update food cards due to quota error');
+        print(
+            '✅ FOODCARDOPEN: Nutrition data saved separately, card will remain unchanged');
+        return; // Exit gracefully without crashing
+      }
 
       // VERIFY THE UPDATE WORKED
       final List<String>? verifyCards = prefs.getStringList('food_cards');
@@ -3828,8 +3853,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       displayAmount = displayAmount.substring(0, 13) + "...";
     }
 
-    // Also format calories to ensure it fits on one line
-    String displayCalories = calories;
+    // Format calories using the new formatter
+    String displayCalories = NutritionFormatters.formatKcal(double.tryParse(calories) ?? 0);
     if (displayCalories.length > 16) {
       displayCalories = displayCalories.substring(0, 13) + "...";
     }
@@ -4069,7 +4094,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              "Protein: ${_formatMacroValue(protein)}",
+                              "Protein: ${NutritionFormatters.g1(double.tryParse(protein) ?? 0)}",
                               style: TextStyle(
                                 fontSize: 16,
                                 fontFamily: 'SF Pro Display',
@@ -4078,7 +4103,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                             ),
                             SizedBox(height: 10),
                             Text(
-                              "Fat: ${_formatMacroValue(fat)}",
+                              "Fat: ${NutritionFormatters.g1(double.tryParse(fat) ?? 0)}",
                               style: TextStyle(
                                 fontSize: 16,
                                 fontFamily: 'SF Pro Display',
@@ -4087,7 +4112,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                             ),
                             SizedBox(height: 10),
                             Text(
-                              "Carbs: ${_formatMacroValue(carbs)}",
+                              "Carbs: ${NutritionFormatters.g1(double.tryParse(carbs) ?? 0)}",
                               style: TextStyle(
                                 fontSize: 16,
                                 fontFamily: 'SF Pro Display',
@@ -8205,14 +8230,16 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Helper method to generate a scanId specific to this food
   String generateFoodSpecificScanId() {
-    // Create a CONSISTENT ID based on this food's properties
-    // Don't use a timestamp which changes each time and causes data loss
-    String foodIdentifier = _foodName.replaceAll(' ', '_').toLowerCase();
-    String calIdentifier = _calories.replaceAll('.', '_');
+    // CRITICAL FIX: Use the SAME format as SnapFood.dart to ensure consistency
+    // SnapFood.dart uses: 'food_nutrition_${foodName.replaceAll(' ', '_').toLowerCase()}'
+    // WITHOUT calories to ensure the same scanId is used consistently
 
-    // Create a stable ID that won't change between visits
-    String scanId = 'food_nutrition_${foodIdentifier}_${calIdentifier}';
-    print("Generated PERSISTENT food-specific scanId: $scanId");
+    String foodIdentifier = _foodName.replaceAll(' ', '_').toLowerCase();
+
+    // Use the EXACT same format as SnapFood.dart - NO calories
+    String scanId = 'food_nutrition_$foodIdentifier';
+    print(
+        "Generated CONSISTENT food-specific scanId (matching SnapFood): $scanId");
     return scanId;
   }
 

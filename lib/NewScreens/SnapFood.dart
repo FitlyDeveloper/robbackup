@@ -40,6 +40,12 @@ import 'FoodCardOpen.dart';
 // Import Nutrition.dart for persistent scan data storage
 import '../Features/codia/Nutrition.dart';
 
+// Import new models
+import '../models/ingredient_item.dart';
+
+// Import formatters
+import '../utils/nutrition_formatters.dart';
+
 class SnapFood extends StatefulWidget {
   const SnapFood({super.key});
 
@@ -74,7 +80,7 @@ class _SnapFoodState extends State<SnapFood> {
   ];
 
   // Food analysis result
-  Map<String, dynamic>? _analysisResult;
+  NutritionResponse? _analysisResult;
   // unused
   // removed unused: _formattedAnalysisResult
   // ignore: unused_field
@@ -196,7 +202,7 @@ class _SnapFoodState extends State<SnapFood> {
 
       try {
         // LIGHTNING-FAST API call - 15 second target!
-        final Map<String, dynamic> response =
+        final NutritionResponse response =
             await FoodAnalyzerApi.analyzeFoodImageLightning(finalImage);
 
         // Cancel the processing timer
@@ -204,7 +210,7 @@ class _SnapFoodState extends State<SnapFood> {
         processingTimer = null;
 
         // VALIDATE API RESPONSE - Prevent mock data
-        if (!_validateApiResponse(response)) {
+        if (!response.isValid) {
           throw Exception('Invalid API response - possible mock data detected');
         }
 
@@ -215,12 +221,8 @@ class _SnapFoodState extends State<SnapFood> {
 
         // Extract the food name for the scan ID
         String foodName = 'Analyzed Meal';
-        if (response.containsKey('meal_name')) {
-          foodName = response['meal_name'];
-        } else if (response.containsKey('food_name')) {
-          foodName = response['food_name'];
-        } else if (response.containsKey('name')) {
-          foodName = response['name'];
+        if (response.foodName.isNotEmpty) {
+          foodName = response.foodName;
         }
 
         // Generate a consistent scanId
@@ -413,34 +415,34 @@ class _SnapFoodState extends State<SnapFood> {
   // removed unused: _compressImage
 
   void _displayAnalysisResults(
-      Map<String, dynamic> analysisData, String scanId) {
+      NutritionResponse analysisData, String scanId) {
     try {
       print('🎯 Displaying analysis results for scanId: $scanId');
-      print('📊 Analysis data keys: ${analysisData.keys.toList()}');
+      print('📊 Analysis data keys: ${analysisData.toJson().keys.toList()}');
 
       // Handle new FDC API response format
-      if (analysisData.containsKey('food_name') &&
-          analysisData.containsKey('macros') &&
-          analysisData.containsKey('ingredients')) {
+      if (analysisData.foodName.isNotEmpty &&
+          analysisData.macros.isNotEmpty &&
+          analysisData.ingredients.isNotEmpty) {
         
-        String foodName = analysisData['food_name'] ?? 'Analyzed Food';
-        List<dynamic> ingredients = analysisData['ingredients'] ?? [];
+        String foodName = analysisData.foodName;
+        List<IngredientItem> ingredients = analysisData.ingredients;
 
         if (ingredients.isEmpty) {
           throw Exception('Invalid or empty ingredients in analysis data');
         }
 
         // Extract macros from the new format
-        Map<String, dynamic> macros = analysisData['macros'] ?? {};
+        Map<String, dynamic> macros = analysisData.macros;
         String calories = macros['calories_kcal']?.toString() ?? "0";
         String protein = macros['protein_g']?.toString() ?? "0";
         String fat = macros['fat_g']?.toString() ?? "0";
         String carbs = macros['carbs_g']?.toString() ?? "0";
 
         // Extract vitamins and minerals from the new format
-        Map<String, dynamic> vitamins = analysisData['vitamins'] ?? {};
-        Map<String, dynamic> minerals = analysisData['minerals'] ?? {};
-        Map<String, dynamic> other = analysisData['other'] ?? {};
+        Map<String, dynamic> vitamins = analysisData.vitamins;
+        Map<String, dynamic> minerals = analysisData.minerals;
+        Map<String, dynamic> other = analysisData.other;
 
         // Convert to the format expected by _saveFoodCardData
         Map<String, dynamic> correctedMicronutrients = {};
@@ -451,7 +453,8 @@ class _SnapFoodState extends State<SnapFood> {
             String nutrientValue = value['value']?.toString() ?? "0";
             // Extract just the numeric part before the unit
             String numericValue = nutrientValue.split(' ')[0];
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = numericValue;
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] =
+                numericValue;
             print('💊 Extracted vitamin $key: $numericValue');
           }
         });
@@ -462,7 +465,8 @@ class _SnapFoodState extends State<SnapFood> {
             String nutrientValue = value['value']?.toString() ?? "0";
             // Extract just the numeric part before the unit
             String numericValue = nutrientValue.split(' ')[0];
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = numericValue;
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] =
+                numericValue;
             print('💊 Extracted mineral $key: $numericValue');
           }
         });
@@ -473,36 +477,35 @@ class _SnapFoodState extends State<SnapFood> {
             String nutrientValue = value['value']?.toString() ?? "0";
             // Extract just the numeric part before the unit
             String numericValue = nutrientValue.split(' ')[0];
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] = numericValue;
+            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] =
+                numericValue;
             print('💊 Extracted other $key: $numericValue');
           }
         });
 
-        print('📊 Total micronutrients extracted: ${correctedMicronutrients.length}');
-        print('📊 Micronutrient keys: ${correctedMicronutrients.keys.toList()}');
+        print(
+            '📊 Total micronutrients extracted: ${correctedMicronutrients.length}');
+        print(
+            '📊 Micronutrient keys: ${correctedMicronutrients.keys.toList()}');
 
         // Process ingredients list with actual nutrition data
         List<Map<String, dynamic>> ingredientsList = [];
-        if (ingredients is List) {
-          for (int i = 0; i < ingredients.length; i++) {
-            var ingredientData = ingredients[i];
-            if (ingredientData is Map<String, dynamic>) {
-              Map<String, dynamic> processedIngredient = {
-                'name': ingredientData['name']?.toString() ?? 'Unknown Ingredient',
-                'amount': ingredientData['grams']?.toString() ?? '100g',
-                'calories': "0", // Will be calculated from macros
-                'protein': 0.0,
-                'fat': 0.0,
-                'carbs': 0.0,
-              };
-              ingredientsList.add(processedIngredient);
-            }
-          }
+        for (int i = 0; i < ingredients.length; i++) {
+          var ingredientData = ingredients[i];
+          Map<String, dynamic> processedIngredient = {
+            'name': ingredientData.name,
+            'amount': '${ingredientData.grams}g',
+            'calories': ingredientData.caloriesKcal.toString(),
+            'protein': ingredientData.proteinG,
+            'fat': ingredientData.fatG,
+            'carbs': ingredientData.carbsG,
+          };
+          ingredientsList.add(processedIngredient);
         }
 
         // Create ingredients string for display
         String ingredientsString = ingredients
-            .map((ing) => ing['name']?.toString() ?? 'Unknown')
+            .map((ing) => ing.name)
             .join(", ");
 
         // Save the data with the new format

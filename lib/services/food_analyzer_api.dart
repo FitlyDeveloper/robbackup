@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
+import '../models/ingredient_item.dart';
 
 class FoodAnalyzerApi {
   // Base URL of our Render.com API server
@@ -45,7 +46,7 @@ class FoodAnalyzerApi {
   }
 
   // Method to analyze a food image with optimizations
-  static Future<Map<String, dynamic>> analyzeFoodImage(
+  static Future<NutritionResponse> analyzeFoodImage(
       Uint8List imageBytes) async {
     try {
       // Start warmup in parallel (non-blocking)
@@ -83,17 +84,23 @@ class FoodAnalyzerApi {
         throw Exception('Failed to analyze image: ${response.statusCode}');
       }
 
-      // Parse the response
+      // Parse the response using the new model
       final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final nutritionResponse = NutritionResponse.fromJson(responseData);
 
-      // Log response details (reduced logging for speed)
+      // Log response details and verify per-ingredient data
       if (kDebugMode) {
         print('✅ API response received with ${responseData.keys.length} keys');
         print('📊 Response keys: ${responseData.keys.toList()}');
+        
+        // Quick verification log for per-ingredient nutrition
+        for (final it in nutritionResponse.ingredients) {
+          print('ING ${it.name} ${it.grams}g -> ${it.caloriesKcal} kcal | P ${it.proteinG} F ${it.fatG} C ${it.carbsG}');
+        }
       }
 
-      // Return the data directly (new FDC API format)
-      return responseData;
+      // Return the parsed nutrition response
+      return nutritionResponse;
     } catch (e) {
       print('❌ Error analyzing food image: $e');
       rethrow;
@@ -149,7 +156,7 @@ class FoodAnalyzerApi {
   }
 
   // Ultra-fast API call with aggressive optimizations
-  static Future<Map<String, dynamic>> analyzeFoodImageUltraFast(
+  static Future<NutritionResponse> analyzeFoodImageUltraFast(
       Uint8List imageBytes) async {
     try {
       print('⚡ ULTRA-FAST MODE: Starting lightning-speed analysis');
@@ -158,37 +165,27 @@ class FoodAnalyzerApi {
       unawaited(warmupApi());
 
       // Ultra-aggressive image optimization
-      final optimizedBytes = await _ultraOptimizeImage(imageBytes);
+      final ultraBytes = await _ultraOptimizeImage(imageBytes);
 
-      // Convert to base64
-      final String base64Image = base64Encode(optimizedBytes);
+      final String base64Image = base64Encode(ultraBytes);
       final String dataUri = 'data:image/jpeg;base64,$base64Image';
 
       print(
-          '⚡ Ultra-optimized size: ${(optimizedBytes.length / 1024).toStringAsFixed(1)}KB');
+          '⚡ Ultra-optimized size: ${(ultraBytes.length / 1024).toStringAsFixed(1)}KB');
 
-      // Ultra-fast request with maximum optimizations
+      // Ultra-fast request with minimal headers
       final response = await _client
           .post(
             Uri.parse('$baseUrl$analyzeEndpoint'),
             headers: {
               'Content-Type': 'application/json',
               'Connection': 'keep-alive',
-              'Accept-Encoding': 'gzip, deflate, br',
-              'Cache-Control': 'no-cache', // Prevent caching delays
             },
             body: jsonEncode({
-              'image': dataUri,
-              'detail_level': 'low', // Fastest processing
-              'include_ingredient_macros': true,
-              'return_ingredient_nutrition': true,
-              'include_additional_nutrition': false, // Skip for speed
-              'include_vitamins_minerals': false, // Skip for speed
-              'fast_mode': true,
-              'ultra_fast': true, // New ultra-fast flag
+              'imageBase64': dataUri,
             }),
           )
-          .timeout(const Duration(seconds: 60)); // Reduced timeout
+          .timeout(const Duration(seconds: 45));
 
       if (response.statusCode != 200) {
         print('⚡ Ultra-fast API error: ${response.statusCode}');
@@ -196,13 +193,10 @@ class FoodAnalyzerApi {
       }
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-      if (responseData['success'] != true) {
-        throw Exception('Ultra-fast API error: ${responseData['error']}');
-      }
+      final nutritionResponse = NutritionResponse.fromJson(responseData);
 
       print('⚡ Ultra-fast response received in record time!');
-      return responseData['data'];
+      return nutritionResponse;
     } catch (e) {
       print('⚡ Ultra-fast mode error: $e');
       // Fallback to regular fast mode
@@ -228,7 +222,7 @@ class FoodAnalyzerApi {
   }
 
   // LIGHTNING-FAST API call - 15 second target
-  static Future<Map<String, dynamic>> analyzeFoodImageLightning(
+  static Future<NutritionResponse> analyzeFoodImageLightning(
       Uint8List imageBytes) async {
     try {
       print('⚡⚡⚡ LIGHTNING MODE: 15-second target analysis!');
@@ -254,15 +248,7 @@ class FoodAnalyzerApi {
               'X-Priority': 'urgent', // High priority header
             },
             body: jsonEncode({
-              'image': dataUri,
-              'detail_level': 'high', // Restore accuracy
-              'include_ingredient_macros': true,
-              'return_ingredient_nutrition': true, // Restore for accuracy
-              'include_additional_nutrition': true, // Restore for accuracy
-              'include_vitamins_minerals': true, // Restore for accuracy
-              'fast_mode': true,
-              'ultra_fast': true,
-              'lightning_fast': true, // NEW: Lightning mode
+              'imageBase64': dataUri,
             }),
           )
           .timeout(
@@ -273,12 +259,10 @@ class FoodAnalyzerApi {
       }
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
-      if (responseData['success'] != true) {
-        throw Exception('Lightning error: ${responseData['error']}');
-      }
+      final nutritionResponse = NutritionResponse.fromJson(responseData);
 
       print('⚡⚡⚡ LIGHTNING response - RECORD TIME!');
-      return responseData['data'];
+      return nutritionResponse;
     } catch (e) {
       print('⚡⚡⚡ Lightning error: $e - falling back to ultra-fast');
       return analyzeFoodImageUltraFast(imageBytes);
