@@ -120,27 +120,32 @@ function normalizeName(s) {
 
 // Robust FDC search with multiple strategies
 async function searchFDCWithFiltering(ingredientName) {
+  console.log(`🔍🔍🔍 STARTING FDC SEARCH FOR: "${ingredientName}"`);
+  
   if (!process.env.FDC_API_KEY) {
-    console.log('❌ FDC_API_KEY not configured');
+    console.log('❌❌❌ FDC_API_KEY not configured - THIS IS THE PROBLEM!');
     return null;
   }
+  
+  console.log(`✅ FDC_API_KEY is configured (length: ${process.env.FDC_API_KEY.length})`);
 
   const normalizedName = normalizeName(ingredientName);
   console.log(`🔍 Searching FDC for: "${ingredientName}" → "${normalizedName}"`);
 
   // Strategy 1: Try normalized search first
+  console.log(`🔄 Strategy 1: Normalized search for "${normalizedName}"`);
   let match = await searchFDCStrategy(normalizedName, 'normalized');
   
   // Strategy 2: If no match, try original name
   if (!match) {
-    console.log(`🔄 No match with normalized name, trying original: "${ingredientName}"`);
+    console.log(`🔄 Strategy 2: Original name search for "${ingredientName}"`);
     match = await searchFDCStrategy(ingredientName, 'original');
   }
   
   // Strategy 3: If still no match, try simplified search
   if (!match) {
     const simplifiedName = simplifyIngredientName(ingredientName);
-    console.log(`🔄 No match with original name, trying simplified: "${simplifiedName}"`);
+    console.log(`🔄 Strategy 3: Simplified search for "${simplifiedName}"`);
     match = await searchFDCStrategy(simplifiedName, 'simplified');
   }
   
@@ -148,15 +153,15 @@ async function searchFDCWithFiltering(ingredientName) {
   if (!match) {
     const categorySearch = getCategorySearchTerm(ingredientName);
     if (categorySearch) {
-      console.log(`🔄 No match with simplified name, trying category: "${categorySearch}"`);
+      console.log(`🔄 Strategy 4: Category search for "${categorySearch}"`);
       match = await searchFDCStrategy(categorySearch, 'category');
     }
   }
 
   if (match) {
-    console.log(`✅ Found FDC match: ${match.description} (score: ${match.score.toFixed(2)}, type: ${match.dataType})`);
+    console.log(`✅✅✅ FOUND FDC MATCH: ${match.description} (score: ${match.score.toFixed(2)}, type: ${match.dataType})`);
   } else {
-    console.log(`❌ No FDC match found for: ${ingredientName}`);
+    console.log(`❌❌❌ NO FDC MATCH FOUND for: ${ingredientName}`);
   }
   
   return match;
@@ -164,6 +169,8 @@ async function searchFDCWithFiltering(ingredientName) {
 
 // Individual search strategy
 async function searchFDCStrategy(searchTerm, strategy) {
+  console.log(`🔍🔍🔍 SEARCH STRATEGY "${strategy}" for "${searchTerm}"`);
+  
   try {
     const searchParams = new URLSearchParams({
       query: searchTerm,
@@ -175,16 +182,20 @@ async function searchFDCStrategy(searchTerm, strategy) {
     });
     
     const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${searchParams}`;
+    console.log(`🌐 Making FDC API call to: ${url.substring(0, 100)}...`);
+    
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.log(`❌ FDC search failed: ${response.status}`);
+      console.log(`❌❌❌ FDC API ERROR: ${response.status} ${response.statusText}`);
       return null;
     }
 
     const data = await response.json();
+    console.log(`📊 FDC API Response: ${data.foods?.length || 0} foods found`);
     
     if (!data.foods || data.foods.length === 0) {
+      console.log(`❌ No FDC results for: ${searchTerm}`);
       return null;
     }
 
@@ -194,7 +205,10 @@ async function searchFDCStrategy(searchTerm, strategy) {
       return { ...food, score };
     }).filter(food => food.score > getMinScoreForStrategy(strategy));
 
+    console.log(`📊 After scoring: ${scoredCandidates.length} candidates with score > ${getMinScoreForStrategy(strategy)}`);
+
     if (scoredCandidates.length === 0) {
+      console.log(`❌ No good FDC matches for: ${searchTerm}`);
       return null;
     }
 
@@ -206,14 +220,15 @@ async function searchFDCStrategy(searchTerm, strategy) {
         if (aType.includes('foundation') && !bType.includes('foundation')) return -1;
         if (bType.includes('foundation') && !aType.includes('foundation')) return 1;
         if (aType.includes('sr legacy') && !bType.includes('sr legacy')) return -1;
-        if (bType.includes('sr legacy') && !aType.includes('sr legacy')) return 1;
+        if (bType.includes('sr legacy') && !bType.includes('sr legacy')) return 1;
       }
       return b.score - a.score;
     });
 
     const bestMatch = scoredCandidates[0];
-  
-  return {
+    console.log(`✅ Best match: ${bestMatch.description} (score: ${bestMatch.score.toFixed(2)})`);
+    
+    return {
       fdcId: bestMatch.fdcId,
       description: bestMatch.description,
       dataType: bestMatch.dataType,
@@ -221,7 +236,7 @@ async function searchFDCStrategy(searchTerm, strategy) {
     };
 
   } catch (error) {
-    console.log(`❌ FDC search error for ${searchTerm}:`, error.message);
+    console.log(`❌❌❌ FDC search error for ${searchTerm}:`, error.message);
     return null;
   }
 }
