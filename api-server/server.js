@@ -48,6 +48,8 @@ const NORMALIZE = [
   [/^spaghetti$/i, "spaghetti, cooked"],
   [/^pasta$/i, "pasta, cooked"],
   [/^bread|dark bread$/i, "bread, wheat"],
+  [/^whole grain bread$/i, "bread, whole wheat"], // Add specific whole grain bread mapping
+  [/^whole wheat bread$/i, "bread, whole wheat"], // Add whole wheat bread mapping
   [/^oatmeal$/i, "oats, cooked"],
   
   // Dairy - improved mappings
