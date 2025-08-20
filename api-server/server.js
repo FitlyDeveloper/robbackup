@@ -681,21 +681,26 @@ app.post("/api/analyze-food", async (req, res) => {
     // Calculate DV percentages
     const dvPct = calculateDVPct(totals);
 
+    // Generate gourmet food name from ingredients
+    const foodName = generateFoodName(ingredients);
+
     // Build response
     const response = {
-      ingredients, // augmented with nutrition data
-      perIngredient, // detailed breakdown
+      ingredients: perIngredient,
+      perIngredient,
       macros: {
-        calories_kcal: totals.calories_kcal,
-        protein_g: totals.protein_g,
-        fat_g: totals.fat_g,
-        carbs_g: totals.carbs_g
+        calories_kcal: round1(totals.calories_kcal),
+        protein_g: round1(totals.protein_g),
+        fat_g: round1(totals.fat_g),
+        carbs_g: round1(totals.carbs_g)
       },
       totals,
       dv_pct: dvPct,
+      food_name: foodName, // Use food_name to match Flutter expectations
       source: { 
         nutrition: "USDA FDC", 
-        vision: clientIngredients ? "Client-provided" : "OpenAI (OCR only)" 
+        vision: "OpenAI GPT-4o-mini",
+        timestamp: new Date().toISOString()
       }
     };
 
@@ -844,3 +849,25 @@ app.get("/api/warmup", (_, res) => res.json({ status: "Server is ready" }));
 app.listen(PORT, () => {
   console.log(`🚀 FDC Nutrition Server running on port ${PORT}`);
 });
+
+// Generate gourmet food name from ingredients
+function generateFoodName(ingredients) {
+  if (!ingredients || ingredients.length === 0) {
+    return "Analyzed Food";
+  }
+  
+  // Sort ingredients by grams (heaviest first)
+  const sortedIngredients = [...ingredients].sort((a, b) => (b.grams || 0) - (a.grams || 0));
+  
+  // Get top 3 ingredients by weight
+  const topIngredients = sortedIngredients.slice(0, 3).map(i => i.name);
+  
+  // Generate descriptive name based on ingredients
+  if (topIngredients.length === 1) {
+    return `${titleCase(topIngredients[0])} Dish`;
+  } else if (topIngredients.length === 2) {
+    return `${titleCase(topIngredients[0])} with ${titleCase(topIngredients[1])}`;
+  } else {
+    return `${titleCase(topIngredients[0])} with ${titleCase(topIngredients[1])} and ${titleCase(topIngredients[2])}`;
+  }
+}
