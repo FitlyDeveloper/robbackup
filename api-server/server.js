@@ -594,19 +594,23 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     
     console.log(`🔍 Processing ingredient: ${name} (${grams}g)`);
     
-    // Search FDC with filtering
-    const match = await searchFDCWithFiltering(name);
-    if (!match) {
+    // Use the working searchFDC function from nutrition module
+    const fdcId = await searchFDC(name);
+    if (!fdcId) {
       console.log(`❌ No FDC data found for: ${name}`);
       continue;
     }
     
+    console.log(`✅ Found FDC ID: ${fdcId} for ${name}`);
+    
     // Fetch nutrient data
-    const fdcData = await fetchFDCData(match.fdcId);
+    const fdcData = await fetchFDCData(fdcId);
     if (!fdcData) {
       console.log(`❌ Failed to fetch FDC data for: ${name}`);
       continue;
     }
+    
+    console.log(`✅ FDC Data: ${fdcData.description} (${fdcData.dataType})`);
     
     // Extract nutrients
     const per100 = extractPer100(fdcData);
@@ -625,9 +629,9 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     const item = {
       name: titleCase(name),
       grams: Math.round(grams),
-      fdcId: match.fdcId,
-      fdcTitle: match.description,
-      dataType: match.dataType,
+      fdcId: fdcId,
+      fdcTitle: fdcData.description || name,
+      dataType: fdcData.dataType || 'Unknown',
       calories_kcal: round1((per100.calories_kcal || 0) * f),
       protein_g: round1((per100.protein_g || 0) * f),
       fat_g: round1((per100.fat_g || 0) * f),
