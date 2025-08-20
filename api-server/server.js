@@ -475,25 +475,20 @@ app.post("/api/analyze-food", async (req, res) => {
       console.log("🤖 Preparing OpenAI Vision request...");
       
       try {
-        const visionResponse = await openai.chat.completions.create({
+        // Add timeout wrapper to prevent hanging
+        const visionPromise = openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
             {
               role: "system",
-              content: `You are a food ingredient extractor. Analyze the image and extract ONLY ingredient names and weights in grams. 
-              Return a JSON object with this exact format: {"ingredients": [{"name": "ingredient name", "grams": weight_in_grams}]}
-              Do NOT calculate nutrition, calories, or macros. Only extract the ingredient list.
-              If you can't determine the weight, estimate based on typical serving sizes.
-              Be specific with ingredient names (e.g., "chicken breast" not just "chicken").
-              If multiple ingredients are visible, list them all.
-              If no ingredients are visible, return {"ingredients": []}`
+              content: `Extract food ingredients from image. Return JSON: {"ingredients": [{"name": "food name", "grams": weight}]}. Be quick and accurate.`
             },
             {
               role: "user",
               content: [
                 {
                   type: "text",
-                  text: "Extract the ingredients from this food image. Return only the JSON with ingredient names and grams."
+                  text: "What food ingredients do you see? Return JSON with names and grams."
                 },
                 {
                   type: "image_url",
@@ -505,8 +500,16 @@ app.post("/api/analyze-food", async (req, res) => {
             }
           ],
           response_format: { type: "json_object" },
-          max_tokens: 500
+          max_tokens: 200,
+          temperature: 0.1
         });
+
+        // Add 30-second timeout
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('OpenAI Vision timeout')), 30000);
+        });
+
+        const visionResponse = await Promise.race([visionPromise, timeoutPromise]);
 
         console.log("🤖 OpenAI Vision API call completed");
         console.log("🤖 Response status:", visionResponse.choices ? "success" : "failed");
