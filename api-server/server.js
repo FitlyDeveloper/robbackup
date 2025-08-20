@@ -245,12 +245,18 @@ function simplifyIngredientName(name) {
 function getCategorySearchTerm(name) {
   const lowerName = name.toLowerCase();
   
-  if (lowerName.includes('pea')) return 'peas';
-  if (lowerName.includes('sprout')) return 'bean sprouts';
+  // More specific mappings to prevent wrong matches
+  if (lowerName.includes('snap pea')) return 'snap peas';
+  if (lowerName.includes('bean sprout')) return 'bean sprouts';
   if (lowerName.includes('cilantro') || lowerName.includes('coriander')) return 'cilantro';
-  if (lowerName.includes('chili') || lowerName.includes('pepper')) return 'peppers';
-  if (lowerName.includes('lime') || lowerName.includes('lemon')) return 'citrus';
+  if (lowerName.includes('red chili') || lowerName.includes('hot chili')) return 'hot chili peppers';
+  if (lowerName.includes('lime')) return 'lime';
+  if (lowerName.includes('lemon')) return 'lemon';
   if (lowerName.includes('noodle') || lowerName.includes('pasta')) return 'pasta';
+  
+  // Generic fallbacks only for very common items
+  if (lowerName.includes('pea') && !lowerName.includes('snap')) return 'peas';
+  if (lowerName.includes('chili') && !lowerName.includes('red') && !lowerName.includes('hot')) return 'peppers';
   
   return null;
 }
@@ -288,6 +294,23 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   }
   if ((isProduce && descIsProtein) || (isProduce && descIsDairy)) {
     return -1000;
+  }
+  
+  // CRITICAL: Specific ingredient mismatches - instant disqualification
+  if (searchTerm.includes('bean sprout') && description.includes('brussels sprout')) {
+    return -1000; // Bean sprouts ≠ Brussels sprouts
+  }
+  if (searchTerm.includes('cilantro') && description.includes('beet')) {
+    return -1000; // Cilantro ≠ Beets
+  }
+  if (searchTerm.includes('lime') && description.includes('beet')) {
+    return -1000; // Lime ≠ Beets
+  }
+  if (searchTerm.includes('hot chili') && description.includes('bell pepper')) {
+    return -1000; // Hot chili ≠ Bell pepper
+  }
+  if (searchTerm.includes('snap pea') && !description.includes('snap')) {
+    return -1000; // Snap peas must contain "snap"
   }
   
   // Heavy penalties for unwanted items
