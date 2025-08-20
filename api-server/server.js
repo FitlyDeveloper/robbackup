@@ -413,27 +413,35 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     
     console.log(`🔍 Processing ingredient: ${name} (${grams}g)`);
     
-    // Search FDC for this ingredient
+    let per100 = null;
+    
+    // Try FDC first
     const fdcId = await searchFDC(name);
-    if (!fdcId) {
-      console.log(`❌ No FDC data found for: ${name}`);
-      continue;
+    if (fdcId) {
+      const fdcData = await fetchFDCData(fdcId);
+      if (fdcData) {
+        per100 = extractPer100(fdcData);
+        console.log('FDC per100 for', name, per100);
+        
+        // Validate the data is reasonable
+        if (validateNutrientData(per100, name)) {
+          console.log('✅ Using FDC data for:', name);
+        } else {
+          console.log('❌ FDC data validation failed, trying fallback for:', name);
+          per100 = null;
+        }
+      }
     }
     
-    // Fetch nutrient data
-    const fdcData = await fetchFDCData(fdcId);
-    if (!fdcData) {
-      console.log(`❌ Failed to fetch FDC data for: ${name}`);
-      continue;
-    }
-    
-    // Extract nutrients using the robust parser
-    const per100 = extractPer100(fdcData);
-    console.log('FDC per100 for', name, per100);
-    
-    if (!per100 || Object.keys(per100).length === 0) {
-      console.log(`❌ Failed to extract nutrients for: ${name}`);
-      continue;
+    // Use fallback if FDC failed or returned unreasonable data
+    if (!per100) {
+      per100 = getFallbackData(name);
+      if (per100) {
+        console.log('✅ Using fallback data for:', name);
+      } else {
+        console.log('❌ No data available for:', name);
+        continue;
+      }
     }
     
     // Scale by grams/100
@@ -504,6 +512,37 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
   })));
   
   return { totals: roundTotals(totals), perIngredient };
+}
+
+// Validate nutrient data is reasonable
+function validateNutrientData(nutrients, ingredientName) {
+  if (!nutrients) return false;
+  
+  // Check for reasonable calorie range (per 100g)
+  if (nutrients.calories_kcal && (nutrients.calories_kcal < 0 || nutrients.calories_kcal > 900)) {
+    console.log(`❌ Unreasonable calories for ${ingredientName}: ${nutrients.calories_kcal} kcal/100g`);
+    return false;
+  }
+  
+  // Check for reasonable fat content (per 100g)
+  if (nutrients.fat_g && (nutrients.fat_g < 0 || nutrients.fat_g > 100)) {
+    console.log(`❌ Unreasonable fat for ${ingredientName}: ${nutrients.fat_g} g/100g`);
+    return false;
+  }
+  
+  // Check for reasonable protein content (per 100g)
+  if (nutrients.protein_g && (nutrients.protein_g < 0 || nutrients.protein_g > 50)) {
+    console.log(`❌ Unreasonable protein for ${ingredientName}: ${nutrients.protein_g} g/100g`);
+    return false;
+  }
+  
+  // Check for reasonable carb content (per 100g)
+  if (nutrients.carbs_g && (nutrients.carbs_g < 0 || nutrients.carbs_g > 100)) {
+    console.log(`❌ Unreasonable carbs for ${ingredientName}: ${nutrients.carbs_g} g/100g`);
+    return false;
+  }
+  
+  return true;
 }
 
 app.listen(port, () => {
