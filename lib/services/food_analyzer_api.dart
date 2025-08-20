@@ -48,63 +48,81 @@ class FoodAnalyzerApi {
   // Method to analyze a food image with optimizations
   static Future<NutritionResponse> analyzeFoodImage(
       Uint8List imageBytes) async {
-    try {
-      // Start warmup in parallel (non-blocking)
-      unawaited(warmupApi());
-
-      // Optimize image size for faster upload
-      final optimizedBytes = await _optimizeImageForUpload(imageBytes);
-
-      // Convert image bytes to base64
-      final String base64Image = base64Encode(optimizedBytes);
-      final String dataUri = 'data:image/jpeg;base64,$base64Image';
-
-      print('📡 Calling API endpoint: $baseUrl$analyzeEndpoint');
-      print(
-          '📊 Image size: ${(optimizedBytes.length / 1024).toStringAsFixed(1)}KB');
-
-      // Use optimized request with connection reuse
-      final response = await _client
-          .post(
-            Uri.parse('$baseUrl$analyzeEndpoint'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Connection': 'keep-alive',
-              'Accept-Encoding': 'gzip, deflate',
-            },
-            body: jsonEncode({
-              'imageBase64': dataUri,
-            }),
-          )
-          .timeout(const Duration(seconds: 90)); // Reduced from 180s
-
-      // Check for HTTP errors
-      if (response.statusCode != 200) {
-        print('❌ API error: ${response.statusCode}, ${response.body}');
-        throw Exception('Failed to analyze image: ${response.statusCode}');
-      }
-
-      // Parse the response using the new model
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      final nutritionResponse = NutritionResponse.fromJson(responseData);
-
-      // Log response details and verify per-ingredient data
-      if (kDebugMode) {
-        print('✅ API response received with ${responseData.keys.length} keys');
-        print('📊 Response keys: ${responseData.keys.toList()}');
+    
+    // Retry logic for reliability
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        print('🔄 Attempt $attempt/3 - Calling API endpoint: $baseUrl$analyzeEndpoint');
         
-        // Quick verification log for per-ingredient nutrition
-        for (final it in nutritionResponse.ingredients) {
-          print('ING ${it.name} ${it.grams}g -> ${it.caloriesKcal} kcal | P ${it.proteinG} F ${it.fatG} C ${it.carbsG}');
-        }
-      }
+        // Start warmup in parallel (non-blocking)
+        unawaited(warmupApi());
 
-      // Return the parsed nutrition response
-      return nutritionResponse;
-    } catch (e) {
-      print('❌ Error analyzing food image: $e');
-      rethrow;
+        // Optimize image size for faster upload
+        final optimizedBytes = await _optimizeImageForUpload(imageBytes);
+
+        // Convert image bytes to base64
+        final String base64Image = base64Encode(optimizedBytes);
+        final String dataUri = 'data:image/jpeg;base64,$base64Image';
+
+        print('📊 Image size: ${(optimizedBytes.length / 1024).toStringAsFixed(1)}KB');
+
+        // Use optimized request with connection reuse
+        final response = await _client
+            .post(
+              Uri.parse('$baseUrl$analyzeEndpoint'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Connection': 'keep-alive',
+                'Accept-Encoding': 'gzip, deflate',
+              },
+              body: jsonEncode({
+                'imageBase64': dataUri,
+              }),
+            )
+            .timeout(const Duration(seconds: 180)); // Increased timeout for reliability
+
+              // Check for HTTP errors
+        if (response.statusCode != 200) {
+          print('❌ API error: ${response.statusCode}, ${response.body}');
+          if (attempt < 3) {
+            print('🔄 Retrying... (attempt $attempt/3)');
+            await Future.delayed(Duration(seconds: attempt * 2)); // Exponential backoff
+            continue;
+          }
+          throw Exception('Failed to analyze image: ${response.statusCode}');
+        }
+
+        // Parse the response using the new model
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final nutritionResponse = NutritionResponse.fromJson(responseData);
+
+        // Log response details and verify per-ingredient data
+        if (kDebugMode) {
+          print('✅ API response received with ${responseData.keys.length} keys');
+          print('📊 Response keys: ${responseData.keys.toList()}');
+
+          // Quick verification log for per-ingredient nutrition
+          for (final it in nutritionResponse.ingredients) {
+            print(
+                'ING ${it.name} ${it.grams}g -> ${it.caloriesKcal} kcal | P ${it.proteinG} F ${it.fatG} C ${it.carbsG}');
+          }
+        }
+
+        // Return the parsed nutrition response
+        return nutritionResponse;
+      } catch (e) {
+        print('❌ Attempt $attempt/3 failed: $e');
+        if (attempt < 3) {
+          print('🔄 Retrying... (attempt $attempt/3)');
+          await Future.delayed(Duration(seconds: attempt * 2)); // Exponential backoff
+          continue;
+        }
+        throw Exception('Failed to analyze food image after 3 attempts: $e');
+      }
     }
+    
+    // This should never be reached, but just in case
+    throw Exception('Failed to analyze food image: All attempts failed');
   }
 
   // Optimize image for faster upload while maintaining quality
