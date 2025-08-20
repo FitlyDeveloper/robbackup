@@ -3135,6 +3135,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                     final targetW = (screenW * 1.5 * dpr)
                                         .clamp(640, 1920)
                                         .toInt();
+                                    print('🖼️ Displaying food image: ${_imageBytes!.length} bytes');
                                     return Image.memory(
                                       _imageBytes!,
                                       width: double.infinity,
@@ -3149,10 +3150,30 @@ class _FoodCardOpenState extends State<FoodCardOpen>
                                   }),
                                 )
                               : Center(
-                                  child: Image.asset(
-                                    'assets/images/meal1.png',
-                                    width: 48,
-                                    height: 48,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Image.asset(
+                                        'assets/images/meal1.png',
+                                        width: 48,
+                                        height: 48,
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'No image available',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      Text(
+                                        '_imageBytes: ${_imageBytes != null ? "loaded (${_imageBytes!.length} bytes)" : "null"}',
+                                        style: TextStyle(
+                                          color: Colors.grey[500],
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                           // Back button inside the scrollable area
