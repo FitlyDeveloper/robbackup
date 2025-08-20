@@ -2089,6 +2089,7 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Helper method to format ingredient calories for display
   String _formatIngredientCalories(dynamic calories) {
+    print('DEBUG _formatIngredientCalories: input=$calories, type=${calories.runtimeType}');
     if (calories == null) return "0 kcal";
 
     // If it's already a string, ensure it has "kcal" suffix
