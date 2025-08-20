@@ -903,6 +903,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
               'Skipping ingredient loading from SharedPreferences - using fresh API data from widget.');
           // If using widget.ingredients, ensure _ingredients is populated by _initFoodData
           // _initFoodData should have already been called or will be.
+          // Don't override the fresh API data that was already loaded
+          return; // Exit early to preserve fresh API data
         }
       } else {
         print(
@@ -3854,7 +3856,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
     }
 
     // Format calories using the new formatter
-    String displayCalories = NutritionFormatters.formatKcal(double.tryParse(calories) ?? 0);
+    String displayCalories =
+        NutritionFormatters.formatKcal(double.tryParse(calories) ?? 0);
     if (displayCalories.length > 16) {
       displayCalories = displayCalories.substring(0, 13) + "...";
     }
