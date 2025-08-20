@@ -757,6 +757,19 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     const f = (grams || 0) / 100;
     console.log('Factor', f.toFixed(2), 'Scaled protein_g=', ((per100.protein_g||0)*f).toFixed(2));
     
+    // Calculate scaled macros
+    const scaledProtein = (per100.protein_g || 0) * f;
+    const scaledFat = (per100.fat_g || 0) * f;
+    const scaledCarbs = (per100.carbs_g || 0) * f;
+    
+    // Calculate calories - use FDC calories if available, otherwise calculate from macros
+    let calories = (per100.calories_kcal || 0) * f;
+    if (calories === 0 && (scaledProtein > 0 || scaledFat > 0 || scaledCarbs > 0)) {
+      // Calculate calories from macros: (Protein × 4) + (Fat × 9) + (Carbs × 4)
+      calories = (scaledProtein * 4) + (scaledFat * 9) + (scaledCarbs * 4);
+      console.log(`🔢 Calculated calories from macros for ${name}: ${calories.toFixed(1)} kcal`);
+    }
+    
     // Build per-ingredient record with FDC metadata
     const item = {
       name: titleCase(name),
@@ -764,10 +777,10 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
       fdcId: match.fdcId,
       fdcTitle: match.description,
       dataType: match.dataType,
-      calories_kcal: round1((per100.calories_kcal || 0) * f),
-      protein_g: round1((per100.protein_g || 0) * f),
-      fat_g: round1((per100.fat_g || 0) * f),
-      carbs_g: round1((per100.carbs_g || 0) * f),
+      calories_kcal: round1(calories),
+      protein_g: round1(scaledProtein),
+      fat_g: round1(scaledFat),
+      carbs_g: round1(scaledCarbs),
       vitamins: {
         A_mcg: Math.round((per100.A_mcg || 0) * f),
         C_mg: round1((per100.C_mg || 0) * f),
@@ -788,10 +801,10 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     ingredients[idx] = { ...ingredients[idx], ...item };
     
     // Sum macronutrients for totals
-    totals.calories_kcal += (per100.calories_kcal || 0) * f;
-    totals.protein_g += (per100.protein_g || 0) * f;
-    totals.fat_g += (per100.fat_g || 0) * f;
-    totals.carbs_g += (per100.carbs_g || 0) * f;
+    totals.calories_kcal += calories;
+    totals.protein_g += scaledProtein;
+    totals.fat_g += scaledFat;
+    totals.carbs_g += scaledCarbs;
     
     // Sum vitamins
     for (const k of Object.keys(totals.vitamins)) {
