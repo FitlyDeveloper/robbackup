@@ -2089,7 +2089,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
 
   // Helper method to format ingredient calories for display
   String _formatIngredientCalories(dynamic calories) {
-    print('DEBUG _formatIngredientCalories: input=$calories, type=${calories.runtimeType}');
+    print(
+        'DEBUG _formatIngredientCalories: input=$calories, type=${calories.runtimeType}');
     if (calories == null) return "0 kcal";
 
     // If it's already a string, ensure it has "kcal" suffix
@@ -3856,9 +3857,8 @@ class _FoodCardOpenState extends State<FoodCardOpen>
       displayAmount = displayAmount.substring(0, 13) + "...";
     }
 
-    // Format calories using the new formatter
-    String displayCalories =
-        NutritionFormatters.formatKcal(double.tryParse(calories) ?? 0);
+    // Format calories - calories parameter is already formatted from _formatIngredientCalories
+    String displayCalories = calories;
     if (displayCalories.length > 16) {
       displayCalories = displayCalories.substring(0, 13) + "...";
     }
