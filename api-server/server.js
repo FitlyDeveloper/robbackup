@@ -48,6 +48,8 @@ const NORMALIZE = [
   [/^yam(s)?$/i, "sweet potato, baked, flesh only"],
   [/^potato(s)?$/i, "potato, baked, flesh only"],
   [/^rice$/i, "rice, white, cooked"],
+  [/^white rice$/i, "rice, white, cooked"],
+  [/^brown rice$/i, "rice, brown, cooked"],
   [/^spaghetti$/i, "spaghetti, cooked"],
   [/^pasta$/i, "pasta, cooked"],
   [/^noodles$/i, "noodles, cooked"],
@@ -80,6 +82,9 @@ const NORMALIZE = [
   [/^lime$/i, "lime, raw"],
   [/^red chili$/i, "peppers, hot chili, red, raw"],
   [/^hot chili$/i, "peppers, hot chili, red, raw"],
+  [/^onion$/i, "onion, raw"],
+  [/^yellow onion$/i, "onion, raw"],
+  [/^white onion$/i, "onion, raw"],
   
   // Fruits - raw variants
   [/^apple(s)?$/i, "apple, raw, with skin"],
@@ -99,12 +104,13 @@ const NORMALIZE = [
   [/^salsa$/i, "salsa"],
   [/^guacamole$/i, "guacamole"],
   [/^hummus$/i, "hummus"],
+  [/^vegetable broth$/i, "vegetable broth"],
+  [/^turmeric$/i, "turmeric, ground"],
   
   // Spices & seasonings
   [/^salt$/i, "salt, table"],
   [/^pepper$/i, "pepper, black"],
   [/^garlic$/i, "garlic, raw"],
-  [/^onion(s)?$/i, "onion, raw"],
 ];
 
 function normalizeName(s) {
@@ -273,6 +279,9 @@ function getCategorySearchTerm(name) {
   if (lowerName.includes('lime')) return 'lime';
   if (lowerName.includes('lemon')) return 'lemon';
   if (lowerName.includes('noodle') || lowerName.includes('pasta')) return 'pasta';
+  if (lowerName.includes('rice') && !lowerName.includes('sweet')) return 'rice'; // Rice ≠ Flour
+  if (lowerName.includes('onion') && !lowerName.includes('yellow') && !lowerName.includes('white')) return 'onion'; // Onion ≠ Green Onion
+  if (lowerName.includes('cilantro') && !lowerName.includes('parsley')) return 'cilantro'; // Cilantro ≠ Blackberries
   
   // Generic fallbacks only for very common items
   if (lowerName.includes('pea') && !lowerName.includes('snap')) return 'peas';
@@ -331,6 +340,20 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   }
   if (searchTerm.includes('snap pea') && !description.includes('snap')) {
     return -1000; // Snap peas must contain "snap"
+  }
+  
+  // NEW CRITICAL MISMATCHES
+  if (searchTerm.includes('rice') && description.includes('flour')) {
+    return -1000; // Rice ≠ Rice flour
+  }
+  if (searchTerm.includes('cilantro') && description.includes('blackberr')) {
+    return -1000; // Cilantro ≠ Blackberries
+  }
+  if (searchTerm.includes('onion') && description.includes('green onion') && !searchTerm.includes('green')) {
+    return -1000; // Onion ≠ Green onion
+  }
+  if (searchTerm.includes('onion') && description.includes('scallion') && !searchTerm.includes('scallion')) {
+    return -1000; // Onion ≠ Scallion
   }
   
   // Heavy penalties for unwanted items
