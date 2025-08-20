@@ -13,7 +13,10 @@ const {
   calculateDVPct,
   roundTotals,
   convertToNutritionFormat,
-  runFDCTest
+  runFDCTest,
+  searchFDC,
+  fetchFDCData,
+  extractPer100
 } = require('./nutrition.js');
 
 const app = express();
@@ -240,14 +243,14 @@ app.post('/api/analyze-food', async (req, res) => {
 
     console.log('🔍 Extracted ingredients:', ingredients);
 
-    // Calculate nutrition using FDC
-    const totals = await calculateTotalsFromFDC(ingredients);
+    // Calculate nutrition using FDC with per-ingredient data
+    const { totals, perIngredient } = await calculateTotalsFromFDCWithPerIngredient(ingredients);
     const dvPct = calculateDVPct(totals);
 
-    // Return new API format
+    // Return new API format with per-ingredient data
     const response = {
       food_name: "Analyzed Food", // Add food name for Flutter compatibility
-      ingredients: ingredients,
+      ingredients: ingredients, // Now augmented with kcal/macros
       macros: {
         calories_kcal: totals.calories_kcal,
         protein_g: totals.protein_g,
@@ -257,7 +260,8 @@ app.post('/api/analyze-food', async (req, res) => {
       vitamins: totals.vitamins,
       minerals: totals.minerals,
       other: totals.other,
-      dv_pct: dvPct
+      dv_pct: dvPct,
+      perIngredient: perIngredient // Detailed list for the flip side UI
     };
 
     console.log('📤 Sending response to Flutter app with', Object.keys(response).length, 'keys');
@@ -387,6 +391,119 @@ function repairJSON(content) {
     console.log('❌ JSON repair failed:', error);
     return { ingredients: [] };
   }
+}
+
+// Helper functions
+function titleCase(s) { 
+  return String(s||'').replace(/\w\S*/g, w => w[0].toUpperCase()+w.slice(1)); 
+}
+
+function round1(x) { 
+  return Math.round((x||0)*10)/10; 
+}
+
+// Calculate totals from FDC with per-ingredient data
+async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
+  const totals = makeZeroTotals();
+  const perIngredient = [];
+  
+  for (let idx = 0; idx < ingredients.length; idx++) {
+    const ing = ingredients[idx];
+    const { name, grams } = ing;
+    
+    console.log(`🔍 Processing ingredient: ${name} (${grams}g)`);
+    
+    // Search FDC for this ingredient
+    const fdcId = await searchFDC(name);
+    if (!fdcId) {
+      console.log(`❌ No FDC data found for: ${name}`);
+      continue;
+    }
+    
+    // Fetch nutrient data
+    const fdcData = await fetchFDCData(fdcId);
+    if (!fdcData) {
+      console.log(`❌ Failed to fetch FDC data for: ${name}`);
+      continue;
+    }
+    
+    // Extract nutrients using the robust parser
+    const per100 = extractPer100(fdcData);
+    console.log('FDC per100 for', name, per100);
+    
+    if (!per100 || Object.keys(per100).length === 0) {
+      console.log(`❌ Failed to extract nutrients for: ${name}`);
+      continue;
+    }
+    
+    // Scale by grams/100
+    const f = (grams || 0) / 100;
+    console.log('Factor', f.toFixed(2), 'Scaled protein_g=', ((per100.protein_g||0)*f).toFixed(2));
+    
+    // Build per-ingredient record
+    const item = {
+      name: titleCase(name),
+      grams: Math.round(grams),
+      calories_kcal: round1((per100.calories_kcal || 0) * f),
+      protein_g: round1((per100.protein_g || 0) * f),
+      fat_g: round1((per100.fat_g || 0) * f),
+      carbs_g: round1((per100.carbs_g || 0) * f),
+      // Optional micros shown in the flip card if needed
+      vitamins: {
+        A_mcg: Math.round((per100.A_mcg || 0) * f),
+        C_mg: round1((per100.C_mg || 0) * f),
+        K_mcg: Math.round((per100.K_mcg || 0) * f),
+        B12_mcg: Math.round((per100.B12_mcg || 0) * f)
+      },
+      minerals: {
+        Ca_mg: round1((per100.Ca_mg || 0) * f),
+        Fe_mg: round1((per100.Fe_mg || 0) * f),
+        K_mg: round1((per100.K_mg || 0) * f),
+        Na_mg: round1((per100.Na_mg || 0) * f)
+      }
+    };
+    
+    perIngredient.push(item);
+    
+    // Augment the original ingredient element with nutrition data
+    ingredients[idx].calories_kcal = item.calories_kcal;
+    ingredients[idx].protein_g = item.protein_g;
+    ingredients[idx].fat_g = item.fat_g;
+    ingredients[idx].carbs_g = item.carbs_g;
+    
+    // Sum macronutrients for totals
+    totals.calories_kcal += (per100.calories_kcal || 0) * f;
+    totals.protein_g += (per100.protein_g || 0) * f;
+    totals.fat_g += (per100.fat_g || 0) * f;
+    totals.carbs_g += (per100.carbs_g || 0) * f;
+    
+    // Sum vitamins
+    for (const k of Object.keys(totals.vitamins)) {
+      totals.vitamins[k] += (per100[k] || 0) * f;
+    }
+    
+    // Sum minerals
+    for (const k of Object.keys(totals.minerals)) {
+      totals.minerals[k] += (per100[k] || 0) * f;
+    }
+    
+    // Sum other nutrients
+    for (const k of Object.keys(totals.other)) {
+      totals.other[k] += (per100[k] || 0) * f;
+    }
+  }
+  
+  // Log per-ingredient breakdown
+  console.table(perIngredient.map(i => ({
+    name: i.name, 
+    g: i.grams, 
+    kcal: i.calories_kcal, 
+    P: i.protein_g, 
+    F: i.fat_g, 
+    C: i.carbs_g
+  })));
+  
+  return { totals: roundTotals(totals), perIngredient };
 }
 
 app.listen(port, () => {
