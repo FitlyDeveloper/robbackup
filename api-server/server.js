@@ -111,6 +111,13 @@ const NORMALIZE = [
   [/^salt$/i, "salt, table"],
   [/^pepper$/i, "pepper, black"],
   [/^garlic$/i, "garlic, raw"],
+  // NEW NORMALIZATION FOR CURRENT ISSUES
+  [/^coconut$/i, "coconut, raw"],
+  [/^gelatin$/i, "gelatin, prepared"],
+  [/^mint leaf$/i, "mint, fresh"],
+  [/^mint$/i, "mint, fresh"],
+  [/^cookie base$/i, "cookie, plain"],
+  [/^cookie crust$/i, "cookie, plain"]
 ];
 
 function normalizeName(s) {
@@ -369,6 +376,19 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   }
   if (searchTerm.includes('onion') && description.includes('scallion') && !searchTerm.includes('scallion')) {
     return -1000; // Onion ≠ Scallion
+  }
+  // NEW FIXES FOR CURRENT ISSUES
+  if (searchTerm.includes('coconut') && description.includes('flour') && !searchTerm.includes('flour')) {
+    return -1000; // Coconut ≠ Coconut flour (should be coconut meat)
+  }
+  if (searchTerm.includes('gelatin') && description.includes('dry powder') && !searchTerm.includes('dry')) {
+    return -1000; // Gelatin ≠ Dry powder (should be prepared gelatin)
+  }
+  if (searchTerm.includes('mint') && description.includes('lettuce') && !searchTerm.includes('lettuce')) {
+    return -1000; // Mint ≠ Lettuce
+  }
+  if (searchTerm.includes('cookie base') && description.includes('oatmeal') && !searchTerm.includes('oatmeal')) {
+    return -1000; // Cookie base ≠ Oatmeal cookies
   }
   
   // Heavy penalties for unwanted items
