@@ -148,6 +148,17 @@ async function searchFDCWithFiltering(ingredientName) {
       return { ...food, score };
     }).filter(food => food.score > 0); // Only keep positive scores
 
+    console.log(`🔍 FDC Search Debug for "${normalizedName}":`);
+    console.log(`   Found ${data.foods.length} total results`);
+    console.log(`   After scoring: ${scoredCandidates.length} candidates with score > 0`);
+    
+    if (scoredCandidates.length > 0) {
+      console.log(`   Top 3 candidates:`);
+      scoredCandidates.slice(0, 3).forEach((candidate, idx) => {
+        console.log(`     ${idx + 1}. ${candidate.description} (score: ${candidate.score.toFixed(2)}, type: ${candidate.dataType})`);
+      });
+    }
+
     if (scoredCandidates.length === 0) {
       console.log(`❌ No good FDC matches for: ${normalizedName}`);
       return null;
@@ -189,34 +200,38 @@ function calculateFDCMatchScore(food, searchTerm) {
   const description = food.description.toLowerCase();
   const dataType = food.dataType?.toLowerCase() || '';
   
-  // CRITICAL: Heavy penalties for completely wrong matches
+  // CRITICAL: Check for major category mismatches - instant disqualification
   const searchWords = searchTerm.split(/\s+/).filter(w => w.length > 2);
   const descWords = description.split(/\s+/).filter(w => w.length > 2);
   
   // Check for major category mismatches - instant disqualification
   const isProtein = searchTerm.includes('chicken') || searchTerm.includes('beef') || searchTerm.includes('pork') || searchTerm.includes('salmon') || searchTerm.includes('tuna') || searchTerm.includes('meat');
-  const isStarch = searchTerm.includes('potato') || searchTerm.includes('rice') || searchTerm.includes('pasta') || searchTerm.includes('bread');
+  const isStarch = searchTerm.includes('potato') || searchTerm.includes('sweet potato') || searchTerm.includes('rice') || searchTerm.includes('pasta') || searchTerm.includes('bread');
   const isDairy = searchTerm.includes('cream') || searchTerm.includes('milk') || searchTerm.includes('yogurt') || searchTerm.includes('cheese');
-  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato') || searchTerm.includes('cilantro') || searchTerm.includes('kimchi');
+  const isProduce = searchTerm.includes('apple') || searchTerm.includes('banana') || searchTerm.includes('carrot') || searchTerm.includes('broccoli') || searchTerm.includes('tomato') || searchTerm.includes('cilantro') || searchTerm.includes('kimchi') || searchTerm.includes('peach');
   
-  // If searching for a starch but description contains protein keywords, heavy penalty
+  // If searching for a starch but description contains protein keywords, instant disqualification
   if (isStarch && (description.includes('beef') || description.includes('chicken') || description.includes('pork') || description.includes('meat') || description.includes('fish'))) {
-    score -= 1000; // Instant disqualification
+    console.log(`❌ REJECTED: ${searchTerm} (starch) matched to ${description} (protein)`);
+    return 0; // Instant disqualification
   }
   
-  // If searching for a protein but description contains starch keywords, heavy penalty
+  // If searching for a protein but description contains starch keywords, instant disqualification
   if (isProtein && (description.includes('potato') || description.includes('rice') || description.includes('bread') || description.includes('pasta'))) {
-    score -= 1000; // Instant disqualification
+    console.log(`❌ REJECTED: ${searchTerm} (protein) matched to ${description} (starch)`);
+    return 0; // Instant disqualification
   }
   
-  // If searching for dairy but description contains non-dairy keywords, heavy penalty
+  // If searching for dairy but description contains non-dairy keywords, instant disqualification
   if (isDairy && (description.includes('beef') || description.includes('chicken') || description.includes('potato') || description.includes('bread'))) {
-    score -= 1000; // Instant disqualification
+    console.log(`❌ REJECTED: ${searchTerm} (dairy) matched to ${description} (non-dairy)`);
+    return 0; // Instant disqualification
   }
   
-  // If searching for produce but description contains non-produce keywords, heavy penalty
+  // If searching for produce but description contains non-produce keywords, instant disqualification
   if (isProduce && (description.includes('beef') || description.includes('chicken') || description.includes('bread') || description.includes('cream'))) {
-    score -= 1000; // Instant disqualification
+    console.log(`❌ REJECTED: ${searchTerm} (produce) matched to ${description} (non-produce)`);
+    return 0; // Instant disqualification
   }
   
   // Heavy penalties for unwanted items
@@ -235,7 +250,7 @@ function calculateFDCMatchScore(food, searchTerm) {
     }
   }
   
-  // Token overlap scoring - MUCH more strict
+  // Token overlap scoring - balanced approach
   let matches = 0;
   for (const searchWord of searchWords) {
     if (descWords.some(descWord => descWord.includes(searchWord) || searchWord.includes(descWord))) {
@@ -243,26 +258,26 @@ function calculateFDCMatchScore(food, searchTerm) {
     }
   }
   
-  // Base score from token overlap - require high match percentage
+  // Base score from token overlap
   if (searchWords.length > 0) {
     const matchPercentage = matches / searchWords.length;
-    score += matchPercentage * 50; // Increased weight
+    score += matchPercentage * 40; // Balanced weight
     
-    // Require at least 60% word match for any score
-    if (matchPercentage < 0.6) {
-      score -= 100; // Heavy penalty for low match percentage
+    // Require at least 40% word match for any score (reduced from 60%)
+    if (matchPercentage < 0.4) {
+      score -= 50; // Moderate penalty for low match percentage
     }
   }
   
   // Bonus for exact phrase match
   if (description.includes(searchTerm)) {
-    score += 30; // Increased from 15
+    score += 25; // Increased from 15
   }
   
-  // Partial phrase match bonus - more strict
+  // Partial phrase match bonus - more lenient
   const commonWords = searchWords.filter(word => descWords.some(descWord => descWord.includes(word) || word.includes(descWord)));
-  if (commonWords.length >= Math.ceil(searchWords.length * 0.8)) { // Increased from 0.7 to 0.8
-    score += 15; // Increased from 8
+  if (commonWords.length >= Math.ceil(searchWords.length * 0.6)) { // Reduced from 0.8 to 0.6
+    score += 12; // Increased from 8
   }
   
   // Data type preference
@@ -284,11 +299,13 @@ function calculateFDCMatchScore(food, searchTerm) {
     score += 2;
   }
   
-  // Require minimum score threshold
-  if (score < 20) { // Increased minimum threshold
+  // Require minimum score threshold - reduced from 20 to 10
+  if (score < 10) { // Reduced minimum threshold
+    console.log(`❌ REJECTED: ${searchTerm} matched to ${description} (score: ${score})`);
     return 0; // Reject low-scoring matches
   }
   
+  console.log(`✅ ACCEPTED: ${searchTerm} matched to ${description} (score: ${score})`);
   return Math.max(0, score);
 }
 
