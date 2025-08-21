@@ -414,8 +414,7 @@ class _SnapFoodState extends State<SnapFood> {
 
   // removed unused: _compressImage
 
-  void _displayAnalysisResults(
-      NutritionResponse analysisData, String scanId) {
+  void _displayAnalysisResults(NutritionResponse analysisData, String scanId) {
     try {
       print('🎯 Displaying analysis results for scanId: $scanId');
       print('📊 Analysis data keys: ${analysisData.toJson().keys.toList()}');
@@ -424,7 +423,6 @@ class _SnapFoodState extends State<SnapFood> {
       if (analysisData.foodName.isNotEmpty &&
           analysisData.macros.isNotEmpty &&
           analysisData.ingredients.isNotEmpty) {
-        
         String foodName = analysisData.foodName;
         List<IngredientItem> ingredients = analysisData.ingredients;
 
@@ -439,7 +437,7 @@ class _SnapFoodState extends State<SnapFood> {
         String fat = macros['fat_g']?.toString() ?? "0";
         String carbs = macros['carbs_g']?.toString() ?? "0";
 
-        // Extract vitamins and minerals from the new format
+        // Extract micronutrients from the new flat format
         Map<String, dynamic> vitamins = analysisData.vitamins;
         Map<String, dynamic> minerals = analysisData.minerals;
         Map<String, dynamic> other = analysisData.other;
@@ -447,40 +445,25 @@ class _SnapFoodState extends State<SnapFood> {
         // Convert to the format expected by _saveFoodCardData
         Map<String, dynamic> correctedMicronutrients = {};
 
-        // Process vitamins - extract the actual values
+        // Process vitamins - now in flat format (vitamin_a, vitamin_c, etc.)
         vitamins.forEach((key, value) {
-          if (value is Map && value.containsKey('value')) {
-            String nutrientValue = value['value']?.toString() ?? "0";
-            // Extract just the numeric part before the unit
-            String numericValue = nutrientValue.split(' ')[0];
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] =
-                numericValue;
-            print('💊 Extracted vitamin $key: $numericValue');
-          }
+          String numericValue = value?.toString() ?? "0";
+          correctedMicronutrients[key] = numericValue;
+          print('💊 Extracted vitamin $key: $numericValue');
         });
 
-        // Process minerals - extract the actual values
+        // Process minerals - now in flat format (calcium, iron, etc.)
         minerals.forEach((key, value) {
-          if (value is Map && value.containsKey('value')) {
-            String nutrientValue = value['value']?.toString() ?? "0";
-            // Extract just the numeric part before the unit
-            String numericValue = nutrientValue.split(' ')[0];
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] =
-                numericValue;
-            print('💊 Extracted mineral $key: $numericValue');
-          }
+          String numericValue = value?.toString() ?? "0";
+          correctedMicronutrients[key] = numericValue;
+          print('💊 Extracted mineral $key: $numericValue');
         });
 
-        // Process other nutrients - extract the actual values
+        // Process other nutrients - now in flat format (fiber, cholesterol, etc.)
         other.forEach((key, value) {
-          if (value is Map && value.containsKey('value')) {
-            String nutrientValue = value['value']?.toString() ?? "0";
-            // Extract just the numeric part before the unit
-            String numericValue = nutrientValue.split(' ')[0];
-            correctedMicronutrients[key.toLowerCase().replaceAll(' ', '_')] =
-                numericValue;
-            print('💊 Extracted other $key: $numericValue');
-          }
+          String numericValue = value?.toString() ?? "0";
+          correctedMicronutrients[key] = numericValue;
+          print('💊 Extracted other $key: $numericValue');
         });
 
         print(
@@ -504,9 +487,8 @@ class _SnapFoodState extends State<SnapFood> {
         }
 
         // Create ingredients string for display
-        String ingredientsString = ingredients
-            .map((ing) => ing.name)
-            .join(", ");
+        String ingredientsString =
+            ingredients.map((ing) => ing.name).join(", ");
 
         // Save the data with the new format
         _saveFoodCardData(
@@ -523,7 +505,6 @@ class _SnapFoodState extends State<SnapFood> {
         );
 
         print('✅ Analysis results processed successfully');
-        
       } else {
         throw Exception('Unexpected analysis format - missing required fields');
       }
