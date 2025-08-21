@@ -2875,18 +2875,22 @@ class _NutritionPage extends State<NutritionPage>
           // Zinc is already in mg - no conversion needed
           _updateMineralWithValue('Zinc', amount);
         } else if (key.contains('fiber')) {
+          // Fiber is already in g - no conversion needed
           _updateOtherNutrientWithValue('Fiber', amount);
         } else if (key.contains('cholesterol')) {
+          // Cholesterol is already in mg - no conversion needed
           _updateOtherNutrientWithValue('Cholesterol', amount);
         } else if (key.contains('sugar')) {
+          // Sugar is already in g - no conversion needed
           _updateOtherNutrientWithValue('Sugar', amount);
-        } else if (key.contains('saturated_fats') ||
-            key.contains('saturatedfat') ||
-            key.contains('saturated')) {
+        } else if (key.contains('saturated_fats')) {
+          // Saturated fats is already in g - no conversion needed
           _updateOtherNutrientWithValue('Saturated Fats', amount);
-        } else if (key.contains('omega_3') || key.contains('omega3')) {
+        } else if (key.contains('omega_3')) {
+          // Omega-3 is already in mg - no conversion needed
           _updateOtherNutrientWithValue('Omega-3', amount);
-        } else if (key.contains('omega_6') || key.contains('omega6')) {
+        } else if (key.contains('omega_6')) {
+          // Omega-6 is already in g - no conversion needed
           _updateOtherNutrientWithValue('Omega-6', amount);
         }
       }
