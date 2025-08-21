@@ -117,7 +117,14 @@ const NORMALIZE = [
   [/^mint leaf$/i, "mint, fresh"],
   [/^mint$/i, "mint, fresh"],
   [/^cookie base$/i, "cookie, plain"],
-  [/^cookie crust$/i, "cookie, plain"]
+  [/^cookie crust$/i, "cookie, plain"],
+  // ADDITIONAL SPECIFIC NORMALIZATION
+  [/^cream$/i, "cream, heavy"],
+  [/^sour cream$/i, "sour cream, cultured"],
+  [/^sugar$/i, "sugar, granulated"],
+  [/^fruit puree.*$/i, "fruit puree, mixed"],
+  [/^dumpling$/i, "dumpling, steamed"],
+  [/^cherry tomato$/i, "tomato, cherry, raw"]
 ];
 
 function normalizeName(s) {
@@ -178,6 +185,21 @@ async function searchFDCWithFiltering(ingredientName) {
       console.log(`🔄 Strategy 5: Using fallback nutrition for "${ingredientName}"`);
       return fallbackMatch;
     }
+  }
+  
+  // Strategy 6: Last resort - use generic estimates for unknown ingredients
+  if (!match) {
+    console.log(`🔄 Strategy 6: Using generic estimate for "${ingredientName}"`);
+    return {
+      fdcId: `generic_${ingredientName.toLowerCase().replace(/\s+/g, '_')}`,
+      description: `${ingredientName} (estimated)`,
+      dataType: 'Generic',
+      score: 1,
+      calories_kcal: 50, // Generic estimate
+      protein_g: 1.0,
+      fat_g: 0.5,
+      carbs_g: 10.0
+    };
   }
 
   if (match) {
@@ -389,6 +411,29 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   }
   if (searchTerm.includes('cookie base') && description.includes('oatmeal') && !searchTerm.includes('oatmeal')) {
     return -1000; // Cookie base ≠ Oatmeal cookies
+  }
+  
+  // ADDITIONAL CRITICAL REJECTIONS FOR COMMON WRONG MATCHES
+  if (searchTerm.includes('cream') && description.includes('cheese') && !searchTerm.includes('cheese')) {
+    return -1000; // Cream ≠ Cream cheese
+  }
+  if (searchTerm.includes('sugar') && description.includes('substitute') && !searchTerm.includes('substitute')) {
+    return -1000; // Sugar ≠ Sugar substitute
+  }
+  if (searchTerm.includes('fruit puree') && description.includes('juice') && !searchTerm.includes('juice')) {
+    return -1000; // Fruit puree ≠ Fruit juice
+  }
+  if (searchTerm.includes('fruit puree') && description.includes('concentrate') && !searchTerm.includes('concentrate')) {
+    return -1000; // Fruit puree ≠ Fruit concentrate
+  }
+  if (searchTerm.includes('dumpling') && description.includes('wonton') && !searchTerm.includes('wonton')) {
+    return -1000; // Dumpling ≠ Wonton
+  }
+  if (searchTerm.includes('sour cream') && description.includes('yogurt') && !searchTerm.includes('yogurt')) {
+    return -1000; // Sour cream ≠ Yogurt
+  }
+  if (searchTerm.includes('cherry tomato') && description.includes('grape') && !searchTerm.includes('grape')) {
+    return -1000; // Cherry tomato ≠ Grape tomato
   }
   
   // Heavy penalties for unwanted items
