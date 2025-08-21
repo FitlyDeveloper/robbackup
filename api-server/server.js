@@ -124,7 +124,13 @@ const NORMALIZE = [
   [/^sugar$/i, "sugar, granulated"],
   [/^fruit puree.*$/i, "fruit puree, mixed"],
   [/^dumpling$/i, "dumpling, steamed"],
-  [/^cherry tomato$/i, "tomato, cherry, raw"]
+  [/^cherry tomato$/i, "tomato, cherry, raw"],
+  // FRUIT NORMALIZATION
+  [/^watermelon$/i, "watermelon, raw"],
+  [/^pineapple$/i, "pineapple, raw"],
+  [/^strawberry$/i, "strawberries, raw"],
+  [/^banana$/i, "banana, raw"],
+  [/^apple$/i, "apple, raw"]
 ];
 
 function normalizeName(s) {
@@ -399,6 +405,20 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   if (searchTerm.includes('onion') && description.includes('scallion') && !searchTerm.includes('scallion')) {
     return -1000; // Onion ≠ Scallion
   }
+  
+  // CRITICAL FRUIT MISMATCHES
+  if (searchTerm.includes('watermelon') && description.includes('beet')) {
+    return -1000; // Watermelon ≠ Beets
+  }
+  if (searchTerm.includes('watermelon') && description.includes('beetroot')) {
+    return -1000; // Watermelon ≠ Beetroot
+  }
+  if (searchTerm.includes('pineapple') && description.includes('apple')) {
+    return -1000; // Pineapple ≠ Apple
+  }
+  if (searchTerm.includes('strawberry') && description.includes('berry') && !description.includes('straw')) {
+    return -1000; // Strawberry ≠ Other berries
+  }
   // NEW FIXES FOR CURRENT ISSUES
   if (searchTerm.includes('coconut') && description.includes('flour') && !searchTerm.includes('flour')) {
     return -1000; // Coconut ≠ Coconut flour (should be coconut meat)
@@ -467,6 +487,22 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   const tokenScore = (matches / searchTokens.length) * 20;
   const strategyMultiplier = strategy === 'normalized' ? 1.5 : strategy === 'original' ? 1.0 : strategy === 'simplified' ? 0.8 : 0.6;
   score += tokenScore * strategyMultiplier;
+  
+  // CRITICAL: Require minimum word match for fruits
+  if (searchTerm.includes('watermelon') || searchTerm.includes('pineapple') || searchTerm.includes('strawberry') || searchTerm.includes('banana') || searchTerm.includes('apple')) {
+    const searchWords = searchTerm.toLowerCase().split(/\s+/);
+    const descWords = description.toLowerCase().split(/\s+/);
+    let exactMatches = 0;
+    for (const searchWord of searchWords) {
+      if (descWords.some(descWord => descWord.includes(searchWord) || searchWord.includes(descWord))) {
+        exactMatches++;
+      }
+    }
+    const matchRatio = exactMatches / searchWords.length;
+    if (matchRatio < 0.5) {
+      score -= 100; // Heavy penalty for poor fruit matches
+    }
+  }
   
   // Bonus for exact phrase match
   if (description.includes(searchTerm)) {
@@ -972,6 +1008,9 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
       protein_g: round1(scaledProtein),
       fat_g: round1(scaledFat),
       carbs_g: round1(scaledCarbs),
+      // Add fallback sugar data for fruits if FDC doesn't provide it
+      sugar_g: round1((per100.sugar_g || 0) * f),
+      fiber_g: round1((per100.fiber_g || 0) * f),
       vitamins: {
         A_mcg: Math.round((per100.A_mcg || 0) * f),
         C_mg: round1((per100.C_mg || 0) * f),
@@ -996,6 +1035,14 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     totals.protein_g += scaledProtein;
     totals.fat_g += scaledFat;
     totals.carbs_g += scaledCarbs;
+    
+    // Add other nutrients to totals
+    totals.other.fiber_g += (per100.fiber_g || 0) * f;
+    totals.other.sugar_g += (per100.sugar_g || 0) * f;
+    totals.other.cholesterol_mg += (per100.cholesterol_mg || 0) * f;
+    totals.other.satfat_g += (per100.satfat_g || 0) * f;
+    totals.other.omega3_mg += (per100.omega3_mg || 0) * f;
+    totals.other.omega6_g += (per100.omega6_g || 0) * f;
     
     // Sum vitamins
     for (const k of Object.keys(totals.vitamins)) {
