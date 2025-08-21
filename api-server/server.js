@@ -976,6 +976,7 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     // Extract nutrients
     const per100 = extractPer100(fdcData);
     console.log('FDC per100 for', name, per100);
+    console.log('🔍🔍🔍 DETAILED FDC DATA for', name, ':', JSON.stringify(fdcData, null, 2));
     
     if (!per100 || Object.keys(per100).length === 0) {
       console.log(`❌ Failed to extract nutrients for: ${name}`);
