@@ -531,61 +531,7 @@ function calculateFDCMatchScore(food, searchTerm, strategy) {
   return Math.max(0, score);
 }
 
-// Get fallback sugar value for fruits
-function getFallbackSugarForFruit(fruitName, totalCarbs) {
-  const lowerName = fruitName.toLowerCase();
-  
-  // Common fruit sugar percentages (sugar as % of total carbs)
-  const sugarPercentages = {
-    'watermelon': 0.85, // ~85% of carbs are sugar
-    'pineapple': 0.90,  // ~90% of carbs are sugar
-    'strawberry': 0.70, // ~70% of carbs are sugar
-    'banana': 0.80,     // ~80% of carbs are sugar
-    'apple': 0.75,      // ~75% of carbs are sugar
-    'orange': 0.80,     // ~80% of carbs are sugar
-    'grape': 0.95,      // ~95% of carbs are sugar
-    'mango': 0.85,      // ~85% of carbs are sugar
-    'peach': 0.80,      // ~80% of carbs are sugar
-    'pear': 0.75,       // ~75% of carbs are sugar
-  };
-  
-  for (const [fruit, percentage] of Object.entries(sugarPercentages)) {
-    if (lowerName.includes(fruit)) {
-      return totalCarbs * percentage;
-    }
-  }
-  
-  // Default: assume 80% of carbs are sugar for unknown fruits
-  return totalCarbs * 0.8;
-}
 
-// Get fallback fiber value for fruits
-function getFallbackFiberForFruit(fruitName) {
-  const lowerName = fruitName.toLowerCase();
-  
-  // Common fruit fiber values (g per 100g)
-  const fiberValues = {
-    'watermelon': 0.4,  // 0.4g fiber per 100g
-    'pineapple': 1.4,   // 1.4g fiber per 100g
-    'strawberry': 2.0,  // 2.0g fiber per 100g
-    'banana': 2.6,      // 2.6g fiber per 100g
-    'apple': 2.4,       // 2.4g fiber per 100g
-    'orange': 2.4,      // 2.4g fiber per 100g
-    'grape': 0.9,       // 0.9g fiber per 100g
-    'mango': 1.6,       // 1.6g fiber per 100g
-    'peach': 1.5,       // 1.5g fiber per 100g
-    'pear': 3.1,        // 3.1g fiber per 100g
-  };
-  
-  for (const [fruit, fiber] of Object.entries(fiberValues)) {
-    if (lowerName.includes(fruit)) {
-      return fiber;
-    }
-  }
-  
-  // Default: assume 1.5g fiber per 100g for unknown fruits
-  return 1.5;
-}
 
 // Fallback nutrition for ingredients not in FDC
 function getFallbackNutrition(ingredientName) {
@@ -1053,9 +999,7 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
       console.log(`🔢 Calculated calories from macros for ${name}: ${calories.toFixed(1)} kcal`);
     }
     
-    // Calculate fallback values for fruits
-    const fallbackSugar = getFallbackSugarForFruit(name, scaledCarbs);
-    const fallbackFiber = getFallbackFiberForFruit(name);
+
     
     // Build per-ingredient record with FDC metadata
     const item = {
@@ -1068,9 +1012,9 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
       protein_g: round1(scaledProtein),
       fat_g: round1(scaledFat),
       carbs_g: round1(scaledCarbs),
-      // Add fallback sugar data for fruits if FDC doesn't provide it
-      sugar_g: round1((per100.sugar_g || fallbackSugar) * f),
-      fiber_g: round1((per100.fiber_g || fallbackFiber) * f),
+      // Add sugar and fiber data from FDC
+      sugar_g: round1((per100.sugar_g || 0) * f),
+      fiber_g: round1((per100.fiber_g || 0) * f),
       vitamins: {
         A_mcg: Math.round((per100.A_mcg || 0) * f),
         C_mg: round1((per100.C_mg || 0) * f),
@@ -1096,9 +1040,9 @@ async function calculateTotalsFromFDCWithPerIngredient(ingredients) {
     totals.fat_g += scaledFat;
     totals.carbs_g += scaledCarbs;
     
-    // Add other nutrients to totals with fallback values for fruits
-    totals.other.fiber_g += (per100.fiber_g || fallbackFiber) * f;
-    totals.other.sugar_g += (per100.sugar_g || fallbackSugar) * f;
+    // Add other nutrients to totals
+    totals.other.fiber_g += (per100.fiber_g || 0) * f;
+    totals.other.sugar_g += (per100.sugar_g || 0) * f;
     totals.other.cholesterol_mg += (per100.cholesterol_mg || 0) * f;
     totals.other.satfat_g += (per100.satfat_g || 0) * f;
     totals.other.omega3_mg += (per100.omega3_mg || 0) * f;
